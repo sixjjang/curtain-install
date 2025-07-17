@@ -1430,4 +1430,43 @@ exports.updateJobStatus = jobStatusManager.updateJobStatus;
 exports.batchUpdateJobStatus = jobStatusManager.batchUpdateJobStatus;
 
 // 작업 상태 통계 조회
-exports.getJobStatusStats = jobStatusManager.getJobStatusStats; 
+exports.getJobStatusStats = jobStatusManager.getJobStatusStats;
+
+/**
+ * 작업 주문 알림 함수들
+ */
+const workOrderNotifications = require('./workOrderStatusChangeNotification');
+
+// 작업 주문 상태 변경 시 자동 알림 (Firestore 트리거)
+exports.onWorkOrderStatusChange = workOrderNotifications.onWorkOrderStatusChange;
+
+// 작업 주문 알림 수동 전송 (테스트용)
+exports.sendWorkOrderNotification = workOrderNotifications.sendWorkOrderNotification;
+
+// 작업 주문 배치 알림 전송
+exports.sendBatchWorkOrderNotifications = workOrderNotifications.sendBatchWorkOrderNotifications;
+
+/**
+ * 간단한 작업 주문 상태 변경 알림 (사용자 요청 버전)
+ */
+const simpleWorkOrderNotifications = require('./notifyWorkOrderStatusChanged');
+
+// 작업 주문 상태 변경 시 알림 전송 (Firestore 트리거)
+exports.notifyWorkOrderStatusChanged = simpleWorkOrderNotifications.notifyWorkOrderStatusChanged;
+
+/**
+ * 결제 알림 함수들
+ */
+const paymentNotifications = require('./onPaymentStatusChanged');
+
+// 결제 상태 변경 시 자동 알림 (Firestore 트리거)
+exports.onPaymentStatusChanged = paymentNotifications.onPaymentStatusChanged;
+
+// 작업 주문 결제 상태 변경 시 알림 (Firestore 트리거)
+exports.onWorkOrderPaymentStatusChanged = paymentNotifications.onWorkOrderPaymentStatusChanged;
+
+// 정산 완료 시 알림 (Firestore 트리거)
+exports.onSettlementCompleted = paymentNotifications.onSettlementCompleted;
+
+// 수동 결제 알림 발송 (HTTP 함수)
+exports.sendPaymentNotification = paymentNotifications.sendPaymentNotification; 

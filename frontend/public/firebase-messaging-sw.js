@@ -1,127 +1,89 @@
-// Firebase Cloud Messaging Service Worker
-// 커튼 설치 매칭 플랫폼용 푸시 알림 서비스 워커
-
-importScripts('https://www.gstatic.com/firebasejs/9.23.0/firebase-app-compat.js');
-importScripts('https://www.gstatic.com/firebasejs/9.23.0/firebase-messaging-compat.js');
+// Firebase Messaging Service Worker
+importScripts('https://www.gstatic.com/firebasejs/9.0.0/firebase-app-compat.js');
+importScripts('https://www.gstatic.com/firebasejs/9.0.0/firebase-messaging-compat.js');
 
 // Firebase 설정
-// 실제 값으로 교체하거나 환경변수에서 가져오세요
 const firebaseConfig = {
   apiKey: "YOUR_API_KEY",
-  authDomain: "YOUR_AUTH_DOMAIN", 
+  authDomain: "YOUR_AUTH_DOMAIN",
   projectId: "YOUR_PROJECT_ID",
   storageBucket: "YOUR_STORAGE_BUCKET",
-  messagingSenderId: "YOUR_SENDER_ID",
+  messagingSenderId: "YOUR_MESSAGING_SENDER_ID",
   appId: "YOUR_APP_ID"
 };
 
 // Firebase 초기화
-try {
-  firebase.initializeApp(firebaseConfig);
-  console.log('[firebase-messaging-sw.js] Firebase initialized successfully');
-} catch (error) {
-  console.error('[firebase-messaging-sw.js] Firebase initialization failed:', error);
-}
+firebase.initializeApp(firebaseConfig);
 
-// Firebase Cloud Messaging 초기화
+// 메시징 인스턴스 가져오기
 const messaging = firebase.messaging();
 
 // 백그라운드 메시지 처리
-messaging.onBackgroundMessage(function(payload) {
-  console.log('[firebase-messaging-sw.js] Received background message ', payload);
-  
-  try {
-    // 알림 제목과 내용 추출
-    const notificationTitle = payload.notification?.title || 
-                             payload.data?.title || 
-                             '커튼 설치 매칭';
-    
-    const notificationBody = payload.notification?.body || 
-                            payload.data?.body || 
-                            '새로운 알림이 있습니다.';
+messaging.onBackgroundMessage((payload) => {
+  console.log('백그라운드 메시지 수신:', payload);
 
-    // 알림 옵션 설정
-    const notificationOptions = {
-      body: notificationBody,
-      icon: '/icon-192x192.png', // 앱 아이콘 경로
-      badge: '/badge-72x72.png', // 배지 아이콘 경로
-      tag: payload.data?.tag || 'default', // 알림 그룹화
-      requireInteraction: payload.data?.requireInteraction || false, // 사용자 상호작용 필요 여부
-      actions: payload.data?.actions || [], // 알림 액션 버튼
-      data: {
-        ...payload.data,
-        click_action: payload.data?.click_action || '/',
-        timestamp: Date.now()
+  const notificationTitle = payload.notification?.title || '알림';
+  const notificationOptions = {
+    body: payload.notification?.body || '',
+    icon: payload.notification?.icon || '/favicon.ico',
+    badge: '/favicon.ico',
+    tag: payload.data?.workOrderId || 'general',
+    data: payload.data,
+    actions: [
+      {
+        action: 'view',
+        title: '보기',
+        icon: '/favicon.ico'
+      },
+      {
+        action: 'close',
+        title: '닫기',
+        icon: '/favicon.ico'
       }
-    };
+    ],
+    requireInteraction: true,
+    silent: false
+  };
 
-    // 커스텀 아이콘이 있는 경우 사용
-    if (payload.data?.icon) {
-      notificationOptions.icon = payload.data.icon;
-    }
-
-    // 커스텀 배지가 있는 경우 사용
-    if (payload.data?.badge) {
-      notificationOptions.badge = payload.data.badge;
-    }
-
-    // 알림 표시
-    self.registration.showNotification(notificationTitle, notificationOptions);
-    
-    console.log('[firebase-messaging-sw.js] Notification displayed successfully');
-    
-  } catch (error) {
-    console.error('[firebase-messaging-sw.js] Error displaying notification:', error);
-    
-    // 기본 알림으로 폴백
-    const fallbackOptions = {
-      body: '새로운 알림이 있습니다.',
-      icon: '/icon-192x192.png',
-      data: { fallback: true }
-    };
-    
-    self.registration.showNotification('커튼 설치 매칭', fallbackOptions);
-  }
-});
-
-// 서비스 워커 설치 이벤트
-self.addEventListener('install', (event) => {
-  console.log('[firebase-messaging-sw.js] Service Worker installed');
-  self.skipWaiting();
-});
-
-// 서비스 워커 활성화 이벤트
-self.addEventListener('activate', (event) => {
-  console.log('[firebase-messaging-sw.js] Service Worker activated');
-  event.waitUntil(self.clients.claim());
+  // 알림 표시
+  return self.registration.showNotification(notificationTitle, notificationOptions);
 });
 
 // 알림 클릭 이벤트 처리
 self.addEventListener('notificationclick', (event) => {
-  console.log('[firebase-messaging-sw.js] Notification clicked:', event);
-  
+  console.log('알림 클릭:', event);
+
   event.notification.close();
-  
-  // 클릭 액션 처리
-  const clickAction = event.notification.data?.click_action || '/';
-  
+
+  const data = event.notification.data;
+  const action = event.action;
+
+  if (action === 'close') {
+    return;
+  }
+
+  // 기본 동작: 알림 데이터에 따른 페이지 이동
+  let urlToOpen = '/';
+
+  if (data?.workOrderId) {
+    urlToOpen = `/workorder/${data.workOrderId}`;
+  } else if (data?.click_action) {
+    urlToOpen = data.click_action;
+  }
+
+  // 클라이언트 창 열기
   event.waitUntil(
-    self.clients.matchAll({ type: 'window' }).then((clients) => {
-      // 이미 열린 탭이 있는지 확인
-      for (const client of clients) {
-        if (client.url.includes(self.location.origin) && 'focus' in client) {
-          client.focus();
-          // 특정 페이지로 이동
-          if (clickAction !== '/') {
-            client.navigate(clickAction);
-          }
-          return;
+    clients.matchAll({ type: 'window', includeUncontrolled: true }).then((clientList) => {
+      // 이미 열린 창이 있는지 확인
+      for (const client of clientList) {
+        if (client.url.includes(urlToOpen) && 'focus' in client) {
+          return client.focus();
         }
       }
-      
-      // 새 탭 열기
-      if (self.clients.openWindow) {
-        return self.clients.openWindow(clickAction);
+
+      // 새 창 열기
+      if (clients.openWindow) {
+        return clients.openWindow(urlToOpen);
       }
     })
   );
@@ -129,11 +91,58 @@ self.addEventListener('notificationclick', (event) => {
 
 // 알림 닫기 이벤트 처리
 self.addEventListener('notificationclose', (event) => {
-  console.log('[firebase-messaging-sw.js] Notification closed:', event);
+  console.log('알림 닫힘:', event);
   
-  // 알림 닫기 통계나 로깅을 여기에 추가할 수 있습니다
-  const notificationData = event.notification.data;
-  if (notificationData) {
-    console.log('[firebase-messaging-sw.js] Closed notification data:', notificationData);
+  // 알림 분석 데이터 전송 (선택사항)
+  const data = event.notification.data;
+  if (data?.workOrderId) {
+    // 알림 닫기 이벤트를 서버에 전송
+    fetch('/api/analytics/notification-closed', {
+      method: 'POST',
+      headers: {
+        'Content-Type': 'application/json',
+      },
+      body: JSON.stringify({
+        workOrderId: data.workOrderId,
+        notificationType: data.type,
+        timestamp: new Date().toISOString()
+      })
+    }).catch(error => {
+      console.error('알림 닫기 이벤트 전송 실패:', error);
+    });
+  }
+});
+
+// 서비스 워커 설치
+self.addEventListener('install', (event) => {
+  console.log('Firebase Messaging Service Worker 설치됨');
+  self.skipWaiting();
+});
+
+// 서비스 워커 활성화
+self.addEventListener('activate', (event) => {
+  console.log('Firebase Messaging Service Worker 활성화됨');
+  event.waitUntil(self.clients.claim());
+});
+
+// 푸시 이벤트 처리 (기본 푸시 알림용)
+self.addEventListener('push', (event) => {
+  console.log('푸시 이벤트 수신:', event);
+
+  if (event.data) {
+    const data = event.data.json();
+    const notificationTitle = data.notification?.title || '알림';
+    const notificationOptions = {
+      body: data.notification?.body || '',
+      icon: data.notification?.icon || '/favicon.ico',
+      badge: '/favicon.ico',
+      tag: data.data?.workOrderId || 'general',
+      data: data.data,
+      requireInteraction: true
+    };
+
+    event.waitUntil(
+      self.registration.showNotification(notificationTitle, notificationOptions)
+    );
   }
 }); 

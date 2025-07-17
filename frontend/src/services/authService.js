@@ -1,5 +1,4 @@
 import { 
-  getAuth, 
   signInWithPopup, 
   GoogleAuthProvider, 
   sendSignInLinkToEmail,
@@ -25,9 +24,7 @@ import {
   getDocs,
   serverTimestamp 
 } from "firebase/firestore";
-import { db } from "../firebase/firebase";
-
-const auth = getAuth();
+import { auth, db } from "../firebase/firebase";
 
 // User roles
 export const USER_ROLES = {
@@ -44,10 +41,16 @@ class AuthService {
     this.currentUser = null;
     this.userProfile = null;
     this.authStateListeners = [];
+    this.isDemoMode = process.env.NEXT_PUBLIC_FIREBASE_API_KEY === 'demo-api-key';
   }
 
   // Initialize auth state listener
   initAuthStateListener() {
+    if (this.isDemoMode) {
+      console.log('Demo mode: Skipping auth state listener initialization');
+      return () => {};
+    }
+
     return onAuthStateChanged(this.auth, async (user) => {
       this.currentUser = user;
       
@@ -204,6 +207,20 @@ class AuthService {
 
   // Create or update user profile
   async createOrUpdateUserProfile(user, role, additionalData = {}) {
+    if (this.isDemoMode) {
+      console.log('Demo mode: Skipping user profile creation/update');
+      return {
+        uid: user.uid,
+        email: user.email,
+        displayName: user.displayName || additionalData.displayName || '',
+        photoURL: user.photoURL || additionalData.photoURL || '',
+        role: role,
+        emailVerified: user.emailVerified,
+        isActive: true,
+        ...additionalData
+      };
+    }
+
     const userRef = doc(db, 'users', user.uid);
     const userSnap = await getDoc(userRef);
 
@@ -258,6 +275,18 @@ class AuthService {
 
   // Get user profile
   async getUserProfile(uid) {
+    if (this.isDemoMode) {
+      console.log('Demo mode: Returning mock user profile');
+      return {
+        uid: uid,
+        email: 'demo@example.com',
+        displayName: 'Demo User',
+        role: USER_ROLES.CUSTOMER,
+        emailVerified: true,
+        isActive: true
+      };
+    }
+
     try {
       const userRef = doc(db, 'users', uid);
       const userSnap = await getDoc(userRef);
@@ -274,6 +303,11 @@ class AuthService {
 
   // Update user profile
   async updateUserProfile(uid, updates) {
+    if (this.isDemoMode) {
+      console.log('Demo mode: Skipping user profile update');
+      return { success: true };
+    }
+
     try {
       const userRef = doc(db, 'users', uid);
       await updateDoc(userRef, {
@@ -295,6 +329,11 @@ class AuthService {
 
   // Update last login
   async updateLastLogin(uid) {
+    if (this.isDemoMode) {
+      console.log('Demo mode: Skipping last login update');
+      return;
+    }
+
     try {
       const userRef = doc(db, 'users', uid);
       await updateDoc(userRef, {

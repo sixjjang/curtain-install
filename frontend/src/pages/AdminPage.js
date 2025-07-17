@@ -1,6 +1,19 @@
 import React, { useEffect } from 'react';
+import dynamic from 'next/dynamic';
 import useAdminCheck from '../hooks/useAdminCheck';
-import AdminDashboard from '../components/AdminDashboard';
+
+// AdminDashboard를 동적으로 로드하여 클라이언트에서만 실행되도록 함
+const AdminDashboard = dynamic(() => import('../components/AdminDashboard'), {
+  ssr: false,
+  loading: () => (
+    <div className="min-h-screen bg-gray-50 flex items-center justify-center">
+      <div className="text-center">
+        <div className="animate-spin rounded-full h-12 w-12 border-b-2 border-blue-600 mx-auto mb-4"></div>
+        <p className="text-lg text-gray-600">관리자 대시보드를 로드 중...</p>
+      </div>
+    </div>
+  )
+});
 
 const AdminPage = () => {
   const { isAdmin, loading } = useAdminCheck();
@@ -26,4 +39,5 @@ const AdminPage = () => {
   return <AdminDashboard />;
 };
 
+// 이 페이지는 클라이언트에서만 렌더링됨
 export default AdminPage; 

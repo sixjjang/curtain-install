@@ -1,0 +1,40 @@
+{
+  "name": "커튼 설치 매칭",
+  "short_name": "커튼매칭",
+  "description": "전문 시공기사와 고객을 연결하는 커튼 설치 매칭 플랫폼",
+  "start_url": "/",
+  "display": "standalone",
+  "background_color": "#ffffff",
+  "theme_color": "#2563eb",
+  "orientation": "portrait-primary",
+  "scope": "/",
+  "lang": "ko",
+  "categories": ["business", "productivity", "utilities"],
+  "icons": [
+    {
+      "src": "/favicon.ico",
+      "sizes": "64x64 32x32 24x24 16x16",
+      "type": "image/x-icon"
+    }
+  ],
+  "shortcuts": [
+    {
+      "name": "견적 요청",
+      "short_name": "견적",
+      "description": "새로운 커튼 설치 견적을 요청합니다",
+      "url": "/workorder/new"
+    },
+    {
+      "name": "작업 목록",
+      "short_name": "목록",
+      "description": "진행 중인 작업 목록을 확인합니다",
+      "url": "/workorder/list"
+    },
+    {
+      "name": "결제 내역",
+      "short_name": "결제",
+      "description": "결제 내역을 확인합니다",
+      "url": "/payment/list"
+    }
+  ]
+} 

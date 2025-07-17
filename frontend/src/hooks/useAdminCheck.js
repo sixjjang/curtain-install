@@ -1,5 +1,6 @@
 import { useState, useEffect } from 'react';
-import { getAuth, onAuthStateChanged } from 'firebase/auth';
+import { onAuthStateChanged } from 'firebase/auth';
+import { auth } from '../firebase/firebase';
 
 /**
  * 관리자 권한을 확인하는 훅 (Next.js 스타일)
@@ -9,9 +10,15 @@ const useAdminCheck = () => {
   const [isAdmin, setIsAdmin] = useState(false);
   const [loading, setLoading] = useState(true);
   const [user, setUser] = useState(null);
-  const auth = getAuth();
 
   useEffect(() => {
+    // Check if auth is available (client-side only)
+    if (!auth) {
+      setLoading(false);
+      setIsAdmin(false);
+      return;
+    }
+
     const unsubscribe = onAuthStateChanged(auth, async (user) => {
       setUser(user);
       
@@ -33,7 +40,7 @@ const useAdminCheck = () => {
     });
 
     return () => unsubscribe();
-  }, [auth]);
+  }, []);
 
   return {
     isAdmin,
