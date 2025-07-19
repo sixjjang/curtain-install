@@ -160,6 +160,9 @@ module.exports = {
         '8xl': '88rem',
         '9xl': '96rem',
       },
+      gridTemplateColumns: {
+        '15': 'repeat(15, minmax(0, 1fr))',
+      },
       screens: {
         'xs': '475px',
       },

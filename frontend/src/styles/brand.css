@@ -1,0 +1,228 @@
+/* Insteam 브랜드 컬러 팔레트 */
+
+:root {
+  /* 메인 브랜드 컬러 */
+  --insteam-primary: #2563eb;      /* 메인 블루 */
+  --insteam-primary-dark: #1e40af; /* 다크 블루 */
+  --insteam-primary-light: #3b82f6; /* 라이트 블루 */
+  
+  /* 보조 컬러 */
+  --insteam-secondary: #64748b;    /* 그레이 */
+  --insteam-accent: #f59e0b;       /* 오렌지 (강조) */
+  
+  /* 중성 컬러 */
+  --insteam-white: #ffffff;
+  --insteam-gray-50: #f8fafc;
+  --insteam-gray-100: #f1f5f9;
+  --insteam-gray-200: #e2e8f0;
+  --insteam-gray-300: #cbd5e1;
+  --insteam-gray-400: #94a3b8;
+  --insteam-gray-500: #64748b;
+  --insteam-gray-600: #475569;
+  --insteam-gray-700: #334155;
+  --insteam-gray-800: #1e293b;
+  --insteam-gray-900: #0f172a;
+  
+  /* 상태 컬러 */
+  --insteam-success: #10b981;      /* 성공 */
+  --insteam-warning: #f59e0b;      /* 경고 */
+  --insteam-error: #ef4444;        /* 에러 */
+  --insteam-info: #3b82f6;         /* 정보 */
+  
+  /* 그라데이션 */
+  --insteam-gradient-primary: linear-gradient(135deg, #2563eb 0%, #1e40af 100%);
+  --insteam-gradient-secondary: linear-gradient(135deg, #3b82f6 0%, #2563eb 100%);
+  --insteam-gradient-accent: linear-gradient(135deg, #f59e0b 0%, #d97706 100%);
+}
+
+/* 브랜드 로고 스타일 */
+.insteam-logo {
+  font-family: 'Inter', 'Arial', sans-serif;
+  font-weight: 700;
+  color: var(--insteam-primary);
+}
+
+.insteam-logo-text {
+  font-size: 1.5rem;
+  font-weight: 800;
+  background: var(--insteam-gradient-primary);
+  -webkit-background-clip: text;
+  -webkit-text-fill-color: transparent;
+  background-clip: text;
+}
+
+/* 브랜드 버튼 스타일 */
+.btn-insteam-primary {
+  background: var(--insteam-gradient-primary);
+  color: var(--insteam-white);
+  border: none;
+  padding: 0.75rem 1.5rem;
+  border-radius: 0.5rem;
+  font-weight: 600;
+  transition: all 0.2s ease;
+}
+
+.btn-insteam-primary:hover {
+  transform: translateY(-1px);
+  box-shadow: 0 4px 12px rgba(37, 99, 235, 0.3);
+}
+
+.btn-insteam-secondary {
+  background: var(--insteam-white);
+  color: var(--insteam-primary);
+  border: 2px solid var(--insteam-primary);
+  padding: 0.75rem 1.5rem;
+  border-radius: 0.5rem;
+  font-weight: 600;
+  transition: all 0.2s ease;
+}
+
+.btn-insteam-secondary:hover {
+  background: var(--insteam-primary);
+  color: var(--insteam-white);
+}
+
+/* 브랜드 카드 스타일 */
+.insteam-card {
+  background: var(--insteam-white);
+  border-radius: 1rem;
+  box-shadow: 0 4px 6px rgba(0, 0, 0, 0.05);
+  border: 1px solid var(--insteam-gray-200);
+  transition: all 0.2s ease;
+}
+
+.insteam-card:hover {
+  box-shadow: 0 8px 25px rgba(0, 0, 0, 0.1);
+  transform: translateY(-2px);
+}
+
+/* 브랜드 헤더 스타일 */
+.insteam-header {
+  background: var(--insteam-gradient-primary);
+  color: var(--insteam-white);
+  padding: 1rem 0;
+}
+
+/* 브랜드 푸터 스타일 */
+.insteam-footer {
+  background: var(--insteam-gray-900);
+  color: var(--insteam-gray-300);
+  padding: 2rem 0;
+}
+
+/* 브랜드 배지 스타일 */
+.insteam-badge {
+  background: var(--insteam-primary);
+  color: var(--insteam-white);
+  padding: 0.25rem 0.75rem;
+  border-radius: 9999px;
+  font-size: 0.75rem;
+  font-weight: 600;
+}
+
+.insteam-badge-success {
+  background: var(--insteam-success);
+}
+
+.insteam-badge-warning {
+  background: var(--insteam-warning);
+}
+
+.insteam-badge-error {
+  background: var(--insteam-error);
+}
+
+/* 브랜드 알림 스타일 */
+.insteam-alert {
+  padding: 1rem;
+  border-radius: 0.5rem;
+  border-left: 4px solid;
+  margin-bottom: 1rem;
+}
+
+.insteam-alert-success {
+  background: #ecfdf5;
+  border-color: var(--insteam-success);
+  color: #065f46;
+}
+
+.insteam-alert-warning {
+  background: #fffbeb;
+  border-color: var(--insteam-warning);
+  color: #92400e;
+}
+
+.insteam-alert-error {
+  background: #fef2f2;
+  border-color: var(--insteam-error);
+  color: #991b1b;
+}
+
+.insteam-alert-info {
+  background: #eff6ff;
+  border-color: var(--insteam-info);
+  color: #1e40af;
+}
+
+/* 브랜드 로딩 스타일 */
+.insteam-loading {
+  display: inline-block;
+  width: 20px;
+  height: 20px;
+  border: 3px solid var(--insteam-gray-200);
+  border-radius: 50%;
+  border-top-color: var(--insteam-primary);
+  animation: insteam-spin 1s ease-in-out infinite;
+}
+
+@keyframes insteam-spin {
+  to { transform: rotate(360deg); }
+}
+
+/* 브랜드 애니메이션 */
+.insteam-fade-in {
+  animation: insteam-fade-in 0.5s ease-in-out;
+}
+
+@keyframes insteam-fade-in {
+  from {
+    opacity: 0;
+    transform: translateY(20px);
+  }
+  to {
+    opacity: 1;
+    transform: translateY(0);
+  }
+}
+
+.insteam-slide-in {
+  animation: insteam-slide-in 0.3s ease-out;
+}
+
+@keyframes insteam-slide-in {
+  from {
+    transform: translateX(-100%);
+  }
+  to {
+    transform: translateX(0);
+  }
+}
+
+/* 브랜드 반응형 유틸리티 */
+.insteam-container {
+  max-width: 1200px;
+  margin: 0 auto;
+  padding: 0 1rem;
+}
+
+@media (min-width: 640px) {
+  .insteam-container {
+    padding: 0 2rem;
+  }
+}
+
+@media (min-width: 1024px) {
+  .insteam-container {
+    padding: 0 4rem;
+  }
+} 

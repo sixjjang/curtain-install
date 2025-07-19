@@ -1,15 +1,20 @@
 import React, { useState, useEffect } from 'react';
+import { useRouter } from 'next/router';
 import Navigation from '../components/Navigation';
 import { useAuth } from '../hooks/useAuth';
+import ProfilePhotoUpload from '../components/ProfilePhotoUpload';
+import { doc, getDoc } from 'firebase/firestore';
+import { db } from '../firebase/firebase';
 
 export default function Profile() {
-  const { user, loading } = useAuth();
+  const router = useRouter();
+  const { user, userProfile, loading } = useAuth();
   const [profile, setProfile] = useState({
     name: '',
     phone: '',
     address: '',
     company: '',
-    role: 'customer'
+    role: ''
   });
   const [isEditing, setIsEditing] = useState(false);
   const [passwordForm, setPasswordForm] = useState({
@@ -19,19 +24,62 @@ export default function Profile() {
   });
   const [showPasswordForm, setShowPasswordForm] = useState(false);
   const [message, setMessage] = useState('');
+  const [profileLoading, setProfileLoading] = useState(true);
+  const [profileLoaded, setProfileLoaded] = useState(false);
 
   useEffect(() => {
-    if (user) {
-      // 실제 데이터는 Firebase에서 가져와야 함
-      setProfile({
-        name: user.displayName || '사용자',
-        phone: '010-1234-5678',
-        address: '서울시 강남구',
-        company: '개인',
-        role: 'customer'
-      });
+    const loadProfile = async () => {
+      // 이미 프로필이 로드되었으면 다시 로드하지 않음
+      if (profileLoaded) {
+        return;
+      }
+
+      if (!user) {
+        setProfileLoading(false);
+        return;
+      }
+
+      try {
+        // Firestore에서 사용자 프로필 데이터 가져오기
+        const userDoc = await getDoc(doc(db, 'users', user.uid));
+        let userData = null;
+        
+        if (userDoc.exists()) {
+          userData = userDoc.data();
+        }
+
+        // 프로필 데이터 설정
+        setProfile({
+          name: userData?.displayName || user.displayName || user.email?.split('@')[0] || '사용자',
+          phone: userData?.phone || '',
+          address: userData?.address || '',
+          company: userData?.businessName || userData?.company || '개인',
+          role: userData?.role || userData?.primaryRole || 'customer'
+        });
+      } catch (error) {
+        console.error('프로필 로드 실패:', error);
+        // 기본값으로 설정
+        setProfile({
+          name: user.displayName || user.email?.split('@')[0] || '사용자',
+          phone: '',
+          address: '',
+          company: '개인',
+          role: 'customer'
+        });
+      } finally {
+        setProfileLoading(false);
+        setProfileLoaded(true);
+      }
+    };
+
+    // useAuth의 loading이 완료되고 user가 있으면 프로필 로드
+    if (!loading && user) {
+      loadProfile();
+    } else if (!loading && !user) {
+      // 로그인되지 않은 경우
+      setProfileLoading(false);
     }
-  }, [user]);
+  }, [user, loading, profileLoaded]);
 
   const handleProfileUpdate = async (e) => {
     e.preventDefault();
@@ -65,12 +113,33 @@ export default function Profile() {
     }
   };
 
-  if (loading) {
+  const getRoleDisplayName = (role) => {
+    switch (role) {
+      case 'seller': return '판매자';
+      case 'contractor': return '시공자';
+      case 'admin': return '관리자';
+      default: return '고객';
+    }
+  };
+
+  const getRoleDescription = (role) => {
+    switch (role) {
+      case 'seller': return '커튼 판매 및 시공요청 등록';
+      case 'contractor': return '커튼 설치 작업 수행';
+      case 'admin': return '시스템 관리';
+      default: return '링크를 통한 접근만 가능';
+    }
+  };
+
+  // 로딩 상태 체크 개선
+  const isLoading = loading || (user && profileLoading && !profileLoaded);
+
+  if (isLoading) {
     return (
       <div className="min-h-screen bg-gray-50 flex items-center justify-center">
         <div className="text-center">
-          <div className="animate-spin rounded-full h-12 w-12 border-b-2 border-blue-600 mx-auto"></div>
-          <p className="mt-4 text-gray-600">로딩 중...</p>
+          <div className="animate-spin rounded-full h-12 w-12 border-b-2 border-blue-600 mx-auto mb-4"></div>
+          <p className="text-gray-600">프로필을 불러오는 중...</p>
         </div>
       </div>
     );
@@ -81,12 +150,12 @@ export default function Profile() {
       <div className="min-h-screen bg-gray-50 flex items-center justify-center">
         <div className="text-center">
           <h2 className="text-2xl font-bold text-gray-900 mb-4">로그인이 필요합니다</h2>
-          <a 
-            href="/login" 
+          <button 
+            onClick={() => router.push('/login')}
             className="bg-blue-600 text-white px-6 py-3 rounded-lg hover:bg-blue-700 transition-colors"
           >
             로그인하기
-          </a>
+          </button>
         </div>
       </div>
     );
@@ -96,7 +165,7 @@ export default function Profile() {
     <div className="min-h-screen bg-gray-50">
       <Navigation title="프로필" />
       
-      <div className="max-w-4xl mx-auto px-4 sm:px-6 lg:px-8 py-8">
+      <div className="max-w-4xl mx-auto px-4 sm:px-6 lg:px-8 pt-24 pb-8">
         {message && (
           <div className="mb-6 p-4 bg-green-100 border border-green-400 text-green-700 rounded-lg">
             {message}
@@ -104,17 +173,38 @@ export default function Profile() {
         )}
 
         <div className="grid grid-cols-1 lg:grid-cols-3 gap-8">
+          {/* 프로필 사진 업로드 */}
+          <div className="lg:col-span-1">
+            <div className="bg-white rounded-lg shadow-sm p-6">
+              <h2 className="text-xl font-semibold text-gray-900 mb-6">프로필 사진</h2>
+              <ProfilePhotoUpload 
+                onPhotoUpdate={(photoURL) => {
+                  setMessage('프로필 사진이 업데이트되었습니다.');
+                  setTimeout(() => setMessage(''), 3000);
+                }}
+              />
+            </div>
+          </div>
+
           {/* 프로필 정보 */}
           <div className="lg:col-span-2">
             <div className="bg-white rounded-lg shadow-sm p-6">
               <div className="flex items-center justify-between mb-6">
                 <h2 className="text-xl font-semibold text-gray-900">프로필 정보</h2>
-                <button
-                  onClick={() => setIsEditing(!isEditing)}
-                  className="text-blue-600 hover:text-blue-700 font-medium"
-                >
-                  {isEditing ? '취소' : '편집'}
-                </button>
+                <div className="flex space-x-4">
+                  <button
+                    onClick={() => setIsEditing(!isEditing)}
+                    className="text-blue-600 hover:text-blue-700 font-medium"
+                  >
+                    {isEditing ? '취소' : '편집'}
+                  </button>
+                  <button
+                    onClick={() => router.push('/profile-edit')}
+                    className="bg-blue-600 text-white px-4 py-2 rounded-lg hover:bg-blue-700 transition-colors text-sm"
+                  >
+                    상세 정보 변경
+                  </button>
+                </div>
               </div>
 
               <form onSubmit={handleProfileUpdate}>
@@ -187,16 +277,17 @@ export default function Profile() {
                     <label className="block text-sm font-medium text-gray-700 mb-2">
                       역할
                     </label>
-                    <select
-                      value={profile.role}
-                      onChange={(e) => setProfile({ ...profile, role: e.target.value })}
-                      disabled={!isEditing}
-                      className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-blue-500 disabled:bg-gray-100"
-                    >
-                      <option value="customer">고객</option>
-                      <option value="worker">시공기사</option>
-                      <option value="admin">관리자</option>
-                    </select>
+                    <div className="flex items-center">
+                      <span className="px-3 py-2 bg-blue-100 text-blue-800 rounded-lg font-medium">
+                        {getRoleDisplayName(profile.role)}
+                      </span>
+                      <span className="ml-3 text-sm text-gray-600">
+                        {getRoleDescription(profile.role)}
+                      </span>
+                    </div>
+                    <p className="mt-1 text-sm text-gray-500">
+                      역할은 가입 시 설정되며 변경할 수 없습니다.
+                    </p>
                   </div>
 
                   {isEditing && (

@@ -20,7 +20,7 @@ const AuthComponent = () => {
   } = useAuth();
 
   const [authMode, setAuthMode] = useState('signin'); // 'signin', 'signup', 'email-link', 'reset-password'
-  const [selectedRole, setSelectedRole] = useState(USER_ROLES.CUSTOMER);
+  const [selectedRole, setSelectedRole] = useState(USER_ROLES.SELLER);
   const [formData, setFormData] = useState({
     email: '',
     password: '',
@@ -249,7 +249,7 @@ const AuthComponent = () => {
                     : 'bg-white text-gray-700 border-gray-300 hover:bg-gray-50'
                 }`}
               >
-                {value === USER_ROLES.CUSTOMER && '고객'}
+                {value === USER_ROLES.SELLER && '판매자'}
                 {value === USER_ROLES.SELLER && '판매자'}
                 {value === USER_ROLES.CONTRACTOR && '시공기사'}
                 {value === USER_ROLES.ADMIN && '관리자'}

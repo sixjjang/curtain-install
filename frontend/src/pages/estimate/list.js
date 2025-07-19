@@ -99,7 +99,7 @@ export default function EstimateListPage() {
     return (
       <div className="min-h-screen bg-gray-50">
         <Navigation title="견적서 목록" />
-        <div className="max-w-6xl mx-auto py-8 px-4 sm:px-6 lg:px-8">
+        <div className="max-w-6xl mx-auto pt-24 pb-8 px-4 sm:px-6 lg:px-8">
           <div className="flex items-center justify-center py-20">
             <div className="animate-spin rounded-full h-12 w-12 border-b-2 border-blue-600"></div>
             <span className="ml-3 text-lg">견적 목록을 불러오는 중...</span>
@@ -113,7 +113,7 @@ export default function EstimateListPage() {
     return (
       <div className="min-h-screen bg-gray-50">
         <Navigation title="견적서 목록" />
-        <div className="max-w-6xl mx-auto py-8 px-4 sm:px-6 lg:px-8">
+        <div className="max-w-6xl mx-auto pt-24 pb-8 px-4 sm:px-6 lg:px-8">
           <div className="bg-red-50 border border-red-200 rounded-lg p-6">
             <h2 className="text-xl font-semibold text-red-800 mb-2">오류 발생</h2>
             <p className="text-red-600 mb-4">{error}</p>
@@ -133,7 +133,7 @@ export default function EstimateListPage() {
     <div className="min-h-screen bg-gray-50">
       <Navigation title="견적서 목록" />
       
-      <div className="max-w-6xl mx-auto py-8 px-4 sm:px-6 lg:px-8 space-y-6">
+      <div className="max-w-6xl mx-auto pt-24 pb-8 px-4 sm:px-6 lg:px-8 space-y-6">
         <div className="bg-white border rounded-lg p-6 shadow-sm">
           {/* 헤더 */}
           <div className="flex justify-between items-center mb-6">

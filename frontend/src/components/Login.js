@@ -33,6 +33,7 @@ const Login = ({ onLogin }) => {
       return;
     }
 
+    // 일반 사용자 로그인 - 이메일 형식 검증
     if (!email.includes('@')) {
       setError("올바른 이메일 형식을 입력해주세요.");
       return;

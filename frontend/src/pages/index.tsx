@@ -1,383 +1,276 @@
 import React, { useState, useEffect } from 'react';
+import Head from 'next/head';
 import Link from 'next/link';
+import { useRouter } from 'next/router';
 import Navigation from '../components/Navigation';
-import InstallPWA from '../components/InstallPWA';
 
 export default function HomePage() {
-  const [isLoaded, setIsLoaded] = useState(false);
-  const [currentAd, setCurrentAd] = useState(0);
-  const [isMobile, setIsMobile] = useState(false);
+  const router = useRouter();
+  const [currentFeature, setCurrentFeature] = useState(0);
+  const [isVisible, setIsVisible] = useState(false);
 
   useEffect(() => {
-    setIsLoaded(true);
+    setIsVisible(true);
     
-    // Check if mobile
-    const checkMobile = () => {
-      setIsMobile(window.innerWidth <= 768);
-    };
-    
-    checkMobile();
-    window.addEventListener('resize', checkMobile);
-    
-    const adInterval = setInterval(() => {
-      setCurrentAd((prev) => (prev + 1) % 3);
-    }, 5000);
+    const interval = setInterval(() => {
+      setCurrentFeature((prev) => (prev + 1) % 3);
+    }, 4000);
 
-    return () => {
-      clearInterval(adInterval);
-      window.removeEventListener('resize', checkMobile);
-    };
+    return () => clearInterval(interval);
   }, []);
 
-  const ads = [
+  const features = [
     {
-      id: 1,
-      title: "신규 고객 특별 할인",
-      subtitle: "첫 주문 시 20% 할인",
-      image: "🎉",
-      bgColor: "bg-gradient-to-br from-pink-500 to-rose-500"
+      icon: '🏢',
+      title: '판매자',
+      subtitle: '커튼/블라인드 전문 판매업체',
+      description: '전문 시공기사와 연결하여 고객에게 완벽한 설치 서비스를 제공하세요',
+      color: 'from-blue-500 to-blue-600',
+      bgColor: 'bg-blue-50',
+      features: ['전문 시공기사 매칭', '실시간 작업 현황', '고객 만족도 관리', '매출 증대']
     },
     {
-      id: 2,
-      title: "전문 시공기사 모집",
-      subtitle: "높은 수익과 안정적인 일자리",
-      image: "👷",
-      bgColor: "bg-gradient-to-br from-blue-500 to-indigo-600"
+      icon: '👷',
+      title: '시공자',
+      subtitle: '설치 전문가',
+      description: '안정적인 수익과 전문성을 인정받는 설치 전문가가 되세요',
+      color: 'from-orange-500 to-orange-600',
+      bgColor: 'bg-orange-50',
+      features: ['안정적인 수익', '전문성 인정', '스케줄 관리', '고객 리뷰']
     },
     {
-      id: 3,
-      title: "24시간 고객 지원",
-      subtitle: "언제든지 문의하세요",
-      image: "📞",
-      bgColor: "bg-gradient-to-br from-green-500 to-emerald-600"
+      icon: '⚡',
+      title: '협업 시스템',
+      subtitle: '혁신적인 협업 플랫폼',
+      description: '여러 시공자가 함께 작업하여 대형 프로젝트도 완벽하게 처리',
+      color: 'from-purple-500 to-purple-600',
+      bgColor: 'bg-purple-50',
+      features: ['다중 시공자 협업', '작업 분담 시스템', '진도 관리', '품질 보장']
     }
   ];
 
-  const quickActions = [
-    { icon: "📋", title: "견적 요청", desc: "간편한 견적 요청", href: "/workorder/new", color: "bg-blue-500" },
-    { icon: "🔍", title: "작업 목록", desc: "진행 상황 확인", href: "/workorder/list", color: "bg-green-500" },
-    { icon: "📄", title: "견적서", desc: "견적서 관리", href: "/estimate/list", color: "bg-purple-500" },
-    { icon: "💳", title: "결제", desc: "결제 내역", href: "/payment/list", color: "bg-orange-500" },
-    { icon: "⭐", title: "리뷰", desc: "고객 리뷰", href: "/review/list", color: "bg-yellow-500" },
-    { icon: "🔔", title: "알림", desc: "알림 확인", href: "/notification/list", color: "bg-red-500" }
-  ];
-
   const stats = [
-    { number: "10,000+", label: "완료된 프로젝트", icon: "🏠" },
-    { number: "500+", label: "전문 시공기사", icon: "👷" },
-    { number: "98%", label: "고객 만족도", icon: "⭐" },
-    { number: "24/7", label: "고객 지원", icon: "📞" }
+    { number: '1,200+', label: '등록된 시공자' },
+    { number: '500+', label: '협력 판매업체' },
+    { number: '15,000+', label: '완료된 프로젝트' },
+    { number: '98%', label: '고객 만족도' }
   ];
 
   return (
-    <div className="min-h-screen bg-gray-50">
-      <Navigation showBack={false} showMenu={false} />
-      
-      {/* Hero Section */}
-      <section className="relative bg-white">
-        <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-8 lg:py-16">
-          <div className="grid grid-cols-1 lg:grid-cols-2 gap-8 lg:gap-12 items-center">
-            {/* Left Content */}
-            <div className={`transition-all duration-1000 ${isLoaded ? 'opacity-100 translate-y-0' : 'opacity-0 translate-y-8'}`}>
-              <div className="inline-flex items-center px-3 py-1.5 bg-blue-50 text-blue-700 rounded-full text-xs font-medium mb-4">
-                <span className="w-1.5 h-1.5 bg-blue-500 rounded-full mr-2"></span>
-                커튼 설치 전문 매칭 플랫폼
-              </div>
-              
-              <h1 className="text-3xl lg:text-6xl font-bold text-gray-900 mb-4 lg:mb-6 leading-tight">
-                커튼 설치를 위한
-                <span className="text-blue-600 block">최고의 선택</span>
-              </h1>
-              
-              <p className="text-base lg:text-xl text-gray-600 mb-6 lg:mb-8 leading-relaxed">
-                전문 시공기사들이 고객님의 커튼 설치를 책임집니다. 
-                간편한 견적 요청부터 전문적인 시공까지, 모든 과정을 관리해드립니다.
-              </p>
-              
-              <div className="flex flex-col sm:flex-row gap-3 lg:gap-4">
-                <Link 
-                  href="/workorder/new" 
-                  className="inline-flex items-center justify-center px-6 lg:px-8 py-3 lg:py-4 bg-blue-600 text-white font-semibold rounded-xl shadow-lg hover:shadow-xl transform hover:-translate-y-1 transition-all duration-300 text-sm lg:text-base"
-                >
-                  <span className="mr-2">🚀</span>
-                  견적 요청하기
-                </Link>
-                <Link 
-                  href="/workorder/list" 
-                  className="inline-flex items-center justify-center px-6 lg:px-8 py-3 lg:py-4 border-2 border-gray-300 text-gray-700 font-semibold rounded-xl hover:border-blue-600 hover:text-blue-600 transition-all duration-300 text-sm lg:text-base"
-                >
-                  <span className="mr-2">📋</span>
-                  작업 주문 보기
-                </Link>
+    <>
+      <Head>
+        <title>Insteam - 설치 전문가 플랫폼</title>
+        <meta name="description" content="설치 전문가와 고객을 연결하는 혁신적인 협업 플랫폼" />
+        <meta name="viewport" content="width=device-width, initial-scale=1" />
+      </Head>
+
+      <div className="min-h-screen bg-gradient-to-br from-gray-50 to-white">
+        <Navigation title="Insteam" />
+        
+        {/* Hero Section */}
+        <section className="relative pt-20 pb-16 overflow-hidden">
+          <div className="absolute inset-0 bg-gradient-to-r from-blue-600/10 to-orange-600/10"></div>
+          <div className="relative max-w-7xl mx-auto px-4 sm:px-6 lg:px-8">
+            <div className="text-center">
+              <div className={`transition-all duration-1000 ${isVisible ? 'opacity-100 translate-y-0' : 'opacity-0 translate-y-8'}`}>
+                <h1 className="text-5xl md:text-7xl font-bold bg-gradient-to-r from-blue-600 via-purple-600 to-orange-600 bg-clip-text text-transparent mb-6">
+                  Insteam
+                </h1>
+                <p className="text-xl md:text-2xl text-gray-700 mb-8 max-w-3xl mx-auto leading-relaxed">
+                  설치 전문가와 고객을 연결하는 <span className="font-semibold text-blue-600">혁신적인 협업 플랫폼</span>
+                </p>
+                <p className="text-lg text-gray-600 mb-12 max-w-2xl mx-auto">
+                  전문 시공기사들이 협업하여 대형 프로젝트도 완벽하게 처리하는 
+                  <br className="hidden md:block" />
+                  <span className="font-medium">차세대 설치 서비스 플랫폼</span>
+                </p>
+                
+                <div className="flex flex-col sm:flex-row gap-4 justify-center mb-16">
+                  <Link href="/signup">
+                    <button className="px-8 py-4 bg-gradient-to-r from-blue-600 to-blue-700 text-white font-semibold rounded-xl hover:from-blue-700 hover:to-blue-800 transition-all duration-300 transform hover:scale-105 shadow-lg hover:shadow-xl">
+                      무료로 시작하기
+                    </button>
+                  </Link>
+                  <Link href="/login">
+                    <button className="px-8 py-4 border-2 border-gray-300 text-gray-700 font-semibold rounded-xl hover:border-blue-500 hover:text-blue-600 transition-all duration-300">
+                      로그인
+                    </button>
+                  </Link>
+                </div>
               </div>
             </div>
+          </div>
+        </section>
 
-            {/* Right Content - Ad Banner */}
-            <div className={`transition-all duration-1000 delay-300 ${isLoaded ? 'opacity-100 translate-y-0' : 'opacity-0 translate-y-8'}`}>
-              <div className="relative">
-                <div className={`${ads[currentAd].bgColor} rounded-2xl p-6 lg:p-8 text-white shadow-2xl`}>
+        {/* Stats Section */}
+        <section className="py-16 bg-white">
+          <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8">
+            <div className="grid grid-cols-2 md:grid-cols-4 gap-8">
+              {stats.map((stat, index) => (
+                <div key={index} className="text-center">
+                  <div className={`text-3xl md:text-4xl font-bold mb-2 transition-all duration-500 ${isVisible ? 'opacity-100 translate-y-0' : 'opacity-0 translate-y-4'}`} style={{ transitionDelay: `${index * 100}ms` }}>
+                    <span className="bg-gradient-to-r from-blue-600 to-purple-600 bg-clip-text text-transparent">
+                      {stat.number}
+                    </span>
+                  </div>
+                  <div className="text-gray-600 font-medium">{stat.label}</div>
+                </div>
+              ))}
+            </div>
+          </div>
+        </section>
+
+        {/* Features Section */}
+        <section className="py-20 bg-gray-50">
+          <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8">
+            <div className="text-center mb-16">
+              <h2 className="text-4xl font-bold text-gray-900 mb-4">
+                핵심 서비스
+              </h2>
+              <p className="text-xl text-gray-600 max-w-3xl mx-auto">
+                판매자와 시공자가 협업하여 완벽한 설치 서비스를 제공합니다
+              </p>
+            </div>
+
+            <div className="grid md:grid-cols-3 gap-8">
+              {features.map((feature, index) => (
+                <div
+                  key={index}
+                  className={`relative p-8 rounded-2xl transition-all duration-500 transform hover:scale-105 ${
+                    currentFeature === index ? 'ring-4 ring-blue-200' : ''
+                  } ${feature.bgColor} hover:shadow-xl`}
+                >
                   <div className="text-center">
-                    <div className="text-4xl lg:text-6xl mb-3 lg:mb-4">{ads[currentAd].image}</div>
-                    <h3 className="text-xl lg:text-2xl font-bold mb-2">
-                      {ads[currentAd].title}
-                    </h3>
-                    <p className="text-base lg:text-lg opacity-90 mb-4 lg:mb-6">
-                      {ads[currentAd].subtitle}
-                    </p>
-                    <div className="flex justify-center space-x-2">
-                      {ads.map((_, index) => (
-                        <button
-                          key={index}
-                          onClick={() => setCurrentAd(index)}
-                          className={`w-2 h-2 rounded-full transition-all duration-300 ${
-                            index === currentAd ? 'bg-white w-6' : 'bg-white/50'
-                          }`}
-                        />
+                    <div className={`text-6xl mb-6 transition-transform duration-300 ${currentFeature === index ? 'scale-110' : ''}`}>
+                      {feature.icon}
+                    </div>
+                    <h3 className="text-2xl font-bold text-gray-900 mb-2">{feature.title}</h3>
+                    <p className="text-lg font-medium text-gray-700 mb-3">{feature.subtitle}</p>
+                    <p className="text-gray-600 mb-6 leading-relaxed">{feature.description}</p>
+                    
+                    <div className="space-y-2">
+                      {feature.features.map((item, idx) => (
+                        <div key={idx} className="flex items-center text-sm text-gray-600">
+                          <span className="text-green-500 mr-2">✓</span>
+                          {item}
+                        </div>
                       ))}
                     </div>
                   </div>
                 </div>
-              </div>
+              ))}
             </div>
           </div>
-        </div>
-      </section>
+        </section>
 
-      {/* Quick Actions - Mobile Optimized */}
-      <section className="py-8 lg:py-16 bg-white">
-        <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8">
-          <div className="text-center mb-8 lg:mb-12">
-            <h2 className="text-2xl lg:text-3xl font-bold text-gray-900 mb-2 lg:mb-4">
-              빠른 서비스 이용
-            </h2>
-            <p className="text-base lg:text-lg text-gray-600">
-              원하는 서비스를 바로 이용해보세요
-            </p>
-          </div>
-          
-          <div className="grid grid-cols-3 lg:grid-cols-6 gap-3 lg:gap-4">
-            {quickActions.map((action, index) => (
-              <Link
-                key={index}
-                href={action.href}
-                className="group bg-white rounded-xl p-4 lg:p-6 text-center shadow-sm hover:shadow-lg transition-all duration-300 border border-gray-100 hover:border-blue-200"
-              >
-                <div className={`w-10 h-10 lg:w-12 lg:h-12 ${action.color} rounded-xl flex items-center justify-center text-white text-lg lg:text-xl mx-auto mb-3 lg:mb-4 group-hover:scale-110 transition-transform duration-300`}>
-                  {action.icon}
-                </div>
-                <h3 className="font-semibold text-gray-900 mb-1 text-xs lg:text-sm">{action.title}</h3>
-                <p className="text-xs lg:text-sm text-gray-500 hidden lg:block">{action.desc}</p>
-              </Link>
-            ))}
-          </div>
-        </div>
-      </section>
-
-      {/* Stats Section */}
-      <section className="py-8 lg:py-16 bg-gray-50">
-        <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8">
-          <div className="grid grid-cols-2 lg:grid-cols-4 gap-6 lg:gap-8">
-            {stats.map((stat, index) => (
-              <div 
-                key={index}
-                className="text-center"
-              >
-                <div className="w-12 h-12 lg:w-16 lg:h-16 bg-blue-100 rounded-2xl flex items-center justify-center text-xl lg:text-2xl mx-auto mb-3 lg:mb-4">
-                  {stat.icon}
-                </div>
-                <div className="text-2xl lg:text-3xl font-bold text-gray-900 mb-1 lg:mb-2">
-                  {stat.number}
-                </div>
-                <div className="text-gray-600 font-medium text-sm lg:text-base">
-                  {stat.label}
-                </div>
-              </div>
-            ))}
-          </div>
-        </div>
-      </section>
-
-      {/* Features Section */}
-      <section className="py-8 lg:py-16 bg-white">
-        <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8">
-          <div className="text-center mb-8 lg:mb-16">
-            <h2 className="text-2xl lg:text-3xl font-bold text-gray-900 mb-2 lg:mb-4">
-              왜 커튼 설치 매칭을 선택해야 할까요?
-            </h2>
-            <p className="text-base lg:text-lg text-gray-600 max-w-3xl mx-auto">
-              전문성과 신뢰성을 바탕으로 고객님의 만족을 최우선으로 생각합니다.
-            </p>
-          </div>
-          
-          <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-6 lg:gap-8">
-            <div className="text-center">
-              <div className="w-12 h-12 lg:w-16 lg:h-16 bg-blue-100 rounded-2xl flex items-center justify-center text-xl lg:text-2xl mx-auto mb-4 lg:mb-6">
-                🏠
-              </div>
-              <h3 className="text-lg lg:text-xl font-bold text-gray-900 mb-3 lg:mb-4">
-                간편한 견적 요청
-              </h3>
-              <p className="text-gray-600 leading-relaxed text-sm lg:text-base">
-                온라인으로 간편하게 견적을 요청하고 전문가들의 제안을 받아보세요.
-              </p>
-            </div>
-            
-            <div className="text-center">
-              <div className="w-12 h-12 lg:w-16 lg:h-16 bg-green-100 rounded-2xl flex items-center justify-center text-xl lg:text-2xl mx-auto mb-4 lg:mb-6">
-                👷
-              </div>
-              <h3 className="text-lg lg:text-xl font-bold text-gray-900 mb-3 lg:mb-4">
-                전문 시공기사
-              </h3>
-              <p className="text-gray-600 leading-relaxed text-sm lg:text-base">
-                검증된 전문 시공기사들이 정확하고 깔끔한 시공을 보장합니다.
-              </p>
-            </div>
-            
-            <div className="text-center">
-              <div className="w-12 h-12 lg:w-16 lg:h-16 bg-purple-100 rounded-2xl flex items-center justify-center text-xl lg:text-2xl mx-auto mb-4 lg:mb-6">
-                💳
-              </div>
-              <h3 className="text-lg lg:text-xl font-bold text-gray-900 mb-3 lg:mb-4">
-                안전한 결제
-              </h3>
-              <p className="text-gray-600 leading-relaxed text-sm lg:text-base">
-                시공 완료 후 결제하는 안전한 시스템으로 고객님의 만족을 보장합니다.
-              </p>
-            </div>
-            
-            <div className="text-center">
-              <div className="w-12 h-12 lg:w-16 lg:h-16 bg-yellow-100 rounded-2xl flex items-center justify-center text-xl lg:text-2xl mx-auto mb-4 lg:mb-6">
-                ⭐
-              </div>
-              <h3 className="text-lg lg:text-xl font-bold text-gray-900 mb-3 lg:mb-4">
-                품질 보장
-              </h3>
-              <p className="text-gray-600 leading-relaxed text-sm lg:text-base">
-                시공 완료 후 1년간 품질 보증을 제공하여 안심하고 이용하세요.
-              </p>
-            </div>
-          </div>
-        </div>
-      </section>
-
-      {/* CTA Section */}
-      <section className="py-8 lg:py-16 bg-gradient-to-r from-blue-600 to-purple-600">
-        <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8">
-          <div className="grid grid-cols-1 lg:grid-cols-2 gap-8 lg:gap-12 items-center">
-            <div className="text-white">
-              <h2 className="text-2xl lg:text-4xl font-bold mb-4 lg:mb-6">
-                지금 바로 시작하세요
+        {/* How It Works */}
+        <section className="py-20 bg-white">
+          <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8">
+            <div className="text-center mb-16">
+              <h2 className="text-4xl font-bold text-gray-900 mb-4">
+                어떻게 작동하나요?
               </h2>
-              <p className="text-lg lg:text-xl mb-6 lg:mb-8 opacity-90">
-                전문 시공기사와 연결되어 완벽한 커튼 설치를 경험해보세요.
+              <p className="text-xl text-gray-600">
+                간단한 3단계로 완벽한 설치 서비스를 경험하세요
               </p>
-              <div className="flex flex-col sm:flex-row gap-3 lg:gap-4">
-                <Link 
-                  href="/signup" 
-                  className="inline-flex items-center justify-center px-6 lg:px-8 py-3 lg:py-4 bg-white text-blue-600 font-semibold rounded-xl hover:bg-gray-100 transition-colors duration-300 text-sm lg:text-base"
-                >
-                  무료 회원가입
-                </Link>
-                <Link 
-                  href="/login" 
-                  className="inline-flex items-center justify-center px-6 lg:px-8 py-3 lg:py-4 border-2 border-white text-white font-semibold rounded-xl hover:bg-white hover:text-blue-600 transition-colors duration-300 text-sm lg:text-base"
-                >
-                  로그인
-                </Link>
-              </div>
             </div>
-            
-            <div className="bg-white/10 backdrop-blur-sm rounded-2xl p-6 lg:p-8 text-center text-white">
-              <div className="text-4xl lg:text-5xl mb-3 lg:mb-4">🎁</div>
-              <h3 className="text-xl lg:text-2xl font-bold mb-2">신규 가입 혜택</h3>
-              <p className="mb-4 lg:mb-6 opacity-90 text-sm lg:text-base">
-                첫 주문 시 20% 할인 + 무료 상담
-              </p>
-              <div className="bg-white/20 rounded-xl p-3 lg:p-4">
-                <div className="text-xs lg:text-sm opacity-75">한정 시간</div>
-                <div className="text-xl lg:text-2xl font-bold">2024.12.31까지</div>
+
+            <div className="grid md:grid-cols-3 gap-8">
+              <div className="text-center">
+                <div className="w-16 h-16 bg-blue-100 rounded-full flex items-center justify-center mx-auto mb-6">
+                  <span className="text-2xl font-bold text-blue-600">1</span>
+                </div>
+                <h3 className="text-xl font-semibold text-gray-900 mb-3">요청 등록</h3>
+                <p className="text-gray-600">판매자가 고객의 설치 요청을 등록합니다</p>
+              </div>
+              
+              <div className="text-center">
+                <div className="w-16 h-16 bg-orange-100 rounded-full flex items-center justify-center mx-auto mb-6">
+                  <span className="text-2xl font-bold text-orange-600">2</span>
+                </div>
+                <h3 className="text-xl font-semibold text-gray-900 mb-3">전문가 배정</h3>
+                <p className="text-gray-600">적합한 시공자가 선택되어 작업을 시작합니다</p>
+              </div>
+              
+              <div className="text-center">
+                <div className="w-16 h-16 bg-green-100 rounded-full flex items-center justify-center mx-auto mb-6">
+                  <span className="text-2xl font-bold text-green-600">3</span>
+                </div>
+                <h3 className="text-xl font-semibold text-gray-900 mb-3">완료 및 평가</h3>
+                <p className="text-gray-600">설치 완료 후 고객이 서비스를 평가합니다</p>
               </div>
             </div>
           </div>
-        </div>
-      </section>
+        </section>
 
-      {/* Footer */}
-      <footer className="bg-gray-900 text-white py-8 lg:py-16">
-        <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8">
-          <div className="grid grid-cols-1 lg:grid-cols-5 gap-6 lg:gap-8">
-            {/* Company Info */}
-            <div className="lg:col-span-2">
-              <div className="flex items-center space-x-3 mb-4 lg:mb-6">
-                <div className="w-10 h-10 lg:w-12 lg:h-12 bg-gradient-to-br from-blue-500 to-purple-600 rounded-xl flex items-center justify-center">
-                  <span className="text-white font-bold text-lg lg:text-xl">C</span>
-                </div>
-                <div>
-                  <h3 className="text-lg lg:text-xl font-bold">커튼 설치 매칭</h3>
-                  <p className="text-gray-400 text-sm lg:text-base">전문 시공기사 매칭 플랫폼</p>
-                </div>
-              </div>
-              <p className="text-gray-400 mb-4 lg:mb-6 text-sm lg:text-base">
-                고객님의 만족을 최우선으로 생각하는 커튼 설치 전문 매칭 서비스입니다.
-                검증된 시공기사들과 함께 완벽한 커튼 설치를 경험해보세요.
-              </p>
-              <div className="flex space-x-3 lg:space-x-4">
-                <div className="w-8 h-8 lg:w-10 lg:h-10 bg-gray-800 rounded-lg flex items-center justify-center hover:bg-gray-700 transition-colors cursor-pointer">
-                  <span className="text-sm lg:text-base">📧</span>
-                </div>
-                <div className="w-8 h-8 lg:w-10 lg:h-10 bg-gray-800 rounded-lg flex items-center justify-center hover:bg-gray-700 transition-colors cursor-pointer">
-                  <span className="text-sm lg:text-base">📱</span>
-                </div>
-                <div className="w-8 h-8 lg:w-10 lg:h-10 bg-gray-800 rounded-lg flex items-center justify-center hover:bg-gray-700 transition-colors cursor-pointer">
-                  <span className="text-sm lg:text-base">💬</span>
-                </div>
-              </div>
-            </div>
-
-            {/* Quick Links */}
-            <div>
-              <h4 className="text-base lg:text-lg font-semibold mb-3 lg:mb-4">빠른 링크</h4>
-              <ul className="space-y-2">
-                <li><Link href="/workorder/new" className="text-gray-400 hover:text-white transition-colors text-sm lg:text-base">견적 요청</Link></li>
-                <li><Link href="/workorder/list" className="text-gray-400 hover:text-white transition-colors text-sm lg:text-base">작업 목록</Link></li>
-                <li><Link href="/estimate/list" className="text-gray-400 hover:text-white transition-colors text-sm lg:text-base">견적서</Link></li>
-                <li><Link href="/payment/list" className="text-gray-400 hover:text-white transition-colors text-sm lg:text-base">결제</Link></li>
-              </ul>
-            </div>
-
-            {/* Support */}
-            <div>
-              <h4 className="text-base lg:text-lg font-semibold mb-3 lg:mb-4">고객 지원</h4>
-              <ul className="space-y-2">
-                <li><Link href="/help" className="text-gray-400 hover:text-white transition-colors text-sm lg:text-base">도움말</Link></li>
-                <li><Link href="/contact" className="text-gray-400 hover:text-white transition-colors text-sm lg:text-base">문의하기</Link></li>
-                <li><Link href="/faq" className="text-gray-400 hover:text-white transition-colors text-sm lg:text-base">자주 묻는 질문</Link></li>
-                <li><Link href="/terms" className="text-gray-400 hover:text-white transition-colors text-sm lg:text-base">이용약관</Link></li>
-              </ul>
-            </div>
-
-            {/* Ad Space */}
-            <div>
-              <h4 className="text-base lg:text-lg font-semibold mb-3 lg:mb-4">광고 공간</h4>
-              <div className="bg-gray-800/50 border border-gray-700 rounded-xl p-3 lg:p-4 text-center">
-                <div className="text-xl lg:text-2xl mb-2">📢</div>
-                <p className="text-xs lg:text-sm text-gray-400">광고 문의</p>
-                <p className="text-xs text-gray-500">contact@curtain.com</p>
-              </div>
-            </div>
-          </div>
-
-          <div className="border-t border-gray-800 mt-8 lg:mt-12 pt-6 lg:pt-8 text-center">
-            <p className="text-gray-400 text-sm lg:text-base">
-              © 2024 커튼 설치 매칭. 모든 권리 보유.
+        {/* CTA Section */}
+        <section className="py-20 bg-gradient-to-r from-blue-600 to-purple-600">
+          <div className="max-w-4xl mx-auto text-center px-4 sm:px-6 lg:px-8">
+            <h2 className="text-4xl font-bold text-white mb-6">
+              지금 바로 시작하세요
+            </h2>
+            <p className="text-xl text-blue-100 mb-8">
+              전문 시공기사들과 함께 성장하는 설치 서비스의 새로운 기준을 만들어보세요
             </p>
+            <div className="flex flex-col sm:flex-row gap-4 justify-center">
+              <Link href="/signup">
+                <button className="px-8 py-4 bg-white text-blue-600 font-semibold rounded-xl hover:bg-gray-100 transition-all duration-300 transform hover:scale-105">
+                  무료 회원가입
+                </button>
+              </Link>
+              <Link href="/login">
+                <button className="px-8 py-4 border-2 border-white text-white font-semibold rounded-xl hover:bg-white hover:text-blue-600 transition-all duration-300">
+                  로그인
+                </button>
+              </Link>
+            </div>
           </div>
-        </div>
-      </footer>
+        </section>
 
-      {/* PWA Install Prompt */}
-      <InstallPWA />
-    </div>
+        {/* Footer */}
+        <footer className="bg-gray-900 text-white py-12">
+          <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8">
+            <div className="grid md:grid-cols-4 gap-8">
+              <div>
+                <h3 className="text-xl font-bold mb-4">Insteam</h3>
+                <p className="text-gray-400">
+                  설치 전문가와 고객을 연결하는 혁신적인 협업 플랫폼
+                </p>
+              </div>
+              <div>
+                <h4 className="font-semibold mb-4">서비스</h4>
+                <ul className="space-y-2 text-gray-400">
+                  <li>커튼 설치</li>
+                  <li>블라인드 설치</li>
+                  <li>롤스크린 설치</li>
+                  <li>전문 시공</li>
+                </ul>
+              </div>
+              <div>
+                <h4 className="font-semibold mb-4">회사</h4>
+                <ul className="space-y-2 text-gray-400">
+                  <li>소개</li>
+                  <li>채용</li>
+                  <li>뉴스</li>
+                  <li>연락처</li>
+                </ul>
+              </div>
+              <div>
+                <h4 className="font-semibold mb-4">지원</h4>
+                <ul className="space-y-2 text-gray-400">
+                  <li>고객센터</li>
+                  <li>도움말</li>
+                  <li>문의하기</li>
+                  <li>이용약관</li>
+                </ul>
+              </div>
+            </div>
+            <div className="border-t border-gray-800 mt-8 pt-8 text-center text-gray-400">
+              <p>&copy; 2024 Insteam. All rights reserved.</p>
+            </div>
+          </div>
+        </footer>
+      </div>
+    </>
   );
 } 

@@ -55,7 +55,7 @@ const MediaList = ({ projectId }) => {
         downloaded: true,
       });
       setMessage(`다운로드 완료: ${item.url}`);
-      window.open(item.url, "_blank");
+      window.open(item.url, "_blank", "noopener,noreferrer");
     } catch (err) {
       console.error(err);
       setMessage("다운로드 오류: " + err.message);
@@ -89,7 +89,7 @@ const MediaList = ({ projectId }) => {
       await updateDoc(docRef, {
         downloaded: true,
       });
-      window.open(item.url, "_blank");
+      window.open(item.url, "_blank", "noopener,noreferrer");
     }
 
     setSelectedItems([]);

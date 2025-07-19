@@ -57,6 +57,12 @@ export default function App({ Component, pageProps }: AppProps) {
         <link rel="preconnect" href="https://fonts.googleapis.com" />
         <link rel="preconnect" href="https://fonts.gstatic.com" crossOrigin="anonymous" />
         
+        {/* Kakao SDK */}
+        <script src="https://developers.kakao.com/sdk/js/kakao.js"></script>
+        
+        {/* Naver SDK */}
+        <script src="https://static.nid.naver.com/js/naveridlogin_js_sdk_2.0.2.js"></script>
+        
         {/* Open Graph */}
         <meta property="og:title" content="커튼 설치 매칭" />
         <meta property="og:description" content="전문 시공기사와 고객을 연결하는 커튼 설치 매칭 플랫폼" />

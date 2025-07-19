@@ -1,6 +1,6 @@
-# Curtain Install Frontend - FCM Notification System
+# Install Frontend - FCM Notification System
 
-Next.js 기반의 커튼 설치 플랫폼 프론트엔드입니다. Firebase Cloud Messaging (FCM)을 통한 실시간 알림 시스템을 포함합니다.
+Next.js 기반의 전문 시공 매칭 플랫폼 프론트엔드입니다. Firebase Cloud Messaging (FCM)을 통한 실시간 알림 시스템을 포함합니다.
 
 ## 🚀 주요 기능
 
@@ -19,35 +19,33 @@ cd frontend
 npm install
 ```
 
-### 2. 환경 변수 설정
+### 2. Firebase 설정
 
-`env.example` 파일을 복사하여 `.env.local` 파일을 생성하고 Firebase 설정을 입력하세요:
+**중요**: 이 애플리케이션은 Firebase Authentication을 사용합니다. Firebase 설정이 필요합니다.
 
-```bash
-cp env.example .env.local
-```
+자세한 설정 방법은 [FIREBASE_SETUP_GUIDE.md](./FIREBASE_SETUP_GUIDE.md)를 참조하세요.
 
-`.env.local` 파일에 다음 정보를 입력하세요:
+#### 빠른 설정:
+
+1. [Firebase Console](https://console.firebase.google.com/)에서 프로젝트 생성
+2. 웹 앱 추가
+3. 프로젝트 루트에 `.env.local` 파일 생성:
 
 ```env
 # Firebase Configuration
-NEXT_PUBLIC_FIREBASE_API_KEY=your_api_key_here
-NEXT_PUBLIC_FIREBASE_AUTH_DOMAIN=your_project.firebaseapp.com
+NEXT_PUBLIC_FIREBASE_API_KEY=your_actual_api_key_here
+NEXT_PUBLIC_FIREBASE_AUTH_DOMAIN=your_project_id.firebaseapp.com
 NEXT_PUBLIC_FIREBASE_PROJECT_ID=your_project_id
-NEXT_PUBLIC_FIREBASE_STORAGE_BUCKET=your_project.appspot.com
-NEXT_PUBLIC_FIREBASE_MESSAGING_SENDER_ID=123456789
-NEXT_PUBLIC_FIREBASE_APP_ID=1:123456789:web:abcdef123456
+NEXT_PUBLIC_FIREBASE_STORAGE_BUCKET=your_project_id.appspot.com
+NEXT_PUBLIC_FIREBASE_MESSAGING_SENDER_ID=your_sender_id
+NEXT_PUBLIC_FIREBASE_APP_ID=your_app_id
 
 # Firebase VAPID Key (for FCM)
 NEXT_PUBLIC_FIREBASE_VAPID_KEY=your_vapid_key_here
 ```
 
-### 3. Firebase 설정
-
-1. [Firebase Console](https://console.firebase.google.com/)에서 프로젝트 생성
-2. 웹 앱 추가
-3. Cloud Messaging 설정에서 VAPID 키 생성
-4. 서비스 워커 등록
+4. Firebase Console에서 Authentication > 로그인 방법 > 이메일/비밀번호 활성화
+5. Firestore Database 생성
 
 ### 4. 개발 서버 실행
 

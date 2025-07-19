@@ -13,6 +13,14 @@ import {
   reauthenticateWithCredential,
   EmailAuthProvider
 } from "firebase/auth";
+
+// Verify imports are working
+console.log('Firebase auth imports:', {
+  signInWithEmailAndPassword: typeof signInWithEmailAndPassword,
+  createUserWithEmailAndPassword: typeof createUserWithEmailAndPassword,
+  signOut: typeof signOut,
+  onAuthStateChanged: typeof onAuthStateChanged
+});
 import { 
   doc, 
   setDoc, 
@@ -30,8 +38,7 @@ import { auth, db } from "../firebase/firebase";
 export const USER_ROLES = {
   SELLER: 'seller',
   CONTRACTOR: 'contractor',
-  ADMIN: 'admin',
-  CUSTOMER: 'customer'
+  ADMIN: 'admin'
 };
 
 // Authentication service class
@@ -41,32 +48,62 @@ class AuthService {
     this.currentUser = null;
     this.userProfile = null;
     this.authStateListeners = [];
-    this.isDemoMode = process.env.NEXT_PUBLIC_FIREBASE_API_KEY === 'demo-api-key';
+    
+    // Log auth initialization status
+    console.log('AuthService initialized with auth:', this.auth ? 'valid' : 'null');
+    if (this.auth) {
+      console.log('Auth instance methods:', Object.keys(this.auth).filter(key => typeof this.auth[key] === 'function'));
+    } else {
+      console.warn('Firebase auth not available - running in demo mode');
+    }
   }
 
   // Initialize auth state listener
   initAuthStateListener() {
-    if (this.isDemoMode) {
-      console.log('Demo mode: Skipping auth state listener initialization');
+    if (!this.auth) {
+      console.warn('Firebase auth not initialized, running in demo mode');
+      // Return a no-op function for demo mode
       return () => {};
     }
 
-    return onAuthStateChanged(this.auth, async (user) => {
-      this.currentUser = user;
-      
-      if (user) {
-        // Get user profile from Firestore
-        this.userProfile = await this.getUserProfile(user.uid);
-        
-        // Update last login
-        await this.updateLastLogin(user.uid);
-      } else {
-        this.userProfile = null;
-      }
+    // Check if auth has onAuthStateChanged method
+    if (typeof this.auth.onAuthStateChanged !== 'function') {
+      console.warn('Firebase auth not properly configured, running in demo mode');
+      return () => {};
+    }
 
-      // Notify listeners
-      this.authStateListeners.forEach(listener => listener(user, this.userProfile));
-    });
+    try {
+      return onAuthStateChanged(this.auth, async (user) => {
+        this.currentUser = user;
+        
+        if (user) {
+          try {
+            // Get user profile from Firestore
+            this.userProfile = await this.getUserProfile(user.uid);
+            
+            // Update last login
+            await this.updateLastLogin(user.uid);
+          } catch (error) {
+            console.error('Get user profile error:', error);
+            this.userProfile = null;
+          }
+        } else {
+          this.userProfile = null;
+        }
+
+        // Notify listeners
+        this.authStateListeners.forEach(listener => {
+          try {
+            listener(user, this.userProfile);
+          } catch (error) {
+            console.error('Auth state listener error:', error);
+          }
+        });
+      });
+    } catch (error) {
+      console.error('Auth state listener initialization error:', error);
+      return () => {};
+    }
   }
 
   // Add auth state listener
@@ -81,7 +118,11 @@ class AuthService {
   }
 
   // Email link authentication
-  async sendEmailLink(email, role = USER_ROLES.CUSTOMER) {
+  async sendEmailLink(email, role = USER_ROLES.SELLER) {
+    if (!this.auth || typeof this.auth.onAuthStateChanged !== 'function') {
+      throw new Error('Firebase가 초기화되지 않았습니다. Firebase 프로젝트를 설정해주세요.');
+    }
+
     const actionCodeSettings = {
       url: `${window.location.origin}/auth/verify-email`,
       handleCodeInApp: true,
@@ -98,8 +139,6 @@ class AuthService {
 
     try {
       await sendSignInLinkToEmail(this.auth, email, actionCodeSettings);
-      window.localStorage.setItem('emailForSignIn', email);
-      window.localStorage.setItem('roleForSignIn', role);
       
       return { success: true, message: '인증 메일이 발송되었습니다. 이메일을 확인해주세요.' };
     } catch (error) {
@@ -110,6 +149,10 @@ class AuthService {
 
   // Complete email link sign in
   async completeEmailSignIn() {
+    if (!this.auth || typeof this.auth.onAuthStateChanged !== 'function') {
+      throw new Error('Firebase가 초기화되지 않았습니다. Firebase 프로젝트를 설정해주세요.');
+    }
+
     if (this.auth.isSignInWithEmailLink(window.location.href)) {
       let email = window.localStorage.getItem('emailForSignIn');
       const role = window.localStorage.getItem('roleForSignIn');
@@ -138,7 +181,11 @@ class AuthService {
   }
 
   // Google sign in
-  async signInWithGoogle(role = USER_ROLES.CUSTOMER) {
+  async signInWithGoogle(role = USER_ROLES.SELLER, additionalData = {}) {
+    if (!this.auth || typeof this.auth.onAuthStateChanged !== 'function') {
+      throw new Error('Firebase가 초기화되지 않았습니다. Firebase 프로젝트를 설정해주세요.');
+    }
+
     const provider = new GoogleAuthProvider();
     provider.addScope('email');
     provider.addScope('profile');
@@ -149,10 +196,21 @@ class AuthService {
     try {
       const result = await signInWithPopup(this.auth, provider);
       
-      // Create or update user profile
-      await this.createOrUpdateUserProfile(result.user, role);
+      // Check if user already exists
+      const userProfile = await this.getUserProfile(result.user.uid);
+      const isNewUser = !userProfile;
       
-      return { success: true, user: result.user };
+      if (isNewUser) {
+        // New user - create profile with selected roles
+        await this.createOrUpdateUserProfile(result.user, role, additionalData);
+      } else {
+        // Existing user - update role if different
+        if (userProfile.role !== role) {
+          await this.updateUserProfile(result.user.uid, { role, roles: [role], primaryRole: role });
+        }
+      }
+      
+      return { success: true, user: result.user, isNewUser };
     } catch (error) {
       console.error('Google sign in error:', error);
       throw this.handleAuthError(error);
@@ -160,7 +218,11 @@ class AuthService {
   }
 
   // Email/password sign up
-  async signUpWithEmail(email, password, userData, role = USER_ROLES.CUSTOMER) {
+  async signUpWithEmail(email, password, userData, role = USER_ROLES.SELLER) {
+    if (!this.auth || typeof this.auth.onAuthStateChanged !== 'function') {
+      throw new Error('Firebase가 초기화되지 않았습니다. Firebase 프로젝트를 설정해주세요.');
+    }
+
     try {
       const result = await createUserWithEmailAndPassword(this.auth, email, password);
       
@@ -183,17 +245,73 @@ class AuthService {
 
   // Email/password sign in
   async signInWithEmail(email, password) {
+    if (!this.auth || typeof this.auth.onAuthStateChanged !== 'function') {
+      throw new Error('Firebase가 초기화되지 않았습니다. Firebase 프로젝트를 설정해주세요.');
+    }
+
     try {
-      const result = await signInWithEmailAndPassword(this.auth, email, password);
+      // Additional check to ensure auth is a valid Firebase Auth instance
+      if (!this.auth || typeof this.auth.signInWithEmailAndPassword !== 'function') {
+        console.error('Firebase auth is not properly initialized');
+        console.error('Auth object:', this.auth);
+        console.error('Auth type:', typeof this.auth);
+        throw new Error('Firebase 인증이 제대로 초기화되지 않았습니다. 환경 변수를 확인해주세요.');
+      }
+
+      console.log('About to call signInWithEmailAndPassword with:', { email, auth: this.auth });
+      
+      // Try to call the function with proper error handling
+      let result;
+      try {
+        result = await signInWithEmailAndPassword(this.auth, email, password);
+        console.log('signInWithEmailAndPassword succeeded:', result);
+      } catch (funcError) {
+        console.error('signInWithEmailAndPassword function error:', funcError);
+        console.error('Function details:', {
+          functionType: typeof signInWithEmailAndPassword,
+          authType: typeof this.auth,
+          authMethods: this.auth ? Object.getOwnPropertyNames(Object.getPrototypeOf(this.auth)) : 'null'
+        });
+        throw funcError;
+      }
+      
+      // Update last login time only (don't create profile if it doesn't exist)
+      Promise.resolve().then(async () => {
+        try {
+          await this.updateLastLogin(result.user.uid);
+        } catch (profileError) {
+          console.error('Update last login error:', profileError);
+          // Update error shouldn't prevent login
+        }
+      });
+      
       return { success: true, user: result.user };
     } catch (error) {
       console.error('Email sign in error:', error);
-      throw this.handleAuthError(error);
+      
+      // Provide more specific error messages
+      if (error.code === 'auth/user-not-found') {
+        throw new Error('등록되지 않은 이메일입니다.');
+      } else if (error.code === 'auth/wrong-password') {
+        throw new Error('비밀번호가 올바르지 않습니다.');
+      } else if (error.code === 'auth/invalid-email') {
+        throw new Error('올바르지 않은 이메일 형식입니다.');
+      } else if (error.code === 'auth/too-many-requests') {
+        throw new Error('너무 많은 로그인 시도가 있었습니다. 잠시 후 다시 시도해주세요.');
+      } else {
+        throw this.handleAuthError(error);
+      }
     }
   }
 
   // Sign out
   async signOut() {
+    if (!this.auth || typeof this.auth.onAuthStateChanged !== 'function') {
+      this.currentUser = null;
+      this.userProfile = null;
+      return { success: true };
+    }
+
     try {
       await signOut(this.auth);
       this.currentUser = null;
@@ -207,31 +325,41 @@ class AuthService {
 
   // Create or update user profile
   async createOrUpdateUserProfile(user, role, additionalData = {}) {
-    if (this.isDemoMode) {
-      console.log('Demo mode: Skipping user profile creation/update');
-      return {
-        uid: user.uid,
-        email: user.email,
-        displayName: user.displayName || additionalData.displayName || '',
-        photoURL: user.photoURL || additionalData.photoURL || '',
-        role: role,
-        emailVerified: user.emailVerified,
-        isActive: true,
-        ...additionalData
-      };
-    }
-
     const userRef = doc(db, 'users', user.uid);
     const userSnap = await getDoc(userRef);
+
+    // 기존 사용자 데이터 가져오기
+    const existingData = userSnap.exists() ? userSnap.data() : {};
+    
+    // 기존 사용자인 경우 역할 변경 방지
+    if (existingData.role && existingData.role !== role) {
+      console.warn(`Role change prevented: existing role ${existingData.role} cannot be changed to ${role}`);
+      // 기존 역할 유지
+      role = existingData.role;
+    }
+    
+    // 역할 처리: 단일 역할 또는 다중 역할
+    let roles = [];
+    let primaryRole = role;
+    
+    if (Array.isArray(role)) {
+      roles = role;
+      primaryRole = additionalData.primaryRole || role[0];
+    } else {
+      roles = [role];
+      primaryRole = role;
+    }
 
     const userData = {
       uid: user.uid,
       email: user.email,
-      displayName: user.displayName || additionalData.displayName || '',
-      photoURL: user.photoURL || additionalData.photoURL || '',
-      role: role,
+      displayName: user.displayName || additionalData.displayName || existingData.displayName || '',
+      photoURL: user.photoURL || additionalData.photoURL || existingData.photoURL || '',
+      role: primaryRole, // 주요 역할 (기존 호환성)
+      roles: roles, // 모든 역할 목록
+      primaryRole: primaryRole, // 주요 역할
       emailVerified: user.emailVerified,
-      createdAt: userSnap.exists() ? userSnap.data().createdAt : serverTimestamp(),
+      createdAt: existingData.createdAt || serverTimestamp(),
       updatedAt: serverTimestamp(),
       lastLoginAt: serverTimestamp(),
       isActive: true,
@@ -275,18 +403,6 @@ class AuthService {
 
   // Get user profile
   async getUserProfile(uid) {
-    if (this.isDemoMode) {
-      console.log('Demo mode: Returning mock user profile');
-      return {
-        uid: uid,
-        email: 'demo@example.com',
-        displayName: 'Demo User',
-        role: USER_ROLES.CUSTOMER,
-        emailVerified: true,
-        isActive: true
-      };
-    }
-
     try {
       const userRef = doc(db, 'users', uid);
       const userSnap = await getDoc(userRef);
@@ -303,21 +419,20 @@ class AuthService {
 
   // Update user profile
   async updateUserProfile(uid, updates) {
-    if (this.isDemoMode) {
-      console.log('Demo mode: Skipping user profile update');
-      return { success: true };
-    }
-
     try {
       const userRef = doc(db, 'users', uid);
+      
+      // 역할 변경을 방지하기 위해 role, roles, primaryRole 필드 제거
+      const { role, roles, primaryRole, ...safeUpdates } = updates;
+      
       await updateDoc(userRef, {
-        ...updates,
+        ...safeUpdates,
         updatedAt: serverTimestamp()
       });
       
-      // Update local profile
+      // Update local profile (역할 필드 제외)
       if (this.userProfile && this.userProfile.uid === uid) {
-        this.userProfile = { ...this.userProfile, ...updates };
+        this.userProfile = { ...this.userProfile, ...safeUpdates };
       }
       
       return { success: true };
@@ -329,23 +444,29 @@ class AuthService {
 
   // Update last login
   async updateLastLogin(uid) {
-    if (this.isDemoMode) {
-      console.log('Demo mode: Skipping last login update');
-      return;
-    }
-
     try {
       const userRef = doc(db, 'users', uid);
-      await updateDoc(userRef, {
-        lastLoginAt: serverTimestamp()
-      });
+      const userSnap = await getDoc(userRef);
+      
+      if (userSnap.exists()) {
+        // 문서가 존재하면 업데이트만
+        await updateDoc(userRef, {
+          lastLoginAt: serverTimestamp()
+        });
+      }
+      // 문서가 존재하지 않으면 아무것도 하지 않음 (프로필 생성하지 않음)
     } catch (error) {
       console.error('Update last login error:', error);
+      // 오류가 발생해도 로그인은 계속 진행
     }
   }
 
   // Send password reset email
   async sendPasswordResetEmail(email) {
+    if (!this.auth || typeof this.auth.onAuthStateChanged !== 'function') {
+      throw new Error('Firebase가 초기화되지 않았습니다. Firebase 프로젝트를 설정해주세요.');
+    }
+
     try {
       await sendPasswordResetEmail(this.auth, email, {
         url: `${window.location.origin}/auth/reset-password`
@@ -359,6 +480,10 @@ class AuthService {
 
   // Update password
   async updatePassword(newPassword) {
+    if (!this.auth || typeof this.auth.onAuthStateChanged !== 'function') {
+      throw new Error('Firebase가 초기화되지 않았습니다. Firebase 프로젝트를 설정해주세요.');
+    }
+
     try {
       await updatePassword(this.currentUser, newPassword);
       return { success: true, message: '비밀번호가 성공적으로 변경되었습니다.' };
@@ -370,6 +495,10 @@ class AuthService {
 
   // Reauthenticate user (required for sensitive operations)
   async reauthenticateUser(password) {
+    if (!this.auth || typeof this.auth.onAuthStateChanged !== 'function') {
+      throw new Error('Firebase가 초기화되지 않았습니다. Firebase 프로젝트를 설정해주세요.');
+    }
+
     try {
       const credential = EmailAuthProvider.credential(this.currentUser.email, password);
       await reauthenticateWithCredential(this.currentUser, credential);
@@ -382,12 +511,28 @@ class AuthService {
 
   // Check if user has specific role
   hasRole(role) {
-    return this.userProfile && this.userProfile.role === role;
+    if (!this.userProfile) return false;
+    
+    // primaryRole, role, roles 배열 모두 확인
+    return (
+      this.userProfile.primaryRole === role ||
+      this.userProfile.role === role ||
+      (this.userProfile.roles && this.userProfile.roles.includes(role))
+    );
   }
 
   // Check if user has any of the specified roles
   hasAnyRole(roles) {
-    return this.userProfile && roles.includes(this.userProfile.role);
+    if (!this.userProfile) return false;
+    
+    // primaryRole, role, roles 배열 모두 확인
+    const userRoles = [
+      this.userProfile.primaryRole,
+      this.userProfile.role,
+      ...(this.userProfile.roles || [])
+    ].filter(Boolean); // null/undefined 제거
+    
+    return roles.some(role => userRoles.includes(role));
   }
 
   // Get current user

@@ -2,9 +2,14 @@
 const nextConfig = {
   reactStrictMode: true,
   swcMinify: true,
-  trailingSlash: true,
+  // trailingSlash: true, // 제거 - API 라우트와 충돌
+  // output: 'export', // 제거 - API 라우트와 충돌
   images: {
     unoptimized: true
+  },
+  // CSS 최적화 비활성화 (Tailwind 호환성을 위해)
+  experimental: {
+    optimizeCss: false,
   },
   // PWA 설정 (선택사항)
   // pwa: {
