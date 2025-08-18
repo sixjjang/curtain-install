@@ -1,6 +1,7 @@
 {
-  "short_name": "React App",
-  "name": "Create React App Sample",
+  "short_name": "전문가의 손길",
+  "name": "전문가의 손길 - 커튼 시공 플랫폼",
+  "description": "커튼 시공 전문가와 고객을 연결하는 플랫폼",
   "icons": [
     {
       "src": "favicon.ico",
@@ -10,16 +11,23 @@
     {
       "src": "logo192.png",
       "type": "image/png",
-      "sizes": "192x192"
+      "sizes": "192x192",
+      "purpose": "any maskable"
     },
     {
       "src": "logo512.png",
       "type": "image/png",
-      "sizes": "512x512"
+      "sizes": "512x512",
+      "purpose": "any maskable"
     }
   ],
-  "start_url": ".",
+  "start_url": "/",
+  "scope": "/",
   "display": "standalone",
-  "theme_color": "#000000",
-  "background_color": "#ffffff"
+  "orientation": "portrait",
+  "theme_color": "#1976d2",
+  "background_color": "#ffffff",
+  "categories": ["business", "productivity"],
+  "lang": "ko",
+  "dir": "ltr"
 }

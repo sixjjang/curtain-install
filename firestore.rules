@@ -1,0 +1,10 @@
+rules_version = '2';
+
+service cloud.firestore {
+  match /databases/{database}/documents {
+    // 모든 사용자에게 읽기/쓰기 권한 부여 (개발용 - 보안 주의)
+    match /{document=**} {
+      allow read, write: if true;
+    }
+  }
+}

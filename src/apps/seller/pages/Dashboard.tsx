@@ -1,0 +1,103 @@
+import React from 'react';
+import {
+  Box,
+  Grid,
+  Card,
+  CardContent,
+  Typography,
+  Button,
+  Chip,
+  Avatar
+} from '@mui/material';
+import {
+  Work,
+  TrendingUp,
+  Star,
+  Add
+} from '@mui/icons-material';
+
+const Dashboard: React.FC = () => {
+  return (
+    <Box>
+      <Typography variant="h4" gutterBottom>
+        판매자 대시보드
+      </Typography>
+
+      <Grid container spacing={3}>
+        <Grid item xs={12} sm={6} md={3}>
+          <Card>
+            <CardContent>
+              <Box display="flex" alignItems="center">
+                <Avatar sx={{ bgcolor: 'primary.main', mr: 2 }}>
+                  <Work />
+                </Avatar>
+                <Box>
+                  <Typography variant="h4">12</Typography>
+                  <Typography variant="body2" color="textSecondary">
+                    총 시공 건수
+                  </Typography>
+                </Box>
+              </Box>
+            </CardContent>
+          </Card>
+        </Grid>
+
+        <Grid item xs={12} sm={6} md={3}>
+          <Card>
+            <CardContent>
+              <Box display="flex" alignItems="center">
+                <Avatar sx={{ bgcolor: 'success.main', mr: 2 }}>
+                  <TrendingUp />
+                </Avatar>
+                <Box>
+                  <Typography variant="h4">4.8</Typography>
+                  <Typography variant="body2" color="textSecondary">
+                    평균 평점
+                  </Typography>
+                </Box>
+              </Box>
+            </CardContent>
+          </Card>
+        </Grid>
+
+        <Grid item xs={12} sm={6} md={3}>
+          <Card>
+            <CardContent>
+              <Box display="flex" alignItems="center">
+                <Avatar sx={{ bgcolor: 'warning.main', mr: 2 }}>
+                  <Star />
+                </Avatar>
+                <Box>
+                  <Typography variant="h4">8</Typography>
+                  <Typography variant="body2" color="textSecondary">
+                    진행중 작업
+                  </Typography>
+                </Box>
+              </Box>
+            </CardContent>
+          </Card>
+        </Grid>
+
+        <Grid item xs={12} sm={6} md={3}>
+          <Card>
+            <CardContent>
+              <Box display="flex" alignItems="center">
+                <Avatar sx={{ bgcolor: 'info.main', mr: 2 }}>
+                  <Add />
+                </Avatar>
+                <Box>
+                  <Typography variant="h4">3</Typography>
+                  <Typography variant="body2" color="textSecondary">
+                    대기중 작업
+                  </Typography>
+                </Box>
+              </Box>
+            </CardContent>
+          </Card>
+        </Grid>
+      </Grid>
+    </Box>
+  );
+};
+
+export default Dashboard;
