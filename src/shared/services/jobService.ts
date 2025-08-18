@@ -244,22 +244,63 @@ export class JobService {
       const currentData = jobDoc.data();
       const currentProgressHistory = currentData.progressHistory || [];
       
-      // 새로운 진행 단계 추가
-      const newProgressStep = {
+      // undefined 값 제거를 위한 데이터 정리 함수
+      const cleanObject = (obj: any): any => {
+        if (obj === null || obj === undefined) return null;
+        if (typeof obj !== 'object') return obj;
+        
+        if (Array.isArray(obj)) {
+          return obj.map(cleanObject).filter(item => item !== null && item !== undefined);
+        }
+        
+        const cleaned: any = {};
+        for (const [key, value] of Object.entries(obj)) {
+          if (value !== undefined) {
+            cleaned[key] = cleanObject(value);
+          }
+        }
+        return cleaned;
+      };
+      
+      // 새로운 진행 단계 추가 (undefined 값을 null로 변환)
+      const newProgressStep = cleanObject({
         status,
         timestamp: new Date(),
-        contractorId,
-        note
-      };
+        contractorId: contractorId || null,
+        note: note || null
+      });
       
       const updatedProgressHistory = [...currentProgressHistory, newProgressStep];
       
-      await updateDoc(jobRef, {
+      // 업데이트할 데이터에서 undefined 값 제거
+      const updateData = cleanObject({
         status,
         updatedAt: new Date(),
         progressHistory: updatedProgressHistory,
         ...(status === 'completed' && { completedDate: new Date() })
       });
+      
+      // undefined 값이 있는지 최종 확인
+      const checkForUndefined = (obj: any, path: string = ''): void => {
+        if (obj === undefined) {
+          console.error(`❌ undefined found at path: ${path}`);
+          return;
+        }
+        if (obj === null || typeof obj !== 'object') return;
+        
+        for (const [key, value] of Object.entries(obj)) {
+          const currentPath = path ? `${path}.${key}` : key;
+          if (value === undefined) {
+            console.error(`❌ undefined found at path: ${currentPath}`);
+          } else if (typeof value === 'object' && value !== null) {
+            checkForUndefined(value, currentPath);
+          }
+        }
+      };
+      
+      checkForUndefined(updateData, 'updateData');
+      
+      await updateDoc(jobRef, updateData);
       
       console.log(`작업 ${jobId}의 상태가 ${status}로 업데이트되었습니다. (시간: ${newProgressStep.timestamp})`);
     } catch (error) {

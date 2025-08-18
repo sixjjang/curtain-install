@@ -514,103 +514,6 @@ const JobList: React.FC = () => {
           </CardContent>
         </Card>
 
-        {/* 대기중인 작업 요약 정보 */}
-        {(() => {
-          const pendingJobs = jobs.filter(job => job.status === 'pending');
-          
-          return (
-            <Card sx={{ mb: 3, background: 'linear-gradient(135deg, #fff8e1 0%, #ffe0b2 100%)', border: '2px solid #ff9800' }}>
-              <CardContent>
-                <Box display="flex" justifyContent="space-between" alignItems="center">
-                  <Box>
-                    <Typography variant="h6" sx={{ color: '#e65100', fontWeight: 'bold', mb: 1 }}>
-                      📋 수락 가능한 작업 현황
-                    </Typography>
-                    <Typography variant="body1" sx={{ color: '#bf360c' }}>
-                      대기중인 작업: <strong>{pendingJobs.length}개</strong>
-                    </Typography>
-                    {pendingJobs.length > 0 && (
-                      <Typography variant="body2" sx={{ color: '#d84315', mt: 1 }}>
-                        💡 캘린더에서 📋 아이콘이 있는 작업을 클릭하여 빠르게 수락하세요!
-                      </Typography>
-                    )}
-                  </Box>
-                  {pendingJobs.length > 0 && (
-                    <Button
-                      variant="contained"
-                      color="warning"
-                      size="large"
-                      sx={{
-                        background: 'linear-gradient(45deg, #ff9800 30%, #ffb74d 90%)',
-                        boxShadow: '0 3px 5px 2px rgba(255, 152, 0, .3)',
-                        animation: 'pulse 2s infinite',
-                        '@keyframes pulse': {
-                          '0%': {
-                            transform: 'scale(1)',
-                            boxShadow: '0 3px 5px 2px rgba(255, 152, 0, .3)'
-                          },
-                          '50%': {
-                            transform: 'scale(1.02)',
-                            boxShadow: '0 5px 15px 2px rgba(255, 152, 0, .5)'
-                          },
-                          '100%': {
-                            transform: 'scale(1)',
-                            boxShadow: '0 3px 5px 2px rgba(255, 152, 0, .3)'
-                          }
-                        },
-                        '&:hover': {
-                          background: 'linear-gradient(45deg, #f57c00 30%, #ff9800 90%)',
-                          transform: 'scale(1.05)',
-                          transition: 'all 0.3s ease'
-                        }
-                      }}
-                      onClick={() => {
-                        // 오늘 날짜로 이동하여 대기중인 작업 확인
-                        setCurrentDate(new Date());
-                        setTimeout(() => {
-                          const today = new Date();
-                          handleDateClick(today);
-                        }, 100);
-                      }}
-                    >
-                      🚀 대기중인 작업 확인하기
-                    </Button>
-                  )}
-                </Box>
-              </CardContent>
-            </Card>
-          );
-        })()}
-
-        {/* 캘린더 범례 */}
-        <Card sx={{ mb: 2 }}>
-          <CardContent>
-            <Typography variant="h6" gutterBottom>범례</Typography>
-            <Box display="flex" gap={2} flexWrap="wrap">
-              <Box display="flex" alignItems="center" gap={1}>
-                <Box sx={{ width: 20, height: 20, backgroundColor: '#fff3e0', border: '2px dashed #ff9800', borderRadius: 1 }} />
-                <Typography variant="body2">📋 수락 가능한 작업</Typography>
-              </Box>
-              <Box display="flex" alignItems="center" gap={1}>
-                <Box sx={{ width: 20, height: 20, backgroundColor: '#ffcc80', borderRadius: 1 }} />
-                <Typography variant="body2">내 작업 (배정됨/준비중)</Typography>
-              </Box>
-              <Box display="flex" alignItems="center" gap={1}>
-                <Box sx={{ width: 20, height: 20, backgroundColor: '#a5d6a7', borderRadius: 1 }} />
-                <Typography variant="body2">제품준비완료</Typography>
-              </Box>
-              <Box display="flex" alignItems="center" gap={1}>
-                <Box sx={{ width: 20, height: 20, backgroundColor: '#90caf9', borderRadius: 1 }} />
-                <Typography variant="body2">진행중/픽업완료</Typography>
-              </Box>
-              <Box display="flex" alignItems="center" gap={1}>
-                <Box sx={{ width: 20, height: 20, backgroundColor: '#f5f5f5', borderRadius: 1 }} />
-                <Typography variant="body2">완료</Typography>
-              </Box>
-            </Box>
-          </CardContent>
-        </Card>
-
         {/* 캘린더 그리드 */}
         <Paper sx={{ p: 2 }}>
           <Grid container>
@@ -891,7 +794,7 @@ const JobList: React.FC = () => {
                                     
                                     <Box display="flex" justifyContent="space-between" alignItems="flex-start" mb={2}>
                                       <Typography variant="h6" sx={{ color: '#e65100', fontWeight: 'bold' }}>
-                                        📋 {job.title}
+                                        📋 {job.title} - {calculateTotalPrice(job).toLocaleString()}원
                                       </Typography>
                                       <Chip 
                                         label="수락 가능" 
@@ -993,7 +896,9 @@ const JobList: React.FC = () => {
                                   backgroundColor: job.status === 'completed' ? '#e8f5e8' : '#e3f2fd'
                                 }}>
                                   <Box display="flex" justifyContent="space-between" alignItems="flex-start" mb={1}>
-                                    <Typography variant="h6" sx={{ color: job.status === 'completed' ? '#2e7d32' : '#0d47a1' }}>{job.title}</Typography>
+                                    <Typography variant="h6" sx={{ color: job.status === 'completed' ? '#2e7d32' : '#0d47a1' }}>
+                                      {job.title} - {calculateTotalPrice(job).toLocaleString()}원
+                                    </Typography>
                                     <Chip 
                                       label={getStatusText(job.status)} 
                                       sx={{ 

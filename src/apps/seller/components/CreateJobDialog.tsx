@@ -307,22 +307,11 @@ const CreateJobDialog: React.FC<CreateJobDialogProps> = ({ open, onClose, onJobC
     }, 0);
   };
 
-  // 자동 제목 생성 함수
+  // 자동 제목 생성
   const generateAutoTitle = () => {
-    const parts = [];
+    const parts: string[] = [];
     
-    // 주소 정보
-    if (formData.address) {
-      const addressParts = formData.address.split(' ');
-      if (addressParts.length >= 2) {
-        // 시/구 정보만 추출 (예: "수원 영통")
-        parts.push(`${addressParts[0]} ${addressParts[1]}`);
-      } else {
-        parts.push(formData.address);
-      }
-    }
-    
-    // 일시 정보
+    // 1. 일시 정보 (가장 먼저)
     if (formData.scheduledDate && formData.scheduledTime) {
       const date = new Date(formData.scheduledDate);
       const month = date.getMonth() + 1;
@@ -331,25 +320,57 @@ const CreateJobDialog: React.FC<CreateJobDialogProps> = ({ open, onClose, onJobC
       parts.push(`${month}/${day} ${time}`);
     }
     
-    // 품목 정보 (기본출장비 제외)
+    // 2. 주소 정보 (시/군/구 + 도로명)
+    if (formData.address) {
+      const addressParts = formData.address.split(' ');
+      if (addressParts.length >= 3) {
+        // "충남 당진시 기지시2길" 형태로 추출
+        parts.push(`${addressParts[0]} ${addressParts[1]} ${addressParts[2]}`);
+      } else if (addressParts.length >= 2) {
+        // "당진시 기지시2길" 형태로 추출
+        parts.push(`${addressParts[0]} ${addressParts[1]}`);
+      } else {
+        parts.push(formData.address);
+      }
+    }
+    
+    // 3. 품목 정보 (기본출장비 제외, 모든 품목 표시)
     const nonTravelFeeItems = items.filter(item => item.name !== '기본출장비');
     if (nonTravelFeeItems.length > 0) {
       const itemSummary = nonTravelFeeItems.map(item => {
         const unit = item.name.includes('커튼') ? '조' : 
                     item.name.includes('블라인드') ? '창' : 
                     item.name.includes('IoT') ? '회' : '개';
-        return `${item.name}${item.quantity}${unit}`;
+        return `${item.name} ${item.quantity}${unit}`;
       }).join(',');
       parts.push(itemSummary);
     }
     
-    // 총 금액 (기본출장비 제외)
+    // 4. 총 금액 (기본출장비 제외, 천 단위 콤마 포함)
     const totalAmountWithoutTravelFee = nonTravelFeeItems.reduce((sum, item) => sum + item.totalPrice, 0);
     if (totalAmountWithoutTravelFee > 0) {
-      parts.push(`${(totalAmountWithoutTravelFee / 10000).toFixed(0)}만원`);
+      parts.push(`${totalAmountWithoutTravelFee.toLocaleString()}원`);
     }
     
-    return parts.join('-');
+    // 최소한의 정보가 없으면 기본 제목 생성
+    if (parts.length === 0) {
+      const defaultTitle = `새 작업 - ${new Date().toLocaleDateString()}`;
+      console.log('🔍 자동 제목 생성 (기본):', defaultTitle);
+      return defaultTitle;
+    }
+    
+    const autoTitle = parts.join('-');
+    console.log('🔍 자동 제목 생성:', {
+      address: formData.address,
+      scheduledDate: formData.scheduledDate,
+      scheduledTime: formData.scheduledTime,
+      items: items.map(item => ({ name: item.name, quantity: item.quantity })),
+      nonTravelFeeItems: nonTravelFeeItems.map(item => ({ name: item.name, quantity: item.quantity })),
+      totalAmount: totalAmountWithoutTravelFee,
+      generatedTitle: autoTitle
+    });
+    
+    return autoTitle;
   };
 
   // 자동 제목 업데이트

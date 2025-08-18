@@ -179,27 +179,76 @@ const Profile: React.FC = () => {
       if (!user?.id) return;
       
       try {
-        // 기본 정보 불러오기
+        console.log('🔍 판매자 프로필 정보 불러오기 시작:', user.id);
+        console.log('🔍 현재 user 객체:', user);
+        
+        // 기본 정보 불러오기 (sellers 컬렉션)
         const savedBasicInfo = await SellerService.getBasicInfo(user.id);
         if (savedBasicInfo) {
+          console.log('✅ 저장된 판매자 정보 (sellers 컬렉션):', savedBasicInfo);
           setBasicInfo(savedBasicInfo);
           if (savedBasicInfo.profileImage) {
             setProfileImage(savedBasicInfo.profileImage);
+          }
+        } else {
+          console.log('⚠️ 저장된 판매자 정보 없음 (sellers 컬렉션), users 컬렉션에서 확인');
+          // users 컬렉션에서 판매자 정보 확인
+          if (user.seller) {
+            console.log('✅ users 컬렉션의 판매자 정보:', user.seller);
+            setBasicInfo({
+              name: user.name || '',
+              companyName: user.seller.companyName || '',
+              businessNumber: user.seller.businessNumber || '',
+              address: user.seller.businessAddress || '',
+              phone: user.phone || '',
+              email: user.email || '',
+              profileImage: user.profileImage || ''
+            });
+          } else {
+            console.log('⚠️ users 컬렉션에도 판매자 정보 없음');
+            // 기본 사용자 정보로 초기화
+            setBasicInfo({
+              name: user.name || '',
+              companyName: '',
+              businessNumber: '',
+              address: '',
+              phone: user.phone || '',
+              email: user.email || '',
+              profileImage: user.profileImage || ''
+            });
           }
         }
         
         // 픽업 정보 불러오기
         const savedPickupInfo = await SellerService.getPickupInfo(user.id);
         if (savedPickupInfo) {
+          console.log('✅ 저장된 픽업 정보:', savedPickupInfo);
           setPickupInfo(savedPickupInfo);
+        } else {
+          console.log('⚠️ 저장된 픽업 정보 없음, users 컬렉션에서 확인');
+          // users 컬렉션에서 픽업 정보 확인
+          if (user.seller?.pickupInfo) {
+            console.log('✅ users 컬렉션의 픽업 정보:', user.seller.pickupInfo);
+            setPickupInfo(user.seller.pickupInfo);
+          }
         }
       } catch (error) {
-        console.error('저장된 정보 불러오기 실패:', error);
+        console.error('❌ 저장된 정보 불러오기 실패:', error);
+        // 오류 발생 시 사용자 정보로 초기화
+        setBasicInfo({
+          name: user.name || '',
+          companyName: user.seller?.companyName || '',
+          businessNumber: user.seller?.businessNumber || '',
+          address: user.seller?.businessAddress || '',
+          phone: user.phone || '',
+          email: user.email || '',
+          profileImage: user.profileImage || ''
+        });
       }
     };
 
     loadSavedInfo();
-  }, [user?.id]);
+  }, [user]);
 
   // 기본 정보 저장
   const handleSaveBasicInfo = async () => {

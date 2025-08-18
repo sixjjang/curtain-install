@@ -36,7 +36,8 @@ import {
   CheckCircle,
   PlayArrow,
   Assignment,
-  Star
+  Star,
+  Engineering
 } from '@mui/icons-material';
 import { useAuth } from '../../../shared/contexts/AuthContext';
 import { JobService } from '../../../shared/services/jobService';
@@ -76,6 +77,7 @@ const JobManagement: React.FC = () => {
   const [detailDialogOpen, setDetailDialogOpen] = useState(false);
   const [selectedJob, setSelectedJob] = useState<ConstructionJob | null>(null);
   const [customerInfo, setCustomerInfo] = useState<any>(null);
+  const [contractorInfo, setContractorInfo] = useState<any>(null);
   const [jobs, setJobs] = useState<ConstructionJob[]>([]);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState('');
@@ -150,6 +152,20 @@ const JobManagement: React.FC = () => {
       console.error('고객 정보 가져오기 실패:', error);
       setCustomerInfo(null);
     }
+
+    // 시공기사 정보 가져오기
+    try {
+      if (job.contractorId) {
+        const { AuthService } = await import('../../../shared/services/authService');
+        const contractor = await AuthService.getUserById(job.contractorId);
+        setContractorInfo(contractor);
+      } else {
+        setContractorInfo(null);
+      }
+    } catch (error) {
+      console.error('시공기사 정보 가져오기 실패:', error);
+      setContractorInfo(null);
+    }
   };
 
   // 상세보기 다이얼로그 닫기
@@ -157,6 +173,7 @@ const JobManagement: React.FC = () => {
     setDetailDialogOpen(false);
     setSelectedJob(null);
     setCustomerInfo(null);
+    setContractorInfo(null);
   };
 
   // 상태 텍스트 변환
@@ -875,6 +892,50 @@ const JobManagement: React.FC = () => {
                   </Grid>
                 )}
 
+                {/* 배정된 시공기사 정보 */}
+                {selectedJob.contractorId && (
+                  <Grid item xs={12}>
+                    <Box display="flex" alignItems="center" gap={1} mb={1}>
+                      <Engineering color="action" />
+                      <Typography variant="subtitle1" fontWeight="bold">
+                        배정된 시공기사 정보
+                      </Typography>
+                    </Box>
+                    <Box sx={{ ml: 3, p: 2, bgcolor: 'blue.50', borderRadius: 1 }}>
+                      {contractorInfo ? (
+                        <>
+                          <Typography variant="body2" sx={{ mb: 1 }}>
+                            <strong>이름:</strong> {contractorInfo.name}
+                          </Typography>
+                          <Typography variant="body2" sx={{ mb: 1 }}>
+                            <strong>연락처:</strong> {contractorInfo.phone}
+                          </Typography>
+                          <Typography variant="body2" sx={{ mb: 1 }}>
+                            <strong>이메일:</strong> {contractorInfo.email}
+                          </Typography>
+                          {contractorInfo.contractor && (
+                            <>
+                              <Typography variant="body2" sx={{ mb: 1 }}>
+                                <strong>경력:</strong> {contractorInfo.contractor.experience}
+                              </Typography>
+                              <Typography variant="body2" sx={{ mb: 1 }}>
+                                <strong>평점:</strong> {contractorInfo.contractor.rating}/5
+                              </Typography>
+                              <Typography variant="body2">
+                                <strong>완료 작업:</strong> {contractorInfo.contractor.completedJobs}건
+                              </Typography>
+                            </>
+                          )}
+                        </>
+                      ) : (
+                        <Typography variant="body2" color="textSecondary">
+                          시공기사 정보를 불러오는 중...
+                        </Typography>
+                      )}
+                    </Box>
+                  </Grid>
+                )}
+
                 {/* 최종 금액 (확정된 경우) */}
                 {selectedJob.finalAmount && (
                   <Grid item xs={12}>
@@ -931,17 +992,37 @@ const JobManagement: React.FC = () => {
                           <ListItemText
                             primary={
                               <Box display="flex" justifyContent="space-between" alignItems="center">
-                                <Chip 
-                                  label={getStatusText(step.status)} 
-                                  color={getStatusColor(step.status)} 
-                                  size="small"
-                                />
+                                <Box display="flex" alignItems="center" gap={1}>
+                                  <Chip 
+                                    label={getStatusText(step.status)} 
+                                    color={getStatusColor(step.status)} 
+                                    size="small"
+                                  />
+                                  {step.contractorId && (
+                                    <Typography variant="caption" color="primary" sx={{ fontWeight: 'bold' }}>
+                                      👷 {contractorInfo?.name || '시공기사'}
+                                    </Typography>
+                                  )}
+                                </Box>
                                 <Typography variant="caption" color="textSecondary">
                                   {formatDateTime(step.timestamp)}
                                 </Typography>
                               </Box>
                             }
-                            secondary={step.note && `메모: ${step.note}`}
+                            secondary={
+                              <Box>
+                                {step.note && (
+                                  <Typography variant="caption" color="textSecondary">
+                                    메모: {step.note}
+                                  </Typography>
+                                )}
+                                {step.contractorId && contractorInfo && (
+                                  <Typography variant="caption" color="textSecondary" sx={{ display: 'block', mt: 0.5 }}>
+                                    📞 {contractorInfo.phone}
+                                  </Typography>
+                                )}
+                              </Box>
+                            }
                           />
                         </ListItem>
                       ))}

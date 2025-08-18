@@ -678,7 +678,7 @@ const CalendarView: React.FC = () => {
                          }}>
                            <Box display="flex" justifyContent="space-between" alignItems="flex-start" mb={1}>
                              <Typography variant="h6">
-                               {isPendingJob ? '📋 ' : ''}{job.title}
+                               {isPendingJob ? '�� ' : ''}{job.title} - {calculateTotalPrice(job).toLocaleString()}원
                              </Typography>
                              <Box display="flex" gap={1}>
                                <Chip 

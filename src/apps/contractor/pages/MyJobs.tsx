@@ -628,7 +628,7 @@ const MyJobs: React.FC = () => {
                 <Card>
                   <CardContent>
                     <Box display="flex" justifyContent="space-between" alignItems="flex-start" mb={2}>
-                      <Typography variant="h6">{job.title}</Typography>
+                      <Typography variant="h6">{job.title} - {calculateTotalPrice(job).toLocaleString()}원</Typography>
                       <Button 
                         variant="outlined" 
                         size="small"
