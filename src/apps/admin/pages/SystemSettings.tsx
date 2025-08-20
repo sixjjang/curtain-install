@@ -333,7 +333,7 @@ const SystemSettings: React.FC = () => {
                       max: 50,
                       step: 0.1
                     }}
-                    helperText="제한 초과 시 적용되는 수수료율"
+                    helperText="제한 초과 시 전체 시공비용의 몇%를 수수료로 적용"
                   />
                 </Grid>
               </Grid>
@@ -350,7 +350,7 @@ const SystemSettings: React.FC = () => {
                   variant="outlined"
                 />
                 <Chip 
-                  label={`취소 수수료율: ${cancellationFeeRate}%`}
+                  label={`취소 수수료율: ${cancellationFeeRate}% (전체 시공비용 기준)`}
                   color="warning"
                   variant="outlined"
                 />
@@ -396,7 +396,7 @@ const SystemSettings: React.FC = () => {
                       max: 100,
                       step: 1
                     }}
-                    helperText="픽업지에서 제품이 준비되지 않은 경우"
+                    helperText="기본 출장비의 몇%를 보상으로 지급"
                   />
                 </Grid>
                 
@@ -412,7 +412,7 @@ const SystemSettings: React.FC = () => {
                       max: 100,
                       step: 1
                     }}
-                    helperText="소비자가 부재한 경우"
+                    helperText="기본 출장비의 몇%를 보상으로 지급"
                   />
                 </Grid>
                 
@@ -428,7 +428,7 @@ const SystemSettings: React.FC = () => {
                       max: 50,
                       step: 0.1
                     }}
-                    helperText="일정 변경 시 적용되는 수수료율"
+                    helperText="전체 시공비용의 몇%를 수수료로 적용"
                   />
                 </Grid>
               </Grid>

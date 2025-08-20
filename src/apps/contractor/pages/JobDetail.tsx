@@ -55,6 +55,7 @@ import {
 } from '@mui/icons-material';
 import { JobService } from '../../../shared/services/jobService';
 import { CustomerService, CustomerInfo } from '../../../shared/services/customerService';
+import { JobCancellationService } from '../../../shared/services/jobCancellationService';
 import { ConstructionJob } from '../../../types';
 import { useAuth } from '../../../shared/contexts/AuthContext';
 
@@ -82,6 +83,16 @@ const JobDetail: React.FC = () => {
     message: '',
     severity: 'success'
   });
+  const [cancelDialogOpen, setCancelDialogOpen] = useState(false);
+  const [cancelReason, setCancelReason] = useState('');
+  const [cancellationInfo, setCancellationInfo] = useState<any>(null);
+  const [cancelling, setCancelling] = useState(false);
+  const [previewDialogOpen, setPreviewDialogOpen] = useState(false);
+  const [previewFile, setPreviewFile] = useState<any>(null);
+  const [imageScale, setImageScale] = useState(1);
+  const [imagePosition, setImagePosition] = useState({ x: 0, y: 0 });
+  const [isDragging, setIsDragging] = useState(false);
+  const [dragStart, setDragStart] = useState({ x: 0, y: 0 });
 
   // 파일 크기 포맷팅
   const formatFileSize = (bytes: number) => {
@@ -115,6 +126,79 @@ const JobDetail: React.FC = () => {
     document.body.appendChild(link);
     link.click();
     document.body.removeChild(link);
+  };
+
+  // 파일 미리보기 처리
+  const handleFilePreview = (file: any) => {
+    setPreviewFile(file);
+    setImageScale(1);
+    setImagePosition({ x: 0, y: 0 });
+    setPreviewDialogOpen(true);
+  };
+
+  // 이미지 줌 인/아웃 처리
+  const handleZoom = (direction: 'in' | 'out') => {
+    setImageScale(prev => {
+      const newScale = direction === 'in' ? prev * 1.2 : prev / 1.2;
+      return Math.min(Math.max(newScale, 0.5), 5); // 0.5배 ~ 5배 제한
+    });
+  };
+
+  // 이미지 드래그 시작
+  const handleMouseDown = (e: React.MouseEvent) => {
+    setIsDragging(true);
+    setDragStart({ x: e.clientX - imagePosition.x, y: e.clientY - imagePosition.y });
+  };
+
+  // 이미지 드래그 중
+  const handleMouseMove = (e: React.MouseEvent) => {
+    if (!isDragging) return;
+    setImagePosition({
+      x: e.clientX - dragStart.x,
+      y: e.clientY - dragStart.y
+    });
+  };
+
+  // 이미지 드래그 종료
+  const handleMouseUp = () => {
+    setIsDragging(false);
+  };
+
+  // 터치 이벤트 처리 (모바일)
+  const handleTouchStart = (e: React.TouchEvent) => {
+    if (e.touches.length === 1) {
+      setIsDragging(true);
+      setDragStart({ 
+        x: e.touches[0].clientX - imagePosition.x, 
+        y: e.touches[0].clientY - imagePosition.y 
+      });
+    }
+  };
+
+  const handleTouchMove = (e: React.TouchEvent) => {
+    if (!isDragging || e.touches.length !== 1) return;
+    e.preventDefault();
+    setImagePosition({
+      x: e.touches[0].clientX - dragStart.x,
+      y: e.touches[0].clientY - dragStart.y
+    });
+  };
+
+  const handleTouchEnd = () => {
+    setIsDragging(false);
+  };
+
+  // 핀치 줌 처리 (모바일)
+  const handleWheel = (e: React.WheelEvent) => {
+    e.preventDefault();
+    const direction = e.deltaY < 0 ? 'in' : 'out';
+    handleZoom(direction);
+  };
+
+  // 미리보기 초기화
+  const resetPreview = () => {
+    setImageScale(1);
+    setImagePosition({ x: 0, y: 0 });
   };
 
   useEffect(() => {
@@ -277,6 +361,56 @@ const JobDetail: React.FC = () => {
         message: '작업 완료 처리에 실패했습니다. 다시 시도해주세요.',
         severity: 'error'
       });
+    }
+  };
+
+  // 작업 취소 관련 함수들
+  const handleCancelJobClick = async () => {
+    if (!job || !user?.id) return;
+
+    try {
+      const cancellationInfo = await JobCancellationService.canCancelJob(job.id, user.id);
+      setCancellationInfo(cancellationInfo);
+      setCancelDialogOpen(true);
+    } catch (error) {
+      console.error('취소 가능 여부 확인 실패:', error);
+      setSnackbar({
+        open: true,
+        message: '취소 가능 여부를 확인할 수 없습니다.',
+        severity: 'error'
+      });
+    }
+  };
+
+  const handleCancelJob = async () => {
+    if (!job || !user?.id) return;
+
+    try {
+      setCancelling(true);
+      await JobCancellationService.cancelJob(job.id, user.id, cancelReason);
+      
+      // 작업 정보 새로고침
+      const updatedJob = await JobService.getJobById(job.id);
+      setJob(updatedJob);
+      
+      setSnackbar({
+        open: true,
+        message: '작업이 성공적으로 취소되었습니다.',
+        severity: 'success'
+      });
+      
+      setCancelDialogOpen(false);
+      setCancelReason('');
+      setCancellationInfo(null);
+    } catch (error) {
+      console.error('작업 취소 실패:', error);
+      setSnackbar({
+        open: true,
+        message: '작업 취소에 실패했습니다. 다시 시도해주세요.',
+        severity: 'error'
+      });
+    } finally {
+      setCancelling(false);
     }
   };
 
@@ -846,14 +980,30 @@ const JobDetail: React.FC = () => {
                             </Typography>
                           </Box>
                         </Box>
-                        <Button
-                          variant="outlined"
-                          size="small"
-                          startIcon={<FileDownload />}
-                          onClick={() => handleFileDownload(file.fileUrl, file.fileName)}
-                        >
-                          다운로드
-                        </Button>
+                        <Box sx={{ display: 'flex', gap: 1 }}>
+                          {file.fileType === 'image' && (
+                            <Button
+                              variant="contained"
+                              size="small"
+                              startIcon={<Image />}
+                              onClick={() => handleFilePreview(file)}
+                              sx={{ 
+                                backgroundColor: '#4CAF50',
+                                '&:hover': { backgroundColor: '#388E3C' }
+                              }}
+                            >
+                              미리보기
+                            </Button>
+                          )}
+                          <Button
+                            variant="outlined"
+                            size="small"
+                            startIcon={<FileDownload />}
+                            onClick={() => handleFileDownload(file.fileUrl, file.fileName)}
+                          >
+                            다운로드
+                          </Button>
+                        </Box>
                       </Box>
                     ))}
                   </Box>
@@ -992,8 +1142,9 @@ const JobDetail: React.FC = () => {
                       variant="outlined"
                       fullWidth
                       color="error"
+                      onClick={handleCancelJobClick}
                     >
-                      작업 거절
+                      작업 취소
                     </Button>
                   </>
                 )}
@@ -1153,8 +1304,9 @@ const JobDetail: React.FC = () => {
                       variant="outlined"
                       fullWidth
                       color="error"
+                      onClick={handleCancelJobClick}
                     >
-                      작업 거절
+                      작업 취소
                     </Button>
                     
                     <Button
@@ -1304,6 +1456,183 @@ const JobDetail: React.FC = () => {
             </Button>
           )}
         </DialogActions>
+      </Dialog>
+
+      {/* 작업 취소 다이얼로그 */}
+      <Dialog
+        open={cancelDialogOpen}
+        onClose={() => setCancelDialogOpen(false)}
+        maxWidth="sm"
+        fullWidth
+      >
+        <DialogTitle>
+          <Box display="flex" alignItems="center" gap={1}>
+            <Info color="warning" />
+            작업 취소 확인
+          </Box>
+        </DialogTitle>
+        
+        <DialogContent>
+          {cancellationInfo && (
+            <Box>
+              <Alert 
+                severity={cancellationInfo.canCancel ? 'info' : 'error'} 
+                sx={{ mb: 2 }}
+              >
+                {cancellationInfo.canCancel 
+                  ? `취소 가능합니다. (${cancellationInfo.remainingCancellations}회 남음)`
+                  : cancellationInfo.reason
+                }
+              </Alert>
+              
+              {cancellationInfo.requiresFee && (
+                <Alert severity="warning" sx={{ mb: 2 }}>
+                  제한을 초과하여 취소 수수료 {cancellationInfo.feeAmount?.toLocaleString()}원이 적용됩니다.
+                </Alert>
+              )}
+              
+              <TextField
+                fullWidth
+                label="취소 사유"
+                multiline
+                rows={3}
+                value={cancelReason}
+                onChange={(e) => setCancelReason(e.target.value)}
+                placeholder="취소 사유를 입력해주세요..."
+                sx={{ mb: 2 }}
+              />
+            </Box>
+          )}
+        </DialogContent>
+        
+        <DialogActions>
+          <Button onClick={() => setCancelDialogOpen(false)}>
+            취소
+          </Button>
+          <Button 
+            variant="contained" 
+            color="error"
+            onClick={handleCancelJob}
+            disabled={!cancellationInfo?.canCancel || cancelling || !cancelReason.trim()}
+          >
+            {cancelling ? '취소 중...' : '작업 취소'}
+          </Button>
+        </DialogActions>
+      </Dialog>
+
+      {/* 파일 미리보기 다이얼로그 */}
+      <Dialog
+        open={previewDialogOpen}
+        onClose={() => setPreviewDialogOpen(false)}
+        maxWidth="lg"
+        fullWidth
+        PaperProps={{
+          sx: {
+            height: '90vh',
+            maxHeight: '90vh'
+          }
+        }}
+      >
+        <DialogTitle>
+          <Box display="flex" alignItems="center" justifyContent="space-between">
+            <Box display="flex" alignItems="center" gap={1}>
+              <Image color="primary" />
+              <Typography variant="h6">
+                {previewFile?.fileName}
+              </Typography>
+            </Box>
+            <Box display="flex" gap={1}>
+              <Button
+                size="small"
+                onClick={() => handleZoom('out')}
+                disabled={imageScale <= 0.5}
+              >
+                🔍-
+              </Button>
+              <Button
+                size="small"
+                onClick={() => handleZoom('in')}
+                disabled={imageScale >= 5}
+              >
+                🔍+
+              </Button>
+              <Button
+                size="small"
+                onClick={resetPreview}
+              >
+                🔄
+              </Button>
+              <Button
+                size="small"
+                onClick={() => setPreviewDialogOpen(false)}
+              >
+                ✕
+              </Button>
+            </Box>
+          </Box>
+        </DialogTitle>
+        
+        <DialogContent
+          sx={{
+            p: 0,
+            display: 'flex',
+            alignItems: 'center',
+            justifyContent: 'center',
+            backgroundColor: '#000',
+            overflow: 'hidden',
+            position: 'relative'
+          }}
+          onWheel={handleWheel}
+          onMouseDown={handleMouseDown}
+          onMouseMove={handleMouseMove}
+          onMouseUp={handleMouseUp}
+          onMouseLeave={handleMouseUp}
+          onTouchStart={handleTouchStart}
+          onTouchMove={handleTouchMove}
+          onTouchEnd={handleTouchEnd}
+        >
+          {previewFile && (
+            <Box
+              sx={{
+                position: 'relative',
+                cursor: isDragging ? 'grabbing' : 'grab',
+                userSelect: 'none',
+                transform: `scale(${imageScale}) translate(${imagePosition.x / imageScale}px, ${imagePosition.y / imageScale}px)`,
+                transition: isDragging ? 'none' : 'transform 0.1s ease-out',
+                maxWidth: '100%',
+                maxHeight: '100%'
+              }}
+            >
+              <img
+                src={previewFile.fileUrl}
+                alt={previewFile.fileName}
+                style={{
+                  maxWidth: '100%',
+                  maxHeight: '100%',
+                  objectFit: 'contain',
+                  display: 'block'
+                }}
+                draggable={false}
+              />
+            </Box>
+          )}
+          
+          {/* 줌 레벨 표시 */}
+          <Box
+            sx={{
+              position: 'absolute',
+              bottom: 16,
+              right: 16,
+              backgroundColor: 'rgba(0, 0, 0, 0.7)',
+              color: 'white',
+              padding: '8px 12px',
+              borderRadius: '20px',
+              fontSize: '14px'
+            }}
+          >
+            {Math.round(imageScale * 100)}%
+          </Box>
+        </DialogContent>
       </Dialog>
 
       {/* Snackbar for notifications */}
