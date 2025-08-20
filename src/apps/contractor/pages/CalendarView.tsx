@@ -16,48 +16,29 @@ import {
   List,
   ListItem,
   ListItemText,
-  Divider,
-  IconButton,
-  Tooltip
+  Divider
 } from '@mui/material';
 import {
   CalendarMonth,
   Work,
-  Schedule,
-  CheckCircle,
-  Warning,
-  Error,
-  Sync,
-  Google,
-  Link,
-  LinkOff,
-  Add,
-  Edit,
-  Delete
+  Schedule
 } from '@mui/icons-material';
 import { useAuth } from '../../../shared/contexts/AuthContext';
 import { JobService } from '../../../shared/services/jobService';
-import { GoogleCalendarService } from '../../../shared/services/googleCalendarService';
 import { ConstructionJob } from '../../../types';
-import { GoogleCalendarEvent } from '../../../config/google';
 
 const CalendarView: React.FC = () => {
   const { user } = useAuth();
-  const [jobs, setJobs] = useState<ConstructionJob[]>([]);
-  const [googleEvents, setGoogleEvents] = useState<GoogleCalendarEvent[]>([]);
+  const [allJobs, setAllJobs] = useState<ConstructionJob[]>([]);
+  const [pendingJobs, setPendingJobs] = useState<ConstructionJob[]>([]);
+  const [myJobs, setMyJobs] = useState<ConstructionJob[]>([]);
   const [loading, setLoading] = useState(true);
-  const [syncing, setSyncing] = useState(false);
   const [error, setError] = useState('');
   const [success, setSuccess] = useState('');
-  
-  // 구글 캘린더 연동 상태
-  const [isConnected, setIsConnected] = useState(false);
-  const [connectionLoading, setConnectionLoading] = useState(true);
   
   // 다이얼로그 상태
   const [jobDetailDialog, setJobDetailDialog] = useState(false);
   const [selectedJob, setSelectedJob] = useState<ConstructionJob | null>(null);
-  const [syncDialog, setSyncDialog] = useState(false);
 
   // 데이터 로드
   const loadData = async () => {
@@ -67,23 +48,22 @@ const CalendarView: React.FC = () => {
       setLoading(true);
       setError('');
       
-      // 시공 작업 조회
-      const allJobs = await JobService.getAllJobs();
-      const myJobs = allJobs.filter(job => 
+      // 모든 작업 조회
+      const allJobsData = await JobService.getAllJobs();
+      setAllJobs(allJobsData);
+      
+      // 대기중인 작업 필터링
+      const pendingJobsData = allJobsData.filter(job => job.status === 'pending');
+      setPendingJobs(pendingJobsData);
+      
+      // 내 작업 필터링 (배정된 작업들)
+      const myJobsData = allJobsData.filter(job => 
         job.contractorId === user.id && 
         ['assigned', 'product_preparing', 'product_ready', 'pickup_completed', 'in_progress', 'completed'].includes(job.status)
       );
-      setJobs(myJobs);
+      setMyJobs(myJobsData);
       
-      // 구글 캘린더 연동 상태 확인
-      await checkGoogleConnection();
-      
-      // 구글 캘린더 이벤트 조회 (연동된 경우)
-      if (isConnected) {
-        await loadGoogleEvents();
-      }
-      
-    } catch (error) {
+    } catch (error: unknown) {
       console.error('데이터 로드 실패:', error);
       setError('데이터를 불러오는데 실패했습니다.');
     } finally {
@@ -91,113 +71,9 @@ const CalendarView: React.FC = () => {
     }
   };
 
-  // 구글 캘린더 연동 상태 확인
-  const checkGoogleConnection = async () => {
-    if (!user?.id) return;
-    
-    try {
-      setConnectionLoading(true);
-      const connection = await GoogleCalendarService.getConnection(user.id);
-      setIsConnected(connection?.isConnected || false);
-    } catch (error) {
-      console.error('연동 상태 확인 실패:', error);
-      setIsConnected(false);
-    } finally {
-      setConnectionLoading(false);
-    }
-  };
-
-  // 구글 캘린더 이벤트 조회
-  const loadGoogleEvents = async () => {
-    if (!user?.id) return;
-    
-    try {
-      const now = new Date();
-      const startOfMonth = new Date(now.getFullYear(), now.getMonth(), 1);
-      const endOfMonth = new Date(now.getFullYear(), now.getMonth() + 1, 0);
-      
-      const events = await GoogleCalendarService.getEvents(
-        user.id,
-        startOfMonth.toISOString(),
-        endOfMonth.toISOString()
-      );
-      
-      setGoogleEvents(events);
-    } catch (error) {
-      console.error('구글 캘린더 이벤트 조회 실패:', error);
-    }
-  };
-
   useEffect(() => {
     loadData();
   }, [user]);
-
-  // 구글 캘린더 연동 시작
-  const handleConnectGoogle = () => {
-    try {
-      GoogleCalendarService.initiateConnection();
-    } catch (error) {
-      console.error('구글 캘린더 연동 실패:', error);
-      const errorMessage = error instanceof Error ? error.message : '구글 캘린더 연동에 실패했습니다.';
-      setError(errorMessage);
-      
-      // 환경 변수 설정이 안 되어 있는 경우 가이드 페이지로 이동
-      if (errorMessage.includes('REACT_APP_GOOGLE_CLIENT_ID가 설정되지 않았습니다')) {
-        setTimeout(() => {
-          window.open('/google-calendar-setup', '_blank');
-        }, 2000);
-      }
-    }
-  };
-
-  // 구글 캘린더 연동 해제
-  const handleDisconnectGoogle = async () => {
-    if (!user?.id) return;
-    
-    try {
-      await GoogleCalendarService.disconnect(user.id);
-      setIsConnected(false);
-      setGoogleEvents([]);
-      setSuccess('구글 캘린더 연동이 해제되었습니다.');
-    } catch (error) {
-      console.error('연동 해제 실패:', error);
-      setError('연동 해제에 실패했습니다.');
-    }
-  };
-
-  // 시공 작업을 구글 캘린더에 동기화
-  const handleSyncToGoogle = async () => {
-    if (!user?.id) return;
-    
-    try {
-      setSyncing(true);
-      setError('');
-      
-      // 기존 이벤트 삭제 (선택사항)
-      // for (const event of googleEvents) {
-      //   await GoogleCalendarService.deleteEvent(user.id, event.id);
-      // }
-      
-      // 새로운 이벤트 생성
-      for (const job of jobs) {
-        if (job.scheduledDate) {
-          const event = GoogleCalendarService.convertJobToCalendarEvent(job, 'contractor');
-          await GoogleCalendarService.createEvent(user.id, event);
-        }
-      }
-      
-      // 이벤트 목록 새로고침
-      await loadGoogleEvents();
-      
-      setSuccess('구글 캘린더에 성공적으로 동기화되었습니다.');
-      setSyncDialog(false);
-    } catch (error) {
-      console.error('동기화 실패:', error);
-      setError('구글 캘린더 동기화에 실패했습니다.');
-    } finally {
-      setSyncing(false);
-    }
-  };
 
   // 작업 수락
   const handleAcceptJob = async (jobId: string) => {
@@ -205,7 +81,7 @@ const CalendarView: React.FC = () => {
       await JobService.updateJobStatus(jobId, 'assigned', user?.id);
       setSuccess('작업을 수락했습니다.');
       await loadData();
-    } catch (error) {
+    } catch (error: unknown) {
       console.error('작업 수락 실패:', error);
       setError('작업 수락에 실패했습니다.');
     }
@@ -228,7 +104,7 @@ const CalendarView: React.FC = () => {
   // 작업 상태 색상
   const getStatusColor = (status: string) => {
     switch (status) {
-      case 'pending': return 'default';
+      case 'pending': return 'warning';
       case 'assigned': return 'primary';
       case 'product_preparing': return 'warning';
       case 'product_ready': return 'info';
@@ -269,46 +145,9 @@ const CalendarView: React.FC = () => {
     <Box>
       <Box display="flex" justifyContent="space-between" alignItems="center" mb={3}>
         <Typography variant="h4" sx={{ display: 'flex', alignItems: 'center', gap: 1 }}>
-          <CalendarMonth />
-          캘린더 뷰
+          <Schedule />
+          스케줄 보기
         </Typography>
-        
-        <Box display="flex" gap={2}>
-          {/* 구글 캘린더 연동 버튼 */}
-          {!connectionLoading && (
-            isConnected ? (
-              <Button
-                variant="outlined"
-                startIcon={<LinkOff />}
-                onClick={handleDisconnectGoogle}
-                color="error"
-              >
-                구글 연동 해제
-              </Button>
-            ) : (
-              <Button
-                variant="contained"
-                startIcon={<Google />}
-                onClick={handleConnectGoogle}
-                color="primary"
-              >
-                구글 캘린더 연동
-              </Button>
-            )
-          )}
-          
-          {/* 동기화 버튼 */}
-          {isConnected && (
-            <Button
-              variant="contained"
-              startIcon={<Sync />}
-              onClick={() => setSyncDialog(true)}
-              disabled={syncing}
-            >
-              {syncing ? '동기화 중...' : '구글 캘린더 동기화'}
-            </Button>
-          )}
-        </Box>
       </Box>
 
       {error && (
@@ -324,27 +163,30 @@ const CalendarView: React.FC = () => {
       )}
 
       <Grid container spacing={3}>
-        {/* 시공 작업 목록 */}
-        <Grid item xs={12} md={6}>
-          <Card>
+        {/* 대기중인 작업 목록 */}
+        <Grid item xs={12}>
+          <Card sx={{ border: '2px solid #ff9800', backgroundColor: '#fff8e1' }}>
             <CardContent>
-              <Typography variant="h6" gutterBottom sx={{ display: 'flex', alignItems: 'center', gap: 1 }}>
+              <Typography variant="h6" gutterBottom sx={{ display: 'flex', alignItems: 'center', gap: 1, color: '#e65100' }}>
                 <Work />
-                내 시공 작업 ({jobs.length}건)
+                수락 가능한 작업 ({pendingJobs.length}건)
               </Typography>
               
-              {jobs.length === 0 ? (
+              {pendingJobs.length === 0 ? (
                 <Typography color="textSecondary" textAlign="center" py={4}>
-                  배정된 시공 작업이 없습니다.
+                  현재 수락 가능한 작업이 없습니다.
                 </Typography>
               ) : (
                 <List>
-                  {jobs.map((job, index) => (
+                  {pendingJobs.map((job, index) => (
                     <React.Fragment key={job.id}>
                       <ListItem 
                         sx={{ 
                           cursor: 'pointer',
-                          '&:hover': { bgcolor: 'action.hover' }
+                          '&:hover': { bgcolor: '#ffe0b2' },
+                          border: '1px solid #ffcc80',
+                          borderRadius: 1,
+                          mb: 1
                         }}
                         onClick={() => {
                           setSelectedJob(job);
@@ -354,7 +196,77 @@ const CalendarView: React.FC = () => {
                         <ListItemText
                           primary={
                             <Box display="flex" justifyContent="space-between" alignItems="center">
-                              <Typography variant="subtitle1">
+                              <Typography variant="subtitle1" sx={{ color: '#e65100', fontWeight: 'bold' }}>
+                                {job.title}
+                              </Typography>
+                              <Chip 
+                                label="수락 가능" 
+                                color="warning" 
+                                size="small"
+                                sx={{ fontWeight: 'bold' }}
+                              />
+                            </Box>
+                          }
+                          secondary={
+                            <React.Fragment>
+                              <Typography variant="body2" color="textSecondary" component="div">
+                                {job.address}
+                              </Typography>
+                              {job.scheduledDate && (
+                                <Typography variant="body2" color="textSecondary" component="div">
+                                  {formatDate(job.scheduledDate)} {formatTime(job.scheduledDate)}
+                                </Typography>
+                              )}
+                              <Typography variant="body2" color="textSecondary" component="div">
+                                예산: {job.budget?.min?.toLocaleString()}~{job.budget?.max?.toLocaleString()}원
+                              </Typography>
+                            </React.Fragment>
+                          }
+                        />
+                      </ListItem>
+                      {index < pendingJobs.length - 1 && <Divider />}
+                    </React.Fragment>
+                  ))}
+                </List>
+              )}
+            </CardContent>
+          </Card>
+        </Grid>
+
+        {/* 내 작업 목록 */}
+        <Grid item xs={12}>
+          <Card sx={{ border: '2px solid #1976d2', backgroundColor: '#e3f2fd' }}>
+            <CardContent>
+              <Typography variant="h6" gutterBottom sx={{ display: 'flex', alignItems: 'center', gap: 1, color: '#0d47a1' }}>
+                <CalendarMonth />
+                내 시공 작업 ({myJobs.length}건)
+              </Typography>
+              
+              {myJobs.length === 0 ? (
+                <Typography color="textSecondary" textAlign="center" py={4}>
+                  배정된 시공 작업이 없습니다.
+                </Typography>
+              ) : (
+                <List>
+                  {myJobs.map((job, index) => (
+                    <React.Fragment key={job.id}>
+                      <ListItem 
+                        sx={{ 
+                          cursor: 'pointer',
+                          '&:hover': { bgcolor: '#bbdefb' },
+                          border: '1px solid #90caf9',
+                          borderRadius: 1,
+                          mb: 1
+                        }}
+                        onClick={() => {
+                          setSelectedJob(job);
+                          setJobDetailDialog(true);
+                        }}
+                      >
+                        <ListItemText
+                          primary={
+                            <Box display="flex" justifyContent="space-between" alignItems="center">
+                              <Typography variant="subtitle1" sx={{ color: '#0d47a1', fontWeight: 'bold' }}>
                                 {job.title}
                               </Typography>
                               <Chip 
@@ -381,72 +293,7 @@ const CalendarView: React.FC = () => {
                           }
                         />
                       </ListItem>
-                      {index < jobs.length - 1 && <Divider />}
-                    </React.Fragment>
-                  ))}
-                </List>
-              )}
-            </CardContent>
-          </Card>
-        </Grid>
-
-        {/* 구글 캘린더 이벤트 */}
-        <Grid item xs={12} md={6}>
-          <Card>
-            <CardContent>
-              <Typography variant="h6" gutterBottom sx={{ display: 'flex', alignItems: 'center', gap: 1 }}>
-                <Google />
-                구글 캘린더 이벤트 ({googleEvents.length}건)
-              </Typography>
-              
-              {!isConnected ? (
-                <Box textAlign="center" py={4}>
-                  <Typography color="textSecondary" gutterBottom>
-                    구글 캘린더와 연동하여 이벤트를 확인하세요.
-                  </Typography>
-                  <Button
-                    variant="contained"
-                    startIcon={<Google />}
-                    onClick={handleConnectGoogle}
-                  >
-                    구글 캘린더 연동
-                  </Button>
-                </Box>
-              ) : googleEvents.length === 0 ? (
-                <Typography color="textSecondary" textAlign="center" py={4}>
-                  구글 캘린더에 이벤트가 없습니다.
-                </Typography>
-              ) : (
-                <List>
-                  {googleEvents.map((event, index) => (
-                    <React.Fragment key={event.id}>
-                      <ListItem>
-                        <ListItemText
-                          primary={
-                            <Typography variant="subtitle1">
-                              {event.summary}
-                            </Typography>
-                          }
-                          secondary={
-                            <React.Fragment>
-                              {event.description && (
-                                <Typography variant="body2" color="textSecondary" component="div">
-                                  {event.description}
-                                </Typography>
-                              )}
-                              {event.location && (
-                                <Typography variant="body2" color="textSecondary" component="div">
-                                  위치: {event.location}
-                                </Typography>
-                              )}
-                              <Typography variant="body2" color="textSecondary" component="div">
-                                {new Date(event.start.dateTime).toLocaleString('ko-KR')}
-                              </Typography>
-                            </React.Fragment>
-                          }
-                        />
-                      </ListItem>
-                      {index < googleEvents.length - 1 && <Divider />}
+                      {index < myJobs.length - 1 && <Divider />}
                     </React.Fragment>
                   ))}
                 </List>
@@ -464,7 +311,7 @@ const CalendarView: React.FC = () => {
         fullWidth
       >
         <DialogTitle>
-          작업 상세 정보
+          {selectedJob?.status === 'pending' ? '수락 가능한 작업 상세 정보' : '내 작업 상세 정보'}
         </DialogTitle>
         <DialogContent>
           {selectedJob && (
@@ -487,51 +334,32 @@ const CalendarView: React.FC = () => {
                 예산: {selectedJob.budget?.min?.toLocaleString()}~{selectedJob.budget?.max?.toLocaleString()}원
               </Typography>
               <Chip 
-                label={getStatusText(selectedJob.status)} 
-                color={getStatusColor(selectedJob.status)} 
+                label={selectedJob.status === 'pending' ? '수락 가능' : getStatusText(selectedJob.status)} 
+                color={selectedJob.status === 'pending' ? 'warning' : getStatusColor(selectedJob.status)} 
                 sx={{ mt: 1 }}
               />
+              
+              {/* 수락 가능한 작업인 경우 수락 버튼 표시 */}
+              {selectedJob.status === 'pending' && (
+                <Box sx={{ mt: 3 }}>
+                  <Button
+                    variant="contained"
+                    color="success"
+                    size="large"
+                    fullWidth
+                    onClick={() => handleAcceptJob(selectedJob.id)}
+                    sx={{ fontWeight: 'bold' }}
+                  >
+                    이 작업을 수락합니다
+                  </Button>
+                </Box>
+              )}
             </Box>
           )}
         </DialogContent>
         <DialogActions>
           <Button onClick={() => setJobDetailDialog(false)}>
             닫기
-          </Button>
-        </DialogActions>
-      </Dialog>
-
-      {/* 구글 캘린더 동기화 다이얼로그 */}
-      <Dialog 
-        open={syncDialog} 
-        onClose={() => setSyncDialog(false)}
-        maxWidth="sm"
-        fullWidth
-      >
-        <DialogTitle>
-          구글 캘린더 동기화
-        </DialogTitle>
-        <DialogContent>
-          <Typography variant="body1" paragraph>
-            현재 시공 작업을 구글 캘린더에 동기화하시겠습니까?
-          </Typography>
-          <Typography variant="body2" color="textSecondary">
-            • 예정일이 있는 작업만 동기화됩니다.<br/>
-            • 기존 이벤트는 유지됩니다.<br/>
-            • 동기화 후 구글 캘린더에서 확인할 수 있습니다.
-          </Typography>
-        </DialogContent>
-        <DialogActions>
-          <Button onClick={() => setSyncDialog(false)}>
-            취소
-          </Button>
-          <Button
-            onClick={handleSyncToGoogle}
-            variant="contained"
-            disabled={syncing}
-            startIcon={syncing ? <CircularProgress size={16} /> : <Sync />}
-          >
-            {syncing ? '동기화 중...' : '동기화'}
           </Button>
         </DialogActions>
       </Dialog>

@@ -27,13 +27,14 @@ import {
   ListItem,
   ListItemText,
   FormControlLabel,
-  Checkbox
+  Checkbox,
+  Paper
 } from '@mui/material';
 import { Search, Schedule, LocationOn, CheckCircle, CalendarMonth, Assignment, Chat, CheckCircleOutline } from '@mui/icons-material';
 import { JobService } from '../../../shared/services/jobService';
 import { ConstructionJob } from '../../../types';
 import { useAuth } from '../../../shared/contexts/AuthContext';
-import CalendarView from './CalendarView';
+import MyJobsCalendarView from './MyJobsCalendarView';
 
 const MyJobs: React.FC = () => {
   const navigate = useNavigate();
@@ -569,13 +570,13 @@ const MyJobs: React.FC = () => {
             startIcon={<CalendarMonth />}
             onClick={() => setViewMode('calendar')}
           >
-            캘린더 보기
+            스케줄 보기
           </Button>
         </Box>
       </Box>
 
       {viewMode === 'calendar' ? (
-        <CalendarView />
+        <MyJobsCalendarView myJobs={jobs} />
       ) : (
         <>
           <Card sx={{ mb: 3 }}>
