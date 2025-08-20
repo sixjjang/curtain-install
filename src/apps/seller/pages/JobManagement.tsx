@@ -45,6 +45,7 @@ import { JobService } from '../../../shared/services/jobService';
 import { CustomerService } from '../../../shared/services/customerService';
 import { ConstructionJob } from '../../../types';
 import CreateJobDialog from '../components/CreateJobDialog';
+import ExcelJobUpload from './ExcelJobUpload';
 import { useNavigate } from 'react-router-dom';
 import { NotificationService } from '../../../shared/services/notificationService';
 import { PointService } from '../../../shared/services/pointService';
@@ -439,6 +440,7 @@ const JobManagement: React.FC = () => {
         <Tabs value={tabValue} onChange={handleTabChange} aria-label="작업 관리 탭">
           <Tab label="목록 보기" />
           <Tab label="스케줄 보기" />
+          <Tab label="시공의뢰(엑셀업로드)" />
         </Tabs>
       </Box>
 
@@ -872,6 +874,11 @@ const JobManagement: React.FC = () => {
                  })}
                </Grid>
              </Paper>
+          </TabPanel>
+
+          {/* 엑셀 업로드 탭 */}
+          <TabPanel value={tabValue} index={2}>
+            <ExcelJobUpload />
           </TabPanel>
         </>
       )}

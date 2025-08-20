@@ -228,6 +228,25 @@ export interface WorkInstruction {
   uploadedBy: string;
 }
 
+// 엑셀 업로드 작업 타입
+export interface ExcelJobData {
+  id: string;
+  title: string;
+  description: string;
+  address: string;
+  scheduledDate?: string;
+  scheduledTime?: string;
+  customerName: string;
+  customerPhone: string;
+  budgetMin?: number;
+  budgetMax?: number;
+  isInternal: boolean;
+  workInstructions?: WorkInstruction[];
+  status: 'pending' | 'ready' | 'error';
+  errorMessage?: string;
+  isSelected: boolean;
+}
+
 // 작업 진행 단계별 시간 추적 타입
 export interface JobProgressStep {
   status: ConstructionJob['status'];
