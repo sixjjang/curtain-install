@@ -32,10 +32,12 @@ import {
 import { Search, Schedule, LocationOn, CheckCircle, CalendarMonth, Assignment, Chat, CheckCircleOutline } from '@mui/icons-material';
 import { JobService } from '../../../shared/services/jobService';
 import { ConstructionJob } from '../../../types';
+import { useAuth } from '../../../shared/contexts/AuthContext';
 import CalendarView from './CalendarView';
 
 const MyJobs: React.FC = () => {
   const navigate = useNavigate();
+  const { user } = useAuth();
   const [jobs, setJobs] = useState<ConstructionJob[]>([]);
   const [loading, setLoading] = useState(true);
   const [searchTerm, setSearchTerm] = useState<string>('');
@@ -65,10 +67,29 @@ const MyJobs: React.FC = () => {
     const fetchMyJobs = async () => {
       try {
         setLoading(true);
+        
+        if (!user?.id) {
+          console.warn('사용자 정보가 없습니다.');
+          setJobs([]);
+          return;
+        }
+
         const allJobs = await JobService.getAllJobs();
-        const myJobs = allJobs.filter(job => 
-          ['assigned', 'product_preparing', 'product_ready', 'pickup_completed', 'in_progress', 'completed'].includes(job.status)
-        );
+        
+        // 현재 로그인한 시공자의 작업만 필터링
+        const myJobs = allJobs.filter(job => {
+          // 상태 필터링
+          const statusMatch = ['assigned', 'product_preparing', 'product_ready', 'pickup_completed', 'in_progress', 'completed'].includes(job.status);
+          
+          // 시공자 ID 필터링
+          const contractorMatch = job.contractorId === user.id;
+          
+          return statusMatch && contractorMatch;
+        });
+        
+        console.log(`전체 작업: ${allJobs.length}개, 내 작업: ${myJobs.length}개`);
+        console.log('내 작업들:', myJobs.map(job => ({ id: job.id, title: job.title, contractorId: job.contractorId, status: job.status })));
+        
         setJobs(myJobs);
       } catch (error) {
         console.error('나의 작업 목록 가져오기 실패:', error);
@@ -78,7 +99,7 @@ const MyJobs: React.FC = () => {
     };
 
     fetchMyJobs();
-  }, []);
+  }, [user?.id]);
 
   const getStatusColor = (status: string) => {
     switch (status) {
@@ -133,10 +154,14 @@ const MyJobs: React.FC = () => {
         message: '픽업이 완료되었습니다. 고객님댁으로 이동하세요.',
         severity: 'success'
       });
+      
+      // 작업 목록 새로고침
       const updatedJobs = await JobService.getAllJobs();
-      const myJobs = updatedJobs.filter(job => 
-        ['assigned', 'product_preparing', 'product_ready', 'pickup_completed', 'in_progress', 'completed'].includes(job.status)
-      );
+      const myJobs = updatedJobs.filter(job => {
+        const statusMatch = ['assigned', 'product_preparing', 'product_ready', 'pickup_completed', 'in_progress', 'completed'].includes(job.status);
+        const contractorMatch = job.contractorId === user?.id;
+        return statusMatch && contractorMatch;
+      });
       setJobs(myJobs);
     } catch (error) {
       console.error('픽업 완료 처리 실패:', error);
@@ -157,10 +182,14 @@ const MyJobs: React.FC = () => {
         message: '시공을 시작합니다.',
         severity: 'success'
       });
+      
+      // 작업 목록 새로고침
       const updatedJobs = await JobService.getAllJobs();
-      const myJobs = updatedJobs.filter(job => 
-        ['assigned', 'product_preparing', 'product_ready', 'pickup_completed', 'in_progress', 'completed'].includes(job.status)
-      );
+      const myJobs = updatedJobs.filter(job => {
+        const statusMatch = ['assigned', 'product_preparing', 'product_ready', 'pickup_completed', 'in_progress', 'completed'].includes(job.status);
+        const contractorMatch = job.contractorId === user?.id;
+        return statusMatch && contractorMatch;
+      });
       setJobs(myJobs);
     } catch (error) {
       console.error('시공 시작 처리 실패:', error);

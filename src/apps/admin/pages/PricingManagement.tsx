@@ -33,7 +33,9 @@ import {
   Save as SaveIcon,
   Cancel as CancelIcon,
   ArrowUpward as ArrowUpwardIcon,
-  ArrowDownward as ArrowDownwardIcon
+  ArrowDownward as ArrowDownwardIcon,
+  ExpandMore as ExpandMoreIcon,
+  ExpandLess as ExpandLessIcon
 } from '@mui/icons-material';
 import { PricingService, PricingItem } from '../../../shared/services/pricingService';
 import { EmergencyJobSettings, PricingOption } from '../../../types';
@@ -84,7 +86,8 @@ const PricingManagement: React.FC = () => {
   const [sortField, setSortField] = useState<'name' | 'category' | 'basePrice'>('name');
   const [sortDirection, setSortDirection] = useState<'asc' | 'desc'>('asc');
 
-  const [categories, setCategories] = useState(['기본', '전동', '배터리전동', 'IoT세팅', '높이추가', '콘크리트추가', '석고추가', '철거추가', '폐기추가', '기타시공']);
+  const [categories, setCategories] = useState<string[]>([]);
+  const [expandedCategories, setExpandedCategories] = useState<Set<string>>(new Set());
   const units = ['개', '회', '세트', 'm²', 'm', '조', '창'];
 
   useEffect(() => {
@@ -125,6 +128,17 @@ const PricingManagement: React.FC = () => {
           await PricingService.initializeDefaultOptions();
           const updatedOptions = await PricingService.getAllOptions();
           setPricingOptions(updatedOptions);
+        }
+
+        // 카테고리 목록 가져오기
+        const categoriesData = await PricingService.getAllCategories();
+        setCategories(categoriesData);
+        
+        // 카테고리가 없으면 기본 데이터 초기화
+        if (categoriesData.length === 0) {
+          await PricingService.initializeDefaultCategories();
+          const updatedCategories = await PricingService.getAllCategories();
+          setCategories(updatedCategories);
         }
       } catch (error) {
         console.error('데이터 가져오기 실패:', error);
@@ -380,7 +394,7 @@ const PricingManagement: React.FC = () => {
   };
 
   // 카테고리 관리 함수들
-  const handleAddCategory = () => {
+  const handleAddCategory = async () => {
     if (!newCategory.trim()) {
       setMessage({ type: 'error', text: '카테고리명을 입력해주세요.' });
       return;
@@ -390,13 +404,26 @@ const PricingManagement: React.FC = () => {
       setMessage({ type: 'error', text: '이미 존재하는 카테고리입니다.' });
       return;
     }
-    
-    setCategories(prev => [...prev, newCategory.trim()]);
-    setNewCategory('');
-    setMessage({ type: 'success', text: '카테고리가 추가되었습니다.' });
+
+    try {
+      setLoading(true);
+      await PricingService.addCategory(newCategory.trim());
+      
+      // 카테고리 목록 새로고침
+      const updatedCategories = await PricingService.getAllCategories();
+      setCategories(updatedCategories);
+      
+      setNewCategory('');
+      setMessage({ type: 'success', text: '카테고리가 추가되었습니다.' });
+    } catch (error) {
+      console.error('카테고리 추가 실패:', error);
+      setMessage({ type: 'error', text: '카테고리 추가에 실패했습니다.' });
+    } finally {
+      setLoading(false);
+    }
   };
 
-  const handleEditCategory = () => {
+  const handleEditCategory = async () => {
     if (!editingCategory.trim()) {
       setMessage({ type: 'error', text: '카테고리명을 입력해주세요.' });
       return;
@@ -406,33 +433,91 @@ const PricingManagement: React.FC = () => {
       setMessage({ type: 'error', text: '이미 존재하는 카테고리입니다.' });
       return;
     }
-    
-    // 품목들의 카테고리도 함께 업데이트
-    const updatedItems = pricingItems.map(item => 
-      item.category === newCategory ? { ...item, category: editingCategory.trim() } : item
-    );
-    setPricingItems(updatedItems);
-    
-    setCategories(prev => prev.map(cat => cat === newCategory ? editingCategory.trim() : cat));
-    setEditingCategory('');
-    setNewCategory('');
-    setIsCategoryDialogOpen(false);
-    setMessage({ type: 'success', text: '카테고리가 수정되었습니다.' });
+
+    try {
+      setLoading(true);
+      await PricingService.updateCategory(newCategory, editingCategory.trim());
+      
+      // 모든 데이터 새로고침
+      const [updatedCategories, updatedItems, updatedOptions] = await Promise.all([
+        PricingService.getAllCategories(),
+        PricingService.getAllItems(),
+        PricingService.getAllOptions()
+      ]);
+      
+      setCategories(updatedCategories);
+      setPricingItems(updatedItems);
+      setPricingOptions(updatedOptions);
+      
+      setEditingCategory('');
+      setNewCategory('');
+      setIsCategoryDialogOpen(false);
+      setMessage({ type: 'success', text: '카테고리가 수정되었습니다.' });
+    } catch (error) {
+      console.error('카테고리 수정 실패:', error);
+      setMessage({ type: 'error', text: '카테고리 수정에 실패했습니다.' });
+    } finally {
+      setLoading(false);
+    }
   };
 
-  const handleDeleteCategory = (categoryToDelete: string) => {
+  const handleDeleteCategory = async (categoryToDelete: string) => {
     // 해당 카테고리를 사용하는 품목이 있는지 확인
     const itemsUsingCategory = pricingItems.filter(item => item.category === categoryToDelete);
-    if (itemsUsingCategory.length > 0) {
+    const optionsUsingCategory = pricingOptions.filter(option => option.category === categoryToDelete);
+    
+    if (itemsUsingCategory.length > 0 || optionsUsingCategory.length > 0) {
+      let errorMessage = `'${categoryToDelete}' 카테고리를 사용하는 `;
+      if (itemsUsingCategory.length > 0 && optionsUsingCategory.length > 0) {
+        errorMessage += `품목 ${itemsUsingCategory.length}개, 옵션 ${optionsUsingCategory.length}개가 있습니다.`;
+      } else if (itemsUsingCategory.length > 0) {
+        errorMessage += `품목 ${itemsUsingCategory.length}개가 있습니다.`;
+      } else {
+        errorMessage += `옵션 ${optionsUsingCategory.length}개가 있습니다.`;
+      }
+      errorMessage += ` 먼저 해당 항목들의 카테고리를 변경해주세요.`;
+      
       setMessage({ 
         type: 'error', 
-        text: `'${categoryToDelete}' 카테고리를 사용하는 품목이 ${itemsUsingCategory.length}개 있습니다. 먼저 해당 품목들의 카테고리를 변경해주세요.` 
+        text: errorMessage
       });
       return;
     }
-    
-    setCategories(prev => prev.filter(cat => cat !== categoryToDelete));
-    setMessage({ type: 'success', text: '카테고리가 삭제되었습니다.' });
+
+    try {
+      setLoading(true);
+      await PricingService.deleteCategory(categoryToDelete);
+      
+      // 카테고리 목록 새로고침
+      const updatedCategories = await PricingService.getAllCategories();
+      setCategories(updatedCategories);
+      
+      setMessage({ type: 'success', text: '카테고리가 삭제되었습니다.' });
+    } catch (error) {
+      console.error('카테고리 삭제 실패:', error);
+      setMessage({ type: 'error', text: '카테고리 삭제에 실패했습니다.' });
+    } finally {
+      setLoading(false);
+    }
+  };
+
+  // 중복 카테고리 정리 함수
+  const handleCleanupDuplicateCategories = async () => {
+    try {
+      setLoading(true);
+      await PricingService.cleanupDuplicateCategories();
+      
+      // 카테고리 목록 새로고침
+      const updatedCategories = await PricingService.getAllCategories();
+      setCategories(updatedCategories);
+      
+      setMessage({ type: 'success', text: '중복 카테고리가 정리되었습니다.' });
+    } catch (error) {
+      console.error('중복 카테고리 정리 실패:', error);
+      setMessage({ type: 'error', text: '중복 카테고리 정리에 실패했습니다.' });
+    } finally {
+      setLoading(false);
+    }
   };
 
   // 옵션 관리 함수들
@@ -532,39 +617,41 @@ const PricingManagement: React.FC = () => {
     }
   };
 
-  // 정렬된 품목 목록
-  const sortedPricingItems = [...pricingItems].sort((a, b) => {
-    let aValue: string | number;
-    let bValue: string | number;
-
-    switch (sortField) {
-      case 'name':
-        aValue = a.name;
-        bValue = b.name;
-        break;
-      case 'category':
-        aValue = a.category;
-        bValue = b.category;
-        break;
-      case 'basePrice':
-        aValue = a.basePrice;
-        bValue = b.basePrice;
-        break;
-      default:
-        aValue = a.name;
-        bValue = b.name;
+  // 카테고리별로 품목 그룹화
+  const groupedItems = pricingItems.reduce((groups, item) => {
+    if (!groups[item.category]) {
+      groups[item.category] = [];
     }
+    groups[item.category].push(item);
+    return groups;
+  }, {} as { [key: string]: PricingItem[] });
 
-    if (typeof aValue === 'string' && typeof bValue === 'string') {
-      return sortDirection === 'asc' 
-        ? aValue.localeCompare(bValue, 'ko-KR')
-        : bValue.localeCompare(aValue, 'ko-KR');
-    } else {
-      return sortDirection === 'asc' 
-        ? (aValue as number) - (bValue as number)
-        : (bValue as number) - (aValue as number);
-    }
+  // 카테고리별로 정렬된 품목 목록
+  const sortedGroupedItems = Object.entries(groupedItems).sort(([a], [b]) => {
+    return a.localeCompare(b, 'ko-KR');
   });
+
+  // 카테고리 토글 함수
+  const toggleCategory = (category: string) => {
+    setExpandedCategories(prev => {
+      const newSet = new Set(prev);
+      if (newSet.has(category)) {
+        newSet.delete(category);
+      } else {
+        newSet.add(category);
+      }
+      return newSet;
+    });
+  };
+
+  // 모든 카테고리 확장/축소 함수
+  const toggleAllCategories = () => {
+    if (expandedCategories.size === categories.length) {
+      setExpandedCategories(new Set());
+    } else {
+      setExpandedCategories(new Set(categories));
+    }
+  };
 
   return (
     <Box>
@@ -808,200 +895,186 @@ const PricingManagement: React.FC = () => {
         </Grid>
       </Grid>
 
-             {/* 단가 테이블 */}
-               <Box display="flex" justifyContent="space-between" alignItems="center" mb={2}>
-          <Box display="flex" gap={1}>
-            <Button
-              variant="outlined"
-              startIcon={<AddIcon />}
-              onClick={() => setIsCategoryDialogOpen(true)}
-            >
-              카테고리 관리
-            </Button>
-            <Button
-              variant="outlined"
-              startIcon={<AddIcon />}
-              onClick={() => setIsOptionDialogOpen(true)}
-            >
-              옵션 관리
-            </Button>
-          </Box>
-          <Button
-            variant="contained"
-            startIcon={<AddIcon />}
-            onClick={() => setIsAddDialogOpen(true)}
-          >
-            새 품목 추가
-          </Button>
-        </Box>
-               <TableContainer component={Paper}>
-          <Table>
-            <TableHead>
-              <TableRow>
-                <TableCell 
-                  onClick={() => handleSort('name')}
-                  sx={{ 
-                    cursor: 'pointer', 
-                    '&:hover': { backgroundColor: 'rgba(0, 0, 0, 0.04)' },
-                    userSelect: 'none'
-                  }}
-                >
-                  <Box display="flex" alignItems="center" gap={1}>
-                    품목명
-                    {sortField === 'name' && (
-                      sortDirection === 'asc' ? <ArrowUpwardIcon fontSize="small" /> : <ArrowDownwardIcon fontSize="small" />
-                    )}
-                  </Box>
-                </TableCell>
-                <TableCell 
-                  onClick={() => handleSort('category')}
-                  sx={{ 
-                    cursor: 'pointer', 
-                    '&:hover': { backgroundColor: 'rgba(0, 0, 0, 0.04)' },
-                    userSelect: 'none'
-                  }}
-                >
-                  <Box display="flex" alignItems="center" gap={1}>
-                    카테고리
-                    {sortField === 'category' && (
-                      sortDirection === 'asc' ? <ArrowUpwardIcon fontSize="small" /> : <ArrowDownwardIcon fontSize="small" />
-                    )}
-                  </Box>
-                </TableCell>
-                <TableCell 
-                  onClick={() => handleSort('basePrice')}
-                  sx={{ 
-                    cursor: 'pointer', 
-                    '&:hover': { backgroundColor: 'rgba(0, 0, 0, 0.04)' },
-                    userSelect: 'none'
-                  }}
-                >
-                  <Box display="flex" alignItems="center" gap={1}>
-                    기본단가
-                    {sortField === 'basePrice' && (
-                      sortDirection === 'asc' ? <ArrowUpwardIcon fontSize="small" /> : <ArrowDownwardIcon fontSize="small" />
-                    )}
-                  </Box>
-                </TableCell>
-                <TableCell>단위</TableCell>
-                <TableCell>설명</TableCell>
-                <TableCell>상태</TableCell>
-                <TableCell>작업</TableCell>
-              </TableRow>
-            </TableHead>
-           <TableBody>
-             {sortedPricingItems.map((item) => (
-              <TableRow key={item.id}>
-                <TableCell>
-                  {editingItem?.id === item.id ? (
-                    <TextField
-                      size="small"
-                      value={editingItem.name}
-                      onChange={(e) => setEditingItem({ ...editingItem, name: e.target.value })}
-                    />
-                  ) : (
-                    <Typography variant="subtitle2">{item.name}</Typography>
-                  )}
-                </TableCell>
-                <TableCell>
-                  {editingItem?.id === item.id ? (
-                    <FormControl size="small" sx={{ minWidth: 120 }}>
-                      <Select
-                        value={editingItem.category || ''}
-                        onChange={(e) => setEditingItem({ ...editingItem, category: e.target.value })}
-                      >
-                        {categories.map((category) => (
-                          <MenuItem key={category} value={category}>{category}</MenuItem>
-                        ))}
-                      </Select>
-                    </FormControl>
-                  ) : (
-                    <Chip 
-                      label={item.category} 
-                      color={getCategoryColor(item.category)}
-                      size="small"
-                    />
-                  )}
-                </TableCell>
-                <TableCell>
-                  {editingItem?.id === item.id ? (
-                    <TextField
-                      size="small"
-                      type="number"
-                      value={editingItem.basePrice}
-                      onChange={(e) => setEditingItem({ ...editingItem, basePrice: parseInt(e.target.value) || 0 })}
-                      InputProps={{
-                        endAdornment: <Typography variant="caption">원</Typography>
-                      }}
-                    />
-                  ) : (
-                    <Typography variant="subtitle2">
-                      {item.basePrice.toLocaleString()}원
-                    </Typography>
-                  )}
-                </TableCell>
-                <TableCell>
-                  {editingItem?.id === item.id ? (
-                    <FormControl size="small" sx={{ minWidth: 80 }}>
-                      <Select
-                        value={editingItem.unit || ''}
-                        onChange={(e) => setEditingItem({ ...editingItem, unit: e.target.value })}
-                      >
-                        {units.map((unit) => (
-                          <MenuItem key={unit} value={unit}>{unit}</MenuItem>
-                        ))}
-                      </Select>
-                    </FormControl>
-                  ) : (
-                    <Typography variant="body2">{item.unit}</Typography>
-                  )}
-                </TableCell>
-                <TableCell>
-                  {editingItem?.id === item.id ? (
-                    <TextField
-                      size="small"
-                      value={editingItem.description}
-                      onChange={(e) => setEditingItem({ ...editingItem, description: e.target.value })}
-                    />
-                  ) : (
-                    <Typography variant="body2" color="textSecondary">
-                      {item.description}
-                    </Typography>
-                  )}
-                </TableCell>
-                <TableCell>
-                  <Chip 
-                    label={item.isActive ? '활성' : '비활성'} 
-                    color={item.isActive ? 'success' : 'default'}
-                    size="small"
-                  />
-                </TableCell>
-                <TableCell>
-                  {editingItem?.id === item.id ? (
-                    <Box>
-                      <IconButton size="small" onClick={handleSaveEdit} color="primary">
-                        <SaveIcon />
-                      </IconButton>
-                      <IconButton size="small" onClick={handleCancelEdit} color="error">
-                        <CancelIcon />
-                      </IconButton>
-                    </Box>
-                  ) : (
-                    <Box>
-                      <IconButton size="small" onClick={() => handleEdit(item)} color="primary">
-                        <EditIcon />
-                      </IconButton>
-                      <IconButton size="small" onClick={() => handleDelete(item.id)} color="error">
-                        <DeleteIcon />
-                      </IconButton>
-                    </Box>
-                  )}
-                </TableCell>
-              </TableRow>
-            ))}
-          </TableBody>
-        </Table>
-      </TableContainer>
+                           {/* 단가 테이블 */}
+                <Box display="flex" justifyContent="space-between" alignItems="center" mb={2}>
+           <Box display="flex" gap={1}>
+             <Button
+               variant="outlined"
+               startIcon={<AddIcon />}
+               onClick={() => setIsCategoryDialogOpen(true)}
+             >
+               카테고리 관리
+             </Button>
+             <Button
+               variant="outlined"
+               startIcon={<AddIcon />}
+               onClick={() => setIsOptionDialogOpen(true)}
+             >
+               옵션 관리
+             </Button>
+             <Button
+               variant="outlined"
+               size="small"
+               onClick={toggleAllCategories}
+             >
+               {expandedCategories.size === categories.length ? '모두 접기' : '모두 펼치기'}
+             </Button>
+           </Box>
+           <Button
+             variant="contained"
+             startIcon={<AddIcon />}
+             onClick={() => setIsAddDialogOpen(true)}
+           >
+             새 품목 추가
+           </Button>
+         </Box>
+
+         {/* 카테고리별 아코디언 테이블 */}
+         <TableContainer component={Paper}>
+           <Table>
+             <TableHead>
+               <TableRow>
+                 <TableCell sx={{ width: '50px' }}></TableCell>
+                 <TableCell>카테고리</TableCell>
+                 <TableCell>품목명</TableCell>
+                 <TableCell>기본단가</TableCell>
+                 <TableCell>단위</TableCell>
+                 <TableCell>설명</TableCell>
+                 <TableCell>상태</TableCell>
+                 <TableCell>작업</TableCell>
+               </TableRow>
+             </TableHead>
+             <TableBody>
+               {sortedGroupedItems.map(([category, items]) => (
+                 <React.Fragment key={category}>
+                   {/* 카테고리 헤더 행 */}
+                   <TableRow 
+                     sx={{ 
+                       backgroundColor: 'rgba(0, 0, 0, 0.02)',
+                       cursor: 'pointer',
+                       '&:hover': { backgroundColor: 'rgba(0, 0, 0, 0.04)' }
+                     }}
+                     onClick={() => toggleCategory(category)}
+                   >
+                     <TableCell>
+                       {expandedCategories.has(category) ? <ExpandLessIcon /> : <ExpandMoreIcon />}
+                     </TableCell>
+                     <TableCell>
+                       <Box display="flex" alignItems="center" gap={1}>
+                         <Chip 
+                           label={category} 
+                           color={getCategoryColor(category)}
+                           size="small"
+                         />
+                         <Typography variant="caption" color="textSecondary">
+                           ({items.length}개)
+                         </Typography>
+                       </Box>
+                     </TableCell>
+                     <TableCell colSpan={6}>
+                       <Typography variant="body2" color="textSecondary">
+                         {expandedCategories.has(category) ? '클릭하여 접기' : '클릭하여 펼치기'}
+                       </Typography>
+                     </TableCell>
+                   </TableRow>
+                   
+                   {/* 카테고리 내 품목들 */}
+                   {expandedCategories.has(category) && items.map((item) => (
+                     <TableRow key={item.id} sx={{ backgroundColor: 'rgba(0, 0, 0, 0.01)' }}>
+                       <TableCell></TableCell>
+                       <TableCell></TableCell>
+                       <TableCell>
+                         {editingItem?.id === item.id ? (
+                           <TextField
+                             size="small"
+                             value={editingItem.name}
+                             onChange={(e) => setEditingItem({ ...editingItem, name: e.target.value })}
+                           />
+                         ) : (
+                           <Typography variant="subtitle2">{item.name}</Typography>
+                         )}
+                       </TableCell>
+                       <TableCell>
+                         {editingItem?.id === item.id ? (
+                           <TextField
+                             size="small"
+                             type="number"
+                             value={editingItem.basePrice}
+                             onChange={(e) => setEditingItem({ ...editingItem, basePrice: parseInt(e.target.value) || 0 })}
+                             InputProps={{
+                               endAdornment: <Typography variant="caption">원</Typography>
+                             }}
+                           />
+                         ) : (
+                           <Typography variant="subtitle2">
+                             {item.basePrice.toLocaleString()}원
+                           </Typography>
+                         )}
+                       </TableCell>
+                       <TableCell>
+                         {editingItem?.id === item.id ? (
+                           <FormControl size="small" sx={{ minWidth: 80 }}>
+                             <Select
+                               value={editingItem.unit || ''}
+                               onChange={(e) => setEditingItem({ ...editingItem, unit: e.target.value })}
+                             >
+                               {units.map((unit) => (
+                                 <MenuItem key={unit} value={unit}>{unit}</MenuItem>
+                               ))}
+                             </Select>
+                           </FormControl>
+                         ) : (
+                           <Typography variant="body2">{item.unit}</Typography>
+                         )}
+                       </TableCell>
+                       <TableCell>
+                         {editingItem?.id === item.id ? (
+                           <TextField
+                             size="small"
+                             value={editingItem.description}
+                             onChange={(e) => setEditingItem({ ...editingItem, description: e.target.value })}
+                           />
+                         ) : (
+                           <Typography variant="body2" color="textSecondary">
+                             {item.description}
+                           </Typography>
+                         )}
+                       </TableCell>
+                       <TableCell>
+                         <Chip 
+                           label={item.isActive ? '활성' : '비활성'} 
+                           color={item.isActive ? 'success' : 'default'}
+                           size="small"
+                         />
+                       </TableCell>
+                       <TableCell>
+                         {editingItem?.id === item.id ? (
+                           <Box>
+                             <IconButton size="small" onClick={handleSaveEdit} color="primary">
+                               <SaveIcon />
+                             </IconButton>
+                             <IconButton size="small" onClick={handleCancelEdit} color="error">
+                               <CancelIcon />
+                             </IconButton>
+                           </Box>
+                         ) : (
+                           <Box>
+                             <IconButton size="small" onClick={() => handleEdit(item)} color="primary">
+                               <EditIcon />
+                             </IconButton>
+                             <IconButton size="small" onClick={() => handleDelete(item.id)} color="error">
+                               <DeleteIcon />
+                             </IconButton>
+                           </Box>
+                         )}
+                       </TableCell>
+                     </TableRow>
+                   ))}
+                 </React.Fragment>
+               ))}
+             </TableBody>
+           </Table>
+         </TableContainer>
 
       {/* 새 품목 추가 다이얼로그 */}
       <Dialog open={isAddDialogOpen} onClose={() => setIsAddDialogOpen(false)} maxWidth="sm" fullWidth>
@@ -1130,25 +1203,40 @@ const PricingManagement: React.FC = () => {
       <Dialog open={isCategoryDialogOpen} onClose={() => setIsCategoryDialogOpen(false)} maxWidth="sm" fullWidth>
         <DialogTitle>카테고리 관리</DialogTitle>
         <DialogContent>
-          <Box sx={{ mb: 3 }}>
-            <Typography variant="h6" gutterBottom>새 카테고리 추가</Typography>
-            <Box sx={{ display: 'flex', gap: 1 }}>
-              <TextField
-                fullWidth
-                label="카테고리명"
-                value={newCategory}
-                onChange={(e) => setNewCategory(e.target.value)}
-                placeholder="새 카테고리명을 입력하세요"
-              />
-              <Button
-                variant="contained"
-                onClick={handleAddCategory}
-                disabled={!newCategory.trim()}
-              >
-                추가
-              </Button>
-            </Box>
-          </Box>
+                     <Box sx={{ mb: 3 }}>
+             <Typography variant="h6" gutterBottom>새 카테고리 추가</Typography>
+             <Box sx={{ display: 'flex', gap: 1 }}>
+               <TextField
+                 fullWidth
+                 label="카테고리명"
+                 value={newCategory}
+                 onChange={(e) => setNewCategory(e.target.value)}
+                 placeholder="새 카테고리명을 입력하세요"
+               />
+               <Button
+                 variant="contained"
+                 onClick={handleAddCategory}
+                 disabled={!newCategory.trim() || loading}
+               >
+                 {loading ? '추가 중...' : '추가'}
+               </Button>
+             </Box>
+           </Box>
+
+           <Box sx={{ mb: 3 }}>
+             <Typography variant="h6" gutterBottom>중복 카테고리 정리</Typography>
+             <Typography variant="body2" color="textSecondary" sx={{ mb: 2 }}>
+               중복으로 생성된 카테고리들을 정리합니다. 각 카테고리명당 하나만 남기고 나머지는 비활성화됩니다.
+             </Typography>
+             <Button
+               variant="outlined"
+               color="warning"
+               onClick={handleCleanupDuplicateCategories}
+               disabled={loading}
+             >
+               {loading ? '정리 중...' : '중복 카테고리 정리'}
+             </Button>
+           </Box>
 
           <Box>
             <Typography variant="h6" gutterBottom>기존 카테고리 관리</Typography>
@@ -1179,9 +1267,9 @@ const PricingManagement: React.FC = () => {
                         size="small"
                         variant="contained"
                         onClick={handleEditCategory}
-                        disabled={!newCategory.trim()}
+                        disabled={!newCategory.trim() || loading}
                       >
-                        저장
+                        {loading ? '저장 중...' : '저장'}
                       </Button>
                       <Button
                         size="small"
@@ -1195,7 +1283,17 @@ const PricingManagement: React.FC = () => {
                       </Button>
                     </Box>
                   ) : (
-                    <Typography variant="body1">{category}</Typography>
+                    <Box>
+                      <Typography variant="body1">{category}</Typography>
+                      <Box sx={{ display: 'flex', gap: 2, mt: 0.5 }}>
+                        <Typography variant="caption" color="textSecondary">
+                          품목: {pricingItems.filter(item => item.category === category).length}개
+                        </Typography>
+                        <Typography variant="caption" color="textSecondary">
+                          옵션: {pricingOptions.filter(option => option.category === category).length}개
+                        </Typography>
+                      </Box>
+                    </Box>
                   )}
                 </Box>
                 <Box sx={{ display: 'flex', gap: 1 }}>
@@ -1214,6 +1312,16 @@ const PricingManagement: React.FC = () => {
                         size="small"
                         color="error"
                         onClick={() => handleDeleteCategory(category)}
+                        disabled={
+                          pricingItems.filter(item => item.category === category).length > 0 ||
+                          pricingOptions.filter(option => option.category === category).length > 0
+                        }
+                        title={
+                          pricingItems.filter(item => item.category === category).length > 0 ||
+                          pricingOptions.filter(option => option.category === category).length > 0
+                            ? '사용 중인 카테고리는 삭제할 수 없습니다'
+                            : '카테고리 삭제'
+                        }
                       >
                         <DeleteIcon />
                       </IconButton>

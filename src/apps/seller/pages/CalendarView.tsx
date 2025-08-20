@@ -67,12 +67,9 @@ const CalendarView: React.FC = () => {
       setLoading(true);
       setError('');
       
-      // 시공 작업 조회
+      // 판매자의 시공 작업 조회
       const allJobs = await JobService.getAllJobs();
-      const myJobs = allJobs.filter(job => 
-        job.contractorId === user.id && 
-        ['assigned', 'product_preparing', 'product_ready', 'pickup_completed', 'in_progress', 'completed'].includes(job.status)
-      );
+      const myJobs = allJobs.filter(job => job.sellerId === user.id);
       setJobs(myJobs);
       
       // 구글 캘린더 연동 상태 확인
@@ -160,15 +157,10 @@ const CalendarView: React.FC = () => {
       setSyncing(true);
       setError('');
       
-      // 기존 이벤트 삭제 (선택사항)
-      // for (const event of googleEvents) {
-      //   await GoogleCalendarService.deleteEvent(user.id, event.id);
-      // }
-      
       // 새로운 이벤트 생성
       for (const job of jobs) {
         if (job.scheduledDate) {
-          const event = GoogleCalendarService.convertJobToCalendarEvent(job, 'contractor');
+          const event = GoogleCalendarService.convertJobToCalendarEvent(job, 'seller');
           await GoogleCalendarService.createEvent(user.id, event);
         }
       }
@@ -183,18 +175,6 @@ const CalendarView: React.FC = () => {
       setError('구글 캘린더 동기화에 실패했습니다.');
     } finally {
       setSyncing(false);
-    }
-  };
-
-  // 작업 수락
-  const handleAcceptJob = async (jobId: string) => {
-    try {
-      await JobService.updateJobStatus(jobId, 'assigned', user?.id);
-      setSuccess('작업을 수락했습니다.');
-      await loadData();
-    } catch (error) {
-      console.error('작업 수락 실패:', error);
-      setError('작업 수락에 실패했습니다.');
     }
   };
 
@@ -317,12 +297,12 @@ const CalendarView: React.FC = () => {
             <CardContent>
               <Typography variant="h6" gutterBottom sx={{ display: 'flex', alignItems: 'center', gap: 1 }}>
                 <Work />
-                내 시공 작업 ({jobs.length}건)
+                내 시공 의뢰 ({jobs.length}건)
               </Typography>
               
               {jobs.length === 0 ? (
                 <Typography color="textSecondary" textAlign="center" py={4}>
-                  배정된 시공 작업이 없습니다.
+                  시공 의뢰한 작업이 없습니다.
                 </Typography>
               ) : (
                 <List>
@@ -352,19 +332,24 @@ const CalendarView: React.FC = () => {
                             </Box>
                           }
                           secondary={
-                            <React.Fragment>
-                              <Typography variant="body2" color="textSecondary" component="div">
+                            <Box>
+                              <Typography variant="body2" color="textSecondary">
                                 {job.address}
                               </Typography>
                               {job.scheduledDate && (
-                                <Typography variant="body2" color="textSecondary" component="div">
-                                  {formatDate(job.scheduledDate)} {formatTime(job.scheduledDate)}
+                                <Typography variant="body2" color="textSecondary">
+                                  예정일: {formatDate(job.scheduledDate)} {formatTime(job.scheduledDate)}
                                 </Typography>
                               )}
-                              <Typography variant="body2" color="textSecondary" component="div">
+                              <Typography variant="body2" color="textSecondary">
                                 예산: {job.budget?.min?.toLocaleString()}~{job.budget?.max?.toLocaleString()}원
                               </Typography>
-                            </React.Fragment>
+                              {job.contractorId && (
+                                <Typography variant="body2" color="textSecondary">
+                                  시공자: {job.contractorName || '배정됨'}
+                                </Typography>
+                              )}
+                            </Box>
                           }
                         />
                       </ListItem>
@@ -415,21 +400,21 @@ const CalendarView: React.FC = () => {
                             </Typography>
                           }
                           secondary={
-                            <React.Fragment>
+                            <Box>
                               {event.description && (
-                                <Typography variant="body2" color="textSecondary" component="div">
+                                <Typography variant="body2" color="textSecondary">
                                   {event.description}
                                 </Typography>
                               )}
                               {event.location && (
-                                <Typography variant="body2" color="textSecondary" component="div">
+                                <Typography variant="body2" color="textSecondary">
                                   위치: {event.location}
                                 </Typography>
                               )}
-                              <Typography variant="body2" color="textSecondary" component="div">
+                              <Typography variant="body2" color="textSecondary">
                                 {new Date(event.start.dateTime).toLocaleString('ko-KR')}
                               </Typography>
-                            </React.Fragment>
+                            </Box>
                           }
                         />
                       </ListItem>
@@ -473,6 +458,11 @@ const CalendarView: React.FC = () => {
               <Typography variant="body2" color="textSecondary" gutterBottom>
                 예산: {selectedJob.budget?.min?.toLocaleString()}~{selectedJob.budget?.max?.toLocaleString()}원
               </Typography>
+              {selectedJob.contractorId && (
+                <Typography variant="body2" color="textSecondary" gutterBottom>
+                  시공자: {selectedJob.contractorName || '배정됨'}
+                </Typography>
+              )}
               <Chip 
                 label={getStatusText(selectedJob.status)} 
                 color={getStatusColor(selectedJob.status)} 
@@ -500,7 +490,7 @@ const CalendarView: React.FC = () => {
         </DialogTitle>
         <DialogContent>
           <Typography variant="body1" paragraph>
-            현재 시공 작업을 구글 캘린더에 동기화하시겠습니까?
+            현재 시공 의뢰를 구글 캘린더에 동기화하시겠습니까?
           </Typography>
           <Typography variant="body2" color="textSecondary">
             • 예정일이 있는 작업만 동기화됩니다.<br/>

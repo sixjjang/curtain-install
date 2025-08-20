@@ -24,15 +24,21 @@ import {
   Delete as DeleteIcon,
   Calculate as CalculateIcon,
   CloudUpload,
-  Description as DescriptionIcon
+  Description as DescriptionIcon,
+  AttachFile,
+  FileDownload,
+  Delete
 } from '@mui/icons-material';
 import { JobService } from '../../../shared/services/jobService';
 import { PricingService, PricingItem } from '../../../shared/services/pricingService';
 import { SellerService } from '../../../shared/services/sellerService';
 import { CustomerService } from '../../../shared/services/customerService';
+import { PointService } from '../../../shared/services/pointService';
+import { StorageService } from '../../../shared/services/storageService';
 import { useAuth } from '../../../shared/contexts/AuthContext';
-import { JobItem, PricingOption } from '../../../types';
+import { JobItem, PricingOption, WorkInstruction } from '../../../types';
 import AddressSearch from '../../../shared/components/AddressSearch';
+import { formatPhoneInput } from '../../../shared/utils/phoneFormatter';
 
 interface CreateJobDialogProps {
   open: boolean;
@@ -68,12 +74,13 @@ const CreateJobDialog: React.FC<CreateJobDialogProps> = ({ open, onClose, onJobC
     scheduledDateTime: ''
   });
 
-  // 저장된 픽업 정보 불러오기
+  // 저장된 픽업 정보 및 포인트 잔액 불러오기
   React.useEffect(() => {
-    const loadSavedPickupInfo = async () => {
+    const loadSavedData = async () => {
       if (!user?.id || !open) return;
       
       try {
+        // 픽업 정보 불러오기
         const savedPickupInfo = await SellerService.getPickupInfo(user.id);
         if (savedPickupInfo) {
           setPickupInfo(prev => ({
@@ -83,12 +90,16 @@ const CreateJobDialog: React.FC<CreateJobDialogProps> = ({ open, onClose, onJobC
             address: savedPickupInfo.address
           }));
         }
+
+        // 포인트 잔액 불러오기
+        const balance = await PointService.getPointBalance(user.id, 'seller');
+        setPointBalance(balance);
       } catch (error) {
-        console.error('저장된 픽업 정보 불러오기 실패:', error);
+        console.error('저장된 데이터 불러오기 실패:', error);
       }
     };
 
-    loadSavedPickupInfo();
+    loadSavedData();
   }, [open, user?.id]);
   const [items, setItems] = useState<JobItem[]>([]);
   const [newItem, setNewItem] = useState({
@@ -98,13 +109,21 @@ const CreateJobDialog: React.FC<CreateJobDialogProps> = ({ open, onClose, onJobC
   });
   const [selectedCategory, setSelectedCategory] = useState('');
   const [loading, setLoading] = useState(false);
+  const [pointBalance, setPointBalance] = useState(0);
+  const [pointValidation, setPointValidation] = useState<{
+    isValid: boolean;
+    currentBalance: number;
+    requiredAmount: number;
+    shortage: number;
+  } | null>(null);
   const [error, setError] = useState('');
   const [pricingItems, setPricingItems] = useState<PricingItem[]>([]);
   const [pricingOptions, setPricingOptions] = useState<PricingOption[]>([]);
   const [selectedOptions, setSelectedOptions] = useState<string[]>([]);
   
   // 작업지시서 파일 상태
-  const [workInstructions, setWorkInstructions] = useState<File[]>([]);
+  const [workInstructions, setWorkInstructions] = useState<WorkInstruction[]>([]);
+  const [uploadingFiles, setUploadingFiles] = useState(false);
 
   // 품목 목록 가져오기
   React.useEffect(() => {
@@ -170,12 +189,23 @@ const CreateJobDialog: React.FC<CreateJobDialogProps> = ({ open, onClose, onJobC
     }));
   };
 
+
+
   // 고객정보 변경 핸들러
   const handleCustomerInfoChange = (field: string, value: string) => {
-    setCustomerInfo(prev => ({
-      ...prev,
-      [field]: value
-    }));
+    // 전화번호 필드인 경우 포맷팅 적용
+    if (field === 'phone') {
+      const formattedValue = formatPhoneInput(value);
+      setCustomerInfo(prev => ({
+        ...prev,
+        [field]: formattedValue
+      }));
+    } else {
+      setCustomerInfo(prev => ({
+        ...prev,
+        [field]: value
+      }));
+    }
     
     // 고객 주소가 변경되면 시공 주소도 동일하게 설정
     if (field === 'address') {
@@ -188,10 +218,19 @@ const CreateJobDialog: React.FC<CreateJobDialogProps> = ({ open, onClose, onJobC
 
   // 픽업 정보 변경 핸들러
   const handlePickupInfoChange = (field: string, value: string) => {
-    setPickupInfo(prev => ({
-      ...prev,
-      [field]: value
-    }));
+    // 전화번호 필드인 경우 포맷팅 적용
+    if (field === 'phone') {
+      const formattedValue = formatPhoneInput(value);
+      setPickupInfo(prev => ({
+        ...prev,
+        [field]: formattedValue
+      }));
+    } else {
+      setPickupInfo(prev => ({
+        ...prev,
+        [field]: value
+      }));
+    }
   };
 
   // 품목 추가
@@ -219,8 +258,11 @@ const CreateJobDialog: React.FC<CreateJobDialogProps> = ({ open, onClose, onJobC
     setSelectedOptions([]);
     setError('');
     
-    // 품목 추가 후 자동 제목 업데이트
-    setTimeout(() => updateAutoTitle(), 100);
+    // 품목 추가 후 자동 제목 업데이트 및 포인트 검증
+    setTimeout(() => {
+      updateAutoTitle();
+      validatePointBalance();
+    }, 100);
   };
 
   // 카테고리 선택 핸들러
@@ -255,39 +297,59 @@ const CreateJobDialog: React.FC<CreateJobDialogProps> = ({ open, onClose, onJobC
   };
 
   // 파일 업로드 핸들러
-  const handleFileUpload = (event: React.ChangeEvent<HTMLInputElement>) => {
+  const handleFileUpload = async (event: React.ChangeEvent<HTMLInputElement>) => {
     const files = event.target.files;
-    if (files) {
-      const newFiles = Array.from(files);
-      
-      // 파일 크기 제한 (10MB)
-      const maxSize = 10 * 1024 * 1024;
-      const validFiles = newFiles.filter(file => {
-        if (file.size > maxSize) {
-          setError(`${file.name} 파일이 너무 큽니다. (최대 10MB)`);
-          return false;
+    if (!files || files.length === 0) return;
+
+    try {
+      setUploadingFiles(true);
+      const uploadedFiles: WorkInstruction[] = [];
+
+      for (let i = 0; i < files.length; i++) {
+        const file = files[i];
+        
+        // 파일 크기 제한 (10MB)
+        if (file.size > 10 * 1024 * 1024) {
+          setError(`파일 ${file.name}이 너무 큽니다. 10MB 이하의 파일만 업로드 가능합니다.`);
+          continue;
         }
-        return true;
-      });
-      
-      // 파일 타입 제한
-      const allowedTypes = ['image/jpeg', 'image/png', 'image/gif', 'application/pdf', 'application/msword', 'application/vnd.openxmlformats-officedocument.wordprocessingml.document'];
-      const typeValidFiles = validFiles.filter(file => {
+
+        // 파일 타입 확인
+        const allowedTypes = ['image/jpeg', 'image/png', 'image/gif', 'application/pdf', 'application/msword', 'application/vnd.openxmlformats-officedocument.wordprocessingml.document'];
         if (!allowedTypes.includes(file.type)) {
-          setError(`${file.name} 파일 형식이 지원되지 않습니다. (JPG, PNG, GIF, PDF, DOC, DOCX만 가능)`);
-          return false;
+          setError(`파일 ${file.name}의 형식이 지원되지 않습니다. 이미지, PDF, Word 파일만 업로드 가능합니다.`);
+          continue;
         }
-        return true;
-      });
-      
-      setWorkInstructions(prev => [...prev, ...typeValidFiles]);
+
+        // Firebase Storage에 업로드
+        const fileUrl = await StorageService.uploadFile(file, 'work-instructions');
+        
+        const workInstruction: WorkInstruction = {
+          id: Date.now().toString() + i,
+          fileName: file.name,
+          fileUrl,
+          fileType: file.type.includes('image') ? 'image' : file.type.includes('pdf') ? 'pdf' : 'document',
+          fileSize: file.size,
+          uploadedAt: new Date(),
+          uploadedBy: user?.id || ''
+        };
+
+        uploadedFiles.push(workInstruction);
+      }
+
+      setWorkInstructions(prev => [...prev, ...uploadedFiles]);
       setError('');
+    } catch (error) {
+      console.error('파일 업로드 실패:', error);
+      setError('파일 업로드에 실패했습니다.');
+    } finally {
+      setUploadingFiles(false);
     }
   };
 
   // 파일 삭제 핸들러
-  const handleFileRemove = (index: number) => {
-    setWorkInstructions(prev => prev.filter((_, i) => i !== index));
+  const handleFileDelete = (fileId: string) => {
+    setWorkInstructions(prev => prev.filter(file => file.id !== fileId));
   };
 
   // 파일 크기 포맷팅
@@ -305,6 +367,30 @@ const CreateJobDialog: React.FC<CreateJobDialogProps> = ({ open, onClose, onJobC
       const option = pricingOptions.find(opt => opt.id === optionId);
       return total + (option?.price || 0);
     }, 0);
+  };
+
+  // 총 금액 계산
+  const calculateTotalPrice = () => {
+    return items.reduce((total, item) => total + item.totalPrice, 0);
+  };
+
+  // 포인트 잔액 검증
+  const validatePointBalance = async () => {
+    if (!user?.id) return;
+    
+    const totalPrice = calculateTotalPrice();
+    if (totalPrice > 0) {
+      try {
+        const validation = await PointService.validatePointBalance(user.id, totalPrice);
+        setPointValidation(validation);
+        return validation.isValid;
+      } catch (error) {
+        console.error('포인트 잔액 검증 실패:', error);
+        setPointValidation(null);
+        return false;
+      }
+    }
+    return true;
   };
 
   // 자동 제목 생성
@@ -399,8 +485,11 @@ const CreateJobDialog: React.FC<CreateJobDialogProps> = ({ open, onClose, onJobC
     }
     
     setItems(prev => prev.filter((_, i) => i !== index));
-    // 품목 삭제 후 자동 제목 업데이트
-    setTimeout(() => updateAutoTitle(), 100);
+    // 품목 삭제 후 자동 제목 업데이트 및 포인트 검증
+    setTimeout(() => {
+      updateAutoTitle();
+      validatePointBalance();
+    }, 100);
   };
 
   // 품목 수량/단가 변경
@@ -422,8 +511,11 @@ const CreateJobDialog: React.FC<CreateJobDialogProps> = ({ open, onClose, onJobC
       }
       return item;
     }));
-    // 품목 변경 후 자동 제목 업데이트
-    setTimeout(() => updateAutoTitle(), 100);
+    // 품목 변경 후 자동 제목 업데이트 및 포인트 검증
+    setTimeout(() => {
+      updateAutoTitle();
+      validatePointBalance();
+    }, 100);
   };
 
   // 총 예산 계산
@@ -492,17 +584,24 @@ const CreateJobDialog: React.FC<CreateJobDialogProps> = ({ open, onClose, onJobC
       };
 
       // undefined 값 제거를 위한 안전한 데이터 생성
-      // 작업지시서 파일 정보 생성 (실제 파일 업로드는 나중에 구현)
-      const workInstructionFiles = workInstructions.map((file, index) => ({
-        id: `temp-${Date.now()}-${index}`,
-        fileName: file.name,
-        fileUrl: '', // 실제 파일 업로드 후 URL 설정
-        fileType: (file.type.includes('image') ? 'image' : 
-                  file.type.includes('pdf') ? 'pdf' : 'document') as 'image' | 'pdf' | 'document',
-        fileSize: file.size,
-        uploadedAt: new Date(),
-        uploadedBy: user.id
+      // 작업지시서 파일 정보 생성
+      const workInstructionFiles = workInstructions.map((file) => ({
+        id: file.id,
+        fileName: file.fileName,
+        fileUrl: file.fileUrl,
+        fileType: file.fileType,
+        fileSize: file.fileSize,
+        uploadedAt: file.uploadedAt,
+        uploadedBy: file.uploadedBy
       }));
+
+      // 포인트 잔액 검증
+      const isValidBalance = await validatePointBalance();
+      if (!isValidBalance) {
+        setError(`포인트 잔액이 부족합니다. 현재 잔액: ${pointBalance.toLocaleString()}포인트, 필요 금액: ${totalBudget.toLocaleString()}포인트`);
+        setLoading(false);
+        return;
+      }
 
       const jobData = {
         sellerId: user.id,
@@ -1136,17 +1235,17 @@ const CreateJobDialog: React.FC<CreateJobDialogProps> = ({ open, onClose, onJobC
                         <DescriptionIcon sx={{ mr: 1, color: 'primary.main' }} />
                         <Box>
                           <Typography variant="body2" fontWeight="medium">
-                            {file.name}
+                            {file.fileName}
                           </Typography>
                           <Typography variant="caption" color="textSecondary">
-                            {formatFileSize(file.size)} • {file.type}
+                            {formatFileSize(file.fileSize)} • {file.fileType}
                           </Typography>
                         </Box>
                       </Box>
                       <IconButton
                         color="error"
                         size="small"
-                        onClick={() => handleFileRemove(index)}
+                        onClick={() => handleFileDelete(file.id)}
                       >
                         <DeleteIcon />
                       </IconButton>
@@ -1155,6 +1254,27 @@ const CreateJobDialog: React.FC<CreateJobDialogProps> = ({ open, onClose, onJobC
                 </Box>
               )}
             </Box>
+
+            {/* 포인트 잔액 검증 섹션 */}
+            {pointValidation && (
+              <Box sx={{ mt: 3 }}>
+                <Alert 
+                  severity={pointValidation.isValid ? 'success' : 'error'}
+                  sx={{ mb: 2 }}
+                >
+                  <Typography variant="body2">
+                    <strong>포인트 잔액 검증:</strong><br />
+                    현재 잔액: {pointValidation.currentBalance.toLocaleString()}포인트<br />
+                    필요 금액: {pointValidation.requiredAmount.toLocaleString()}포인트<br />
+                    {!pointValidation.isValid && (
+                      <span style={{ color: 'red' }}>
+                        부족 금액: {pointValidation.shortage.toLocaleString()}포인트
+                      </span>
+                    )}
+                  </Typography>
+                </Alert>
+              </Box>
+            )}
 
             {/* 픽업 정보 섹션 */}
             <Box sx={{ mt: 3 }}>

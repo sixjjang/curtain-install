@@ -42,15 +42,19 @@ import {
   Engineering,
   Check,
   Close,
-  Warning
+  Warning,
+  Delete
 } from '@mui/icons-material';
-import { collection, getDocs, doc, updateDoc, query, where, orderBy, Timestamp } from 'firebase/firestore';
+import { collection, getDocs, doc, updateDoc, deleteDoc, query, where, orderBy, Timestamp } from 'firebase/firestore';
 import { db } from '../../../firebase/config';
 import { User, UserRole, ContractorInfo, ApprovalStatus } from '../../../types';
+import { migratePhoneNumbers } from '../../../shared/utils/phoneMigration';
 
 interface UserWithStatus extends Omit<User, 'createdAt'> {
   isActive: boolean;
   createdAt?: Timestamp | Date;
+  companyName?: string; // 판매자 상호명
+  businessName?: string; // 시공자 상호명
 }
 
 const UserManagement: React.FC = () => {
@@ -66,6 +70,9 @@ const UserManagement: React.FC = () => {
   const [updateLoading, setUpdateLoading] = useState(false);
   const [rejectionReason, setRejectionReason] = useState('');
   const [rejectionDialogOpen, setRejectionDialogOpen] = useState(false);
+  const [deleteDialogOpen, setDeleteDialogOpen] = useState(false);
+  const [userToDelete, setUserToDelete] = useState<UserWithStatus | null>(null);
+  const [migrating, setMigrating] = useState(false);
 
   // 사용자 데이터 로드
   const loadUsers = async () => {
@@ -188,6 +195,49 @@ const UserManagement: React.FC = () => {
       console.error('승인 처리 실패:', error);
     } finally {
       setUpdateLoading(false);
+    }
+  };
+
+  // 사용자 삭제
+  const handleDeleteUser = async () => {
+    if (!userToDelete) return;
+    
+    try {
+      setUpdateLoading(true);
+      const userRef = doc(db, 'users', userToDelete.id);
+      await deleteDoc(userRef);
+      
+      // 로컬 상태에서 사용자 제거
+      setUsers(prev => prev.filter(user => user.id !== userToDelete.id));
+      
+      // 선택된 사용자가 삭제된 사용자인 경우 다이얼로그 닫기
+      if (selectedUser?.id === userToDelete.id) {
+        setDetailDialogOpen(false);
+        setSelectedUser(null);
+      }
+      
+      setDeleteDialogOpen(false);
+      setUserToDelete(null);
+    } catch (error) {
+      console.error('사용자 삭제 실패:', error);
+    } finally {
+      setUpdateLoading(false);
+    }
+  };
+
+  // 전화번호 마이그레이션
+  const handlePhoneMigration = async () => {
+    try {
+      setMigrating(true);
+      const result = await migratePhoneNumbers();
+      alert(`마이그레이션 완료: ${result.updatedCount}개 업데이트, ${result.errorCount}개 오류`);
+      // 사용자 목록 새로고침
+      loadUsers();
+    } catch (error) {
+      console.error('전화번호 마이그레이션 실패:', error);
+      alert('마이그레이션 중 오류가 발생했습니다.');
+    } finally {
+      setMigrating(false);
     }
   };
 
@@ -447,6 +497,15 @@ const UserManagement: React.FC = () => {
                 >
                   초기화
                 </Button>
+                <Button
+                  variant="outlined"
+                  color="info"
+                  onClick={handlePhoneMigration}
+                  disabled={migrating}
+                  startIcon={migrating ? <CircularProgress size={16} /> : <Warning />}
+                >
+                  {migrating ? '마이그레이션 중...' : '전화번호 포맷팅'}
+                </Button>
               </Box>
             </Grid>
           </Grid>
@@ -466,6 +525,7 @@ const UserManagement: React.FC = () => {
                 <TableRow>
                   <TableCell>사용자</TableCell>
                   <TableCell>역할</TableCell>
+                  <TableCell>상호명</TableCell>
                   <TableCell>연락처</TableCell>
                   <TableCell>가입일</TableCell>
                   <TableCell>승인 상태</TableCell>
@@ -504,6 +564,11 @@ const UserManagement: React.FC = () => {
                         color={getRoleColor(user.role)}
                         size="small"
                       />
+                    </TableCell>
+                    <TableCell>
+                      {user.role === 'seller' && user.companyName ? user.companyName : 
+                       user.role === 'contractor' && user.businessName ? user.businessName : 
+                       '-'}
                     </TableCell>
                     <TableCell>{user.phone}</TableCell>
                                          <TableCell>
@@ -597,6 +662,20 @@ const UserManagement: React.FC = () => {
                             disabled={updateLoading}
                           >
                             {user.isActive ? <Block /> : <CheckCircle />}
+                          </IconButton>
+                        </Tooltip>
+                        
+                        <Tooltip title="사용자 삭제">
+                          <IconButton
+                            size="small"
+                            color="error"
+                            onClick={() => {
+                              setUserToDelete(user);
+                              setDeleteDialogOpen(true);
+                            }}
+                            disabled={updateLoading}
+                          >
+                            <Delete />
                           </IconButton>
                         </Tooltip>
                       </Box>
@@ -732,6 +811,10 @@ const UserManagement: React.FC = () => {
                     </Typography>
                   </Grid>
                   <Grid item xs={12} md={6}>
+                    <Typography variant="subtitle2" color="textSecondary">상호명</Typography>
+                    <Typography variant="body1">{selectedUser.businessName || '미입력'}</Typography>
+                  </Grid>
+                  <Grid item xs={12} md={6}>
                     <Typography variant="subtitle2" color="textSecondary">레벨</Typography>
                     <Typography variant="body1">Lv. {selectedUser.contractor?.level || 1}</Typography>
                   </Grid>
@@ -761,10 +844,33 @@ const UserManagement: React.FC = () => {
                      <Typography variant="subtitle2" color="textSecondary">계좌번호</Typography>
                      <Typography variant="body1">{selectedUser.contractor?.bankAccount || '미입력'}</Typography>
                    </Grid>
-                   <Grid item xs={12} md={6}>
-                     <Typography variant="subtitle2" color="textSecondary">예금주</Typography>
-                     <Typography variant="body1">{selectedUser.contractor?.accountHolder || '미입력'}</Typography>
-                   </Grid>
+                                     <Grid item xs={12} md={6}>
+                    <Typography variant="subtitle2" color="textSecondary">예금주</Typography>
+                    <Typography variant="body1">{selectedUser.contractor?.accountHolder || '미입력'}</Typography>
+                  </Grid>
+                  
+                  {/* 시공자 사업 정보 */}
+                  <Grid item xs={12}>
+                    <Typography variant="h6" sx={{ mt: 2, mb: 1, color: 'primary.main' }}>
+                      사업 정보
+                    </Typography>
+                  </Grid>
+                  <Grid item xs={12} md={6}>
+                    <Typography variant="subtitle2" color="textSecondary">사업자등록번호</Typography>
+                    <Typography variant="body1">{selectedUser.businessNumber || '미입력'}</Typography>
+                  </Grid>
+                  <Grid item xs={12} md={6}>
+                    <Typography variant="subtitle2" color="textSecondary">사업장주소</Typography>
+                    <Typography variant="body1">{selectedUser.businessAddress || '미입력'}</Typography>
+                  </Grid>
+                  <Grid item xs={12} md={6}>
+                    <Typography variant="subtitle2" color="textSecondary">업태</Typography>
+                    <Typography variant="body1">{selectedUser.businessType || '미입력'}</Typography>
+                  </Grid>
+                  <Grid item xs={12} md={6}>
+                    <Typography variant="subtitle2" color="textSecondary">종목</Typography>
+                    <Typography variant="body1">{selectedUser.businessCategory || '미입력'}</Typography>
+                  </Grid>
                   <Grid item xs={12} md={6}>
                     <Typography variant="subtitle2" color="textSecondary">활성 상태</Typography>
                     <Typography variant="body1">
@@ -812,6 +918,28 @@ const UserManagement: React.FC = () => {
                        </Box>
                      ) : (
                        <Typography variant="body2" color="error.main">본인 반명함판 사진 미첨부</Typography>
+                     )}
+                   </Grid>
+                   <Grid item xs={12} md={6}>
+                     <Typography variant="subtitle2" color="textSecondary">사업자등록증</Typography>
+                     {selectedUser.businessLicenseImage ? (
+                       <Box sx={{ mt: 1 }}>
+                         <img 
+                           src={selectedUser.businessLicenseImage} 
+                           alt="사업자등록증" 
+                           style={{ width: '200px', height: '150px', objectFit: 'cover', borderRadius: '8px', border: '1px solid #ddd' }}
+                         />
+                         <Button 
+                           variant="outlined" 
+                           size="small" 
+                           sx={{ mt: 1 }}
+                           onClick={() => window.open(selectedUser.businessLicenseImage, '_blank')}
+                         >
+                           새 창에서 보기
+                         </Button>
+                       </Box>
+                     ) : (
+                       <Typography variant="body2" color="textSecondary">사업자등록증 미첨부 (선택사항)</Typography>
                      )}
                    </Grid>
                   
@@ -965,6 +1093,48 @@ const UserManagement: React.FC = () => {
             disabled={!rejectionReason.trim() || updateLoading}
           >
             거부
+          </Button>
+        </DialogActions>
+      </Dialog>
+
+      {/* 사용자 삭제 확인 다이얼로그 */}
+      <Dialog
+        open={deleteDialogOpen}
+        onClose={() => setDeleteDialogOpen(false)}
+        maxWidth="sm"
+        fullWidth
+      >
+        <DialogTitle>
+          사용자 삭제 확인
+        </DialogTitle>
+        <DialogContent>
+          <Alert severity="warning" sx={{ mb: 2 }}>
+            <Typography variant="body1" sx={{ mb: 1 }}>
+              <strong>{userToDelete?.name}</strong>님을 완전히 삭제하시겠습니까?
+            </Typography>
+            <Typography variant="body2">
+              이 작업은 되돌릴 수 없으며, 사용자의 모든 데이터가 영구적으로 삭제됩니다.
+            </Typography>
+          </Alert>
+          <Typography variant="body2" color="textSecondary">
+            삭제될 데이터:
+          </Typography>
+          <ul>
+            <li>사용자 계정 정보</li>
+            <li>프로필 데이터</li>
+            <li>관련된 모든 기록</li>
+          </ul>
+        </DialogContent>
+        <DialogActions>
+          <Button onClick={() => setDeleteDialogOpen(false)}>취소</Button>
+          <Button
+            variant="contained"
+            color="error"
+            onClick={handleDeleteUser}
+            disabled={updateLoading}
+            startIcon={<Delete />}
+          >
+            삭제
           </Button>
         </DialogActions>
       </Dialog>

@@ -12,6 +12,7 @@ import AdminApp from './apps/admin/AdminApp';
 
 import CustomerChat from './apps/customer/CustomerChat';
 import SimpleSatisfactionSurvey from './apps/customer/SimpleSatisfactionSurvey';
+import SatisfactionSurvey from './apps/customer/SatisfactionSurvey';
 import KakaoCallback from './shared/components/KakaoCallback';
 
 // 공통 컴포넌트들
@@ -23,6 +24,7 @@ import FirebaseTest from './shared/components/FirebaseTest';
 import TestAccounts from './shared/components/TestAccounts';
 import StorageTest from './shared/components/StorageTest';
 import FirebaseStorageGuide from './shared/components/FirebaseStorageGuide';
+import KakaoBusinessTest from './shared/components/KakaoBusinessTest';
 
 // 테마 설정
 const theme = createTheme({
@@ -94,6 +96,9 @@ function App() {
             {/* 고객 설문 - 인증 불필요 */}
             <Route path="/survey/:surveyId" element={<SimpleSatisfactionSurvey />} />
             
+            {/* 고객 만족도 평가 - 인증 불필요 */}
+            <Route path="/satisfaction-survey/:jobId" element={<SatisfactionSurvey />} />
+            
             {/* 고객 채팅 - 인증 불필요 */}
             <Route path="/chat/:jobId" element={<CustomerChat />} />
             
@@ -111,6 +116,9 @@ function App() {
             
             {/* Storage 설정 가이드 페이지 */}
             <Route path="/storage-guide" element={<FirebaseStorageGuide />} />
+            
+            {/* 카카오톡 비즈니스 테스트 페이지 */}
+            <Route path="/kakao-business-test" element={<KakaoBusinessTest />} />
             
             {/* 404 페이지 */}
             <Route path="*" element={<Navigate to="/login" replace />} />

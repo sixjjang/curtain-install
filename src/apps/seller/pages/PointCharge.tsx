@@ -80,7 +80,7 @@ const PointCharge: React.FC = () => {
       
       // 포인트 잔액 조회
       const balanceData = await PointService.getPointBalance(user.id, 'seller');
-      setBalance(balanceData);
+      setBalance({ balance: balanceData });
       
       // 거래 내역 조회
       const transactionData = await PointService.getTransactionHistory(user.id, 'seller');
@@ -263,12 +263,12 @@ const PointCharge: React.FC = () => {
               
               <Box display="flex" gap={1} flexWrap="wrap">
                 <Chip 
-                  label={`총 충전: ${balance?.totalCharged.toLocaleString() || 0}P`} 
+                  label={`총 충전: ${(balance?.totalCharged || 0).toLocaleString()}P`} 
                   color="info" 
                   size="small" 
                 />
                 <Chip 
-                  label={`총 인출: ${balance?.totalWithdrawn.toLocaleString() || 0}P`} 
+                  label={`총 인출: ${(balance?.totalWithdrawn || 0).toLocaleString()}P`} 
                   color="secondary" 
                   size="small" 
                 />

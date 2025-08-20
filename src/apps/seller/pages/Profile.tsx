@@ -130,16 +130,53 @@ const Profile: React.FC = () => {
           compressionRatio: optimizedResult.compressionRatio
         });
 
-        // CORS 설정 완료 전까지 로컬 저장 방식 사용
+        // Firebase Storage에 안전하게 업로드 (CORS 오류 시 로컬 저장)
         if (user?.id) {
-          // 로컬 dataURL로 저장 (CORS 설정 완료 후 Firebase Storage로 변경 예정)
-          setProfileImage(optimizedResult.dataUrl);
-          
-          const basicInfoWithImage = {
-            ...basicInfo,
-            profileImage: optimizedResult.dataUrl
-          };
-          await SellerService.saveBasicInfo(user.id, basicInfoWithImage);
+          try {
+            const imageFile = StorageService.dataURLtoFile(optimizedResult.dataUrl, file.name);
+            const imageUrl = await StorageService.uploadProfileImageSafe(imageFile, user.id);
+            
+            // 업로드된 URL로 설정
+            setProfileImage(imageUrl);
+            
+            const basicInfoWithImage = {
+              ...basicInfo,
+              profileImage: imageUrl
+            };
+            await SellerService.saveBasicInfo(user.id, basicInfoWithImage);
+            
+            // Firebase Storage에 성공적으로 업로드된 경우
+            if (StorageService.isFirebaseStorageURL(imageUrl)) {
+              setSnackbar({
+                open: true,
+                message: '프로필 사진이 서버에 저장되었습니다.',
+                severity: 'success'
+              });
+            } else {
+              // 로컬 저장된 경우
+              setSnackbar({
+                open: true,
+                message: '프로필 사진이 로컬에 저장되었습니다. (CORS 설정 완료 후 서버 저장 가능)',
+                severity: 'success'
+              });
+            }
+          } catch (error) {
+            console.error('이미지 저장 실패:', error);
+            // 로컬 저장으로 폴백
+            setProfileImage(optimizedResult.dataUrl);
+            
+            const basicInfoWithImage = {
+              ...basicInfo,
+              profileImage: optimizedResult.dataUrl
+            };
+            await SellerService.saveBasicInfo(user.id, basicInfoWithImage);
+            
+            setSnackbar({
+              open: true,
+              message: '프로필 사진이 로컬에 저장되었습니다.',
+              severity: 'success'
+            });
+          }
         } else {
           // 로컬 미리보기용 (임시)
           setProfileImage(optimizedResult.dataUrl);

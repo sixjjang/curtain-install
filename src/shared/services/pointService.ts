@@ -13,7 +13,7 @@ import {
   serverTimestamp,
   Timestamp
 } from 'firebase/firestore';
-import { PointTransaction, PointBalance } from '../../types';
+import { PointTransaction, PointBalance, PointEscrow } from '../../types';
 
 // undefined 값을 제거하는 유틸리티 함수
 const removeUndefinedValues = (obj: any): any => {
@@ -27,6 +27,47 @@ const removeUndefinedValues = (obj: any): any => {
 };
 
 export class PointService {
+  // 포인트 잔액 조회
+  static async getPointBalance(userId: string, userRole: 'seller' | 'contractor'): Promise<number> {
+    try {
+      const balanceRef = doc(db, 'pointBalances', userId);
+      const balanceDoc = await getDoc(balanceRef);
+      
+      if (balanceDoc.exists()) {
+        const data = balanceDoc.data();
+        return data[userRole] || 0;
+      }
+      
+      return 0;
+    } catch (error) {
+      console.error('포인트 잔액 조회 실패:', error);
+      return 0;
+    }
+  }
+
+  // 포인트 잔액 검증 (시공의뢰 시)
+  static async validatePointBalance(userId: string, requiredAmount: number): Promise<{
+    isValid: boolean;
+    currentBalance: number;
+    requiredAmount: number;
+    shortage: number;
+  }> {
+    try {
+      const currentBalance = await this.getPointBalance(userId, 'seller');
+      const shortage = requiredAmount - currentBalance;
+      
+      return {
+        isValid: currentBalance >= requiredAmount,
+        currentBalance,
+        requiredAmount,
+        shortage
+      };
+    } catch (error) {
+      console.error('포인트 잔액 검증 실패:', error);
+      throw new Error('포인트 잔액을 확인할 수 없습니다.');
+    }
+  }
+
   // 포인트 충전
   static async chargePoints(userId: string, userRole: 'seller' | 'contractor', amount: number): Promise<string> {
     try {
@@ -39,7 +80,6 @@ export class PointService {
         balance: 0, // 임시값, 나중에 업데이트
         description: `${amount.toLocaleString()}포인트 충전`,
         status: 'pending'
-        // relatedJobId는 명시적으로 제외
       };
 
       const transactionRef = await addDoc(collection(db, 'pointTransactions'), {
@@ -63,221 +103,292 @@ export class PointService {
     }
   }
 
-  // 시공자에게 포인트 지급 (48시간 후)
-  static async payContractor(jobId: string, contractorId: string, amount: number): Promise<string> {
+  // 에스크로 포인트 차감 (시공의뢰 시)
+  static async escrowPoints(jobId: string, sellerId: string, amount: number): Promise<string> {
     try {
+      // 1. 판매자 포인트 차감
+      const sellerBalance = await this.getPointBalance(sellerId, 'seller');
+      if (sellerBalance < amount) {
+        throw new Error('포인트 잔액이 부족합니다.');
+      }
+
+      // 2. 시스템 설정에서 자동 지급 시간 조회
+      const { SystemSettingsService } = await import('./systemSettingsService');
+      const autoReleaseHours = await SystemSettingsService.getEscrowAutoReleaseHours();
+
+      // 3. 에스크로 거래 기록 생성
+      const escrowData: PointEscrow = {
+        id: `escrow_${jobId}`,
+        jobId,
+        sellerId,
+        amount,
+        status: 'pending',
+        createdAt: new Date(),
+        disputeDeadline: new Date(Date.now() + autoReleaseHours * 60 * 60 * 1000) // 설정된 시간 후
+      };
+
+      await setDoc(doc(db, 'pointEscrows', escrowData.id), escrowData);
+
+      // 3. 판매자 포인트 차감 거래 기록
+      const transactionData: any = {
+        userId: sellerId,
+        userRole: 'seller',
+        type: 'escrow',
+        amount: -amount,
+        balance: sellerBalance - amount,
+        description: `시공의뢰 에스크로 - ${amount.toLocaleString()}포인트`,
+        status: 'completed',
+        jobId,
+        createdAt: new Date(),
+        completedAt: new Date()
+      };
+
+      const transactionRef = await addDoc(collection(db, 'pointTransactions'), {
+        ...removeUndefinedValues(transactionData),
+        createdAt: serverTimestamp(),
+        completedAt: serverTimestamp()
+      });
+
+      // 4. 판매자 잔액 업데이트
+      await this.updatePointBalance(sellerId, 'seller', -amount);
+
+      return escrowData.id;
+    } catch (error) {
+      console.error('에스크로 포인트 차감 실패:', error);
+      throw new Error('에스크로 포인트 차감에 실패했습니다.');
+    }
+  }
+
+  // 시공 완료 후 48시간 후 포인트 지급
+  static async releaseEscrowToContractor(jobId: string, contractorId: string): Promise<void> {
+    try {
+      // 1. 에스크로 정보 조회
+      const escrowRef = doc(db, 'pointEscrows', `escrow_${jobId}`);
+      const escrowDoc = await getDoc(escrowRef);
+      
+      if (!escrowDoc.exists()) {
+        throw new Error('에스크로 정보를 찾을 수 없습니다.');
+      }
+
+      const escrowData = escrowDoc.data() as PointEscrow;
+      
+      // 2. 48시간 경과 확인
+      const now = new Date();
+      if (now < escrowData.disputeDeadline) {
+        throw new Error('아직 48시간이 경과하지 않았습니다.');
+      }
+
+      // 3. 시공자에게 포인트 지급
+      const contractorBalance = await this.getPointBalance(contractorId, 'contractor');
+      
       const transactionData: any = {
         userId: contractorId,
         userRole: 'contractor',
-        type: 'payment',
-        amount,
-        balance: 0, // 임시값
-        description: `시공 완료 보수 - ${amount.toLocaleString()}포인트`,
-        status: 'pending',
-        relatedJobId: jobId
+        type: 'release',
+        amount: escrowData.amount,
+        balance: contractorBalance + escrowData.amount,
+        description: `시공 완료 보수 - ${escrowData.amount.toLocaleString()}포인트`,
+        status: 'completed',
+        jobId,
+        createdAt: new Date(),
+        completedAt: new Date()
       };
 
-      const transactionRef = await addDoc(collection(db, 'pointTransactions'), {
+      await addDoc(collection(db, 'pointTransactions'), {
         ...removeUndefinedValues(transactionData),
-        createdAt: serverTimestamp()
-      });
-
-      return transactionRef.id;
-    } catch (error) {
-      console.error('시공자 지급 실패:', error);
-      throw new Error('시공자 지급에 실패했습니다.');
-    }
-  }
-
-  // 48시간 후 포인트 지급 완료 처리
-  static async completePayment(transactionId: string): Promise<void> {
-    try {
-      const transactionRef = doc(db, 'pointTransactions', transactionId);
-      const transactionDoc = await getDoc(transactionRef);
-      
-      if (!transactionDoc.exists()) {
-        throw new Error('거래 내역을 찾을 수 없습니다.');
-      }
-
-      const transactionData = transactionDoc.data() as PointTransaction;
-      
-      // 포인트 잔액 업데이트
-      await this.updatePointBalance(
-        transactionData.userId, 
-        transactionData.userRole, 
-        transactionData.amount
-      );
-
-      // 거래 상태를 완료로 업데이트
-      await updateDoc(transactionRef, {
-        status: 'completed',
+        createdAt: serverTimestamp(),
         completedAt: serverTimestamp()
       });
+
+      // 4. 시공자 잔액 업데이트
+      await this.updatePointBalance(contractorId, 'contractor', escrowData.amount);
+
+      // 5. 에스크로 상태 업데이트
+      await updateDoc(escrowRef, {
+        status: 'released',
+        releasedAt: serverTimestamp(),
+        contractorId
+      });
+
+      console.log(`✅ 에스크로 포인트 ${escrowData.amount}포인트가 시공자에게 지급되었습니다.`);
     } catch (error) {
-      console.error('지급 완료 처리 실패:', error);
-      throw new Error('지급 완료 처리에 실패했습니다.');
+      console.error('에스크로 포인트 지급 실패:', error);
+      throw new Error('에스크로 포인트 지급에 실패했습니다.');
     }
   }
 
-  // 포인트 인출 요청
-  static async requestWithdrawal(userId: string, userRole: 'seller' | 'contractor', amount: number): Promise<string> {
+  // 분쟁 발생 시 포인트 환불
+  static async refundEscrowToSeller(jobId: string, reason: string): Promise<void> {
     try {
-      // 잔액 확인
-      const balance = await this.getPointBalance(userId, userRole);
-      if (balance.balance < amount) {
-        throw new Error('잔액이 부족합니다.');
+      // 1. 에스크로 정보 조회
+      const escrowRef = doc(db, 'pointEscrows', `escrow_${jobId}`);
+      const escrowDoc = await getDoc(escrowRef);
+      
+      if (!escrowDoc.exists()) {
+        throw new Error('에스크로 정보를 찾을 수 없습니다.');
       }
 
+      const escrowData = escrowDoc.data() as PointEscrow;
+      
+      // 2. 판매자에게 포인트 환불
+      const sellerBalance = await this.getPointBalance(escrowData.sellerId, 'seller');
+      
       const transactionData: any = {
-        userId,
-        userRole,
-        type: 'withdrawal',
-        amount: -amount, // 음수로 표시
-        balance: 0, // 임시값
-        description: `${amount.toLocaleString()}포인트 인출 요청`,
-        status: 'pending'
-        // relatedJobId는 명시적으로 제외
+        userId: escrowData.sellerId,
+        userRole: 'seller',
+        type: 'refund',
+        amount: escrowData.amount,
+        balance: sellerBalance + escrowData.amount,
+        description: `분쟁 환불 - ${escrowData.amount.toLocaleString()}포인트 (사유: ${reason})`,
+        status: 'completed',
+        jobId,
+        createdAt: new Date(),
+        completedAt: new Date()
       };
 
-      const transactionRef = await addDoc(collection(db, 'pointTransactions'), {
+      await addDoc(collection(db, 'pointTransactions'), {
         ...removeUndefinedValues(transactionData),
-        createdAt: serverTimestamp()
+        createdAt: serverTimestamp(),
+        completedAt: serverTimestamp()
       });
 
-      return transactionRef.id;
+      // 3. 판매자 잔액 업데이트
+      await this.updatePointBalance(escrowData.sellerId, 'seller', escrowData.amount);
+
+      // 4. 에스크로 상태 업데이트
+      await updateDoc(escrowRef, {
+        status: 'refunded',
+        refundedAt: serverTimestamp(),
+        notes: reason
+      });
+
+      console.log(`✅ 에스크로 포인트 ${escrowData.amount}포인트가 판매자에게 환불되었습니다.`);
     } catch (error) {
-      console.error('인출 요청 실패:', error);
-      throw new Error('인출 요청에 실패했습니다.');
+      console.error('에스크로 포인트 환불 실패:', error);
+      throw new Error('에스크로 포인트 환불에 실패했습니다.');
     }
   }
 
   // 포인트 잔액 업데이트
-  private static async updatePointBalance(userId: string, userRole: 'seller' | 'contractor', amount: number): Promise<void> {
+  static async updatePointBalance(userId: string, userRole: 'seller' | 'contractor', amount: number): Promise<void> {
     try {
-      const balanceRef = doc(db, 'pointBalances', `${userRole}_${userId}`);
+      const balanceRef = doc(db, 'pointBalances', userId);
       const balanceDoc = await getDoc(balanceRef);
-
+      
+      let currentBalance = 0;
       if (balanceDoc.exists()) {
-        const currentBalance = balanceDoc.data() as PointBalance;
-        const newBalance = currentBalance.balance + amount;
-        
-        await updateDoc(balanceRef, {
-          balance: newBalance,
-          totalCharged: amount > 0 ? currentBalance.totalCharged + amount : currentBalance.totalCharged,
-          totalWithdrawn: amount < 0 ? currentBalance.totalWithdrawn + Math.abs(amount) : currentBalance.totalWithdrawn,
-          updatedAt: serverTimestamp()
-        });
-      } else {
-        // 새로운 잔액 문서 생성
-        const newBalance: Omit<PointBalance, 'updatedAt'> = {
-          userId,
-          userRole,
-          balance: amount,
-          totalCharged: amount > 0 ? amount : 0,
-          totalWithdrawn: amount < 0 ? Math.abs(amount) : 0
-        };
-
-        await setDoc(balanceRef, {
-          ...newBalance,
-          updatedAt: serverTimestamp()
-        });
+        const data = balanceDoc.data();
+        currentBalance = data[userRole] || 0;
       }
+      
+      const newBalance = currentBalance + amount;
+      
+      await setDoc(balanceRef, {
+        [userRole]: newBalance,
+        updatedAt: serverTimestamp()
+      }, { merge: true });
+      
+      console.log(`포인트 잔액 업데이트: ${userId} (${userRole}) ${currentBalance} → ${newBalance}`);
     } catch (error) {
       console.error('포인트 잔액 업데이트 실패:', error);
-      throw new Error('포인트 잔액 업데이트에 실패했습니다.');
+      throw new Error('포인트 잔액을 업데이트할 수 없습니다.');
     }
   }
 
-  // 포인트 잔액 조회
-  static async getPointBalance(userId: string, userRole: 'seller' | 'contractor'): Promise<PointBalance> {
-    try {
-      const balanceRef = doc(db, 'pointBalances', `${userRole}_${userId}`);
-      const balanceDoc = await getDoc(balanceRef);
-
-      if (balanceDoc.exists()) {
-        return balanceDoc.data() as PointBalance;
-      } else {
-        // 기본 잔액 반환
-        return {
-          userId,
-          userRole,
-          balance: 0,
-          totalCharged: 0,
-          totalWithdrawn: 0,
-          updatedAt: new Date()
-        };
-      }
-    } catch (error) {
-      console.error('포인트 잔액 조회 실패:', error);
-      throw new Error('포인트 잔액 조회에 실패했습니다.');
-    }
-  }
-
-  // 포인트 거래 내역 조회
+  // 거래 내역 조회
   static async getTransactionHistory(userId: string, userRole: 'seller' | 'contractor'): Promise<PointTransaction[]> {
     try {
-      // 복합 인덱스 없이 작동하도록 쿼리 수정
       const q = query(
         collection(db, 'pointTransactions'),
         where('userId', '==', userId),
-        where('userRole', '==', userRole)
+        where('userRole', '==', userRole),
+        orderBy('createdAt', 'desc')
       );
-
+      
       const querySnapshot = await getDocs(q);
       const transactions: PointTransaction[] = [];
-
+      
       querySnapshot.forEach((doc) => {
         const data = doc.data();
         transactions.push({
           id: doc.id,
-          ...data,
-          createdAt: (data.createdAt as Timestamp).toDate(),
-          completedAt: data.completedAt ? (data.completedAt as Timestamp).toDate() : undefined
-        } as PointTransaction);
+          userId: data.userId,
+          userRole: data.userRole,
+          type: data.type,
+          amount: data.amount,
+          balance: data.balance,
+          description: data.description,
+          jobId: data.jobId,
+          status: data.status,
+          createdAt: data.createdAt?.toDate() || new Date(),
+          completedAt: data.completedAt?.toDate(),
+          adminId: data.adminId,
+          notes: data.notes
+        });
       });
-
-      // 클라이언트에서 정렬
-      return transactions.sort((a, b) => b.createdAt.getTime() - a.createdAt.getTime());
+      
+      return transactions;
     } catch (error) {
       console.error('거래 내역 조회 실패:', error);
-      throw new Error('거래 내역 조회에 실패했습니다.');
+      throw new Error('거래 내역을 조회할 수 없습니다.');
     }
   }
 
-  // 48시간 후 지급할 거래들 조회
-  static async getPendingPayments(): Promise<PointTransaction[]> {
+  // 에스크로 정보 조회
+  static async getEscrowInfo(jobId: string): Promise<PointEscrow | null> {
     try {
-      // 복합 인덱스 없이 작동하도록 쿼리 수정
-      const q = query(
-        collection(db, 'pointTransactions'),
-        where('type', '==', 'payment'),
-        where('status', '==', 'pending')
-      );
-
-      const querySnapshot = await getDocs(q);
-      const pendingPayments: PointTransaction[] = [];
-
-      querySnapshot.forEach((doc) => {
-        const data = doc.data();
-        const createdAt = (data.createdAt as Timestamp).toDate();
-        const now = new Date();
-        const hoursDiff = (now.getTime() - createdAt.getTime()) / (1000 * 60 * 60);
-
-        // 48시간이 지난 거래만 필터링
-        if (hoursDiff >= 48) {
-          pendingPayments.push({
-            id: doc.id,
-            ...data,
-            createdAt,
-            completedAt: data.completedAt ? (data.completedAt as Timestamp).toDate() : undefined
-          } as PointTransaction);
-        }
-      });
-
-      return pendingPayments;
+      const escrowRef = doc(db, 'pointEscrows', `escrow_${jobId}`);
+      const escrowDoc = await getDoc(escrowRef);
+      
+      if (!escrowDoc.exists()) {
+        return null;
+      }
+      
+      const data = escrowDoc.data();
+      return {
+        id: data.id,
+        jobId: data.jobId,
+        sellerId: data.sellerId,
+        contractorId: data.contractorId,
+        amount: data.amount,
+        status: data.status,
+        createdAt: data.createdAt?.toDate() || new Date(),
+        releasedAt: data.releasedAt?.toDate(),
+        refundedAt: data.refundedAt?.toDate(),
+        disputeDeadline: data.disputeDeadline?.toDate() || new Date(),
+        notes: data.notes
+      };
     } catch (error) {
-      console.error('대기 중인 지급 조회 실패:', error);
-      throw new Error('대기 중인 지급 조회에 실패했습니다.');
+      console.error('에스크로 정보 조회 실패:', error);
+      return null;
+    }
+  }
+
+  // 만료된 에스크로 자동 처리 (관리자용)
+  static async processExpiredEscrows(): Promise<void> {
+    try {
+      const now = new Date();
+      const q = query(
+        collection(db, 'pointEscrows'),
+        where('status', '==', 'pending'),
+        where('disputeDeadline', '<', now)
+      );
+      
+      const querySnapshot = await getDocs(q);
+      
+      for (const doc of querySnapshot.docs) {
+        const escrowData = doc.data() as PointEscrow;
+        
+        // 설정된 시간 경과 후 자동으로 시공자에게 지급
+        if (escrowData.contractorId) {
+          await this.releaseEscrowToContractor(escrowData.jobId, escrowData.contractorId);
+        }
+      }
+      
+      console.log(`✅ ${querySnapshot.docs.length}개의 만료된 에스크로를 처리했습니다.`);
+    } catch (error) {
+      console.error('만료된 에스크로 처리 실패:', error);
+      throw new Error('만료된 에스크로를 처리할 수 없습니다.');
     }
   }
 }

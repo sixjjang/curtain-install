@@ -9,6 +9,7 @@ import PricingManagement from './pages/PricingManagement';
 import LevelManagement from './pages/LevelManagement';
 import SatisfactionSurveyManagement from './pages/SatisfactionSurveyManagement';
 import Analytics from './pages/Analytics';
+import SystemSettings from './pages/SystemSettings';
 
 const AdminApp: React.FC = () => {
   return (
@@ -22,6 +23,7 @@ const AdminApp: React.FC = () => {
           <Route path="/levels" element={<LevelManagement />} />
           <Route path="/surveys" element={<SatisfactionSurveyManagement />} />
           <Route path="/analytics" element={<Analytics />} />
+          <Route path="/settings" element={<SystemSettings />} />
         </Routes>
       </Box>
     </AdminLayout>

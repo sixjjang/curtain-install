@@ -127,23 +127,67 @@ const Profile: React.FC = () => {
           compressionRatio: optimizedResult.compressionRatio
         });
 
-        // CORS 설정 완료 전까지 로컬 저장 방식 사용
+        // Firebase Storage에 안전하게 업로드 (CORS 오류 시 로컬 저장)
         if (user?.id) {
-          // 로컬 dataURL로 저장 (CORS 설정 완료 후 Firebase Storage로 변경 예정)
-          setProfileImage(optimizedResult.dataUrl);
-          
-          const basicInfo: ContractorBasicInfo = {
-            name: contractor?.name || '',
-            phone: contractor?.phone || '',
-            email: contractor?.email || '',
-            address: contractor?.location?.address || '',
-            experience: experience,
-            serviceAreas: selectedRegions,
-            bankName: selectedBank,
-            bankAccount: bankAccount,
-            profileImage: optimizedResult.dataUrl
-          };
-          await ContractorService.saveBasicInfo(user.id, basicInfo);
+          try {
+            const imageFile = StorageService.dataURLtoFile(optimizedResult.dataUrl, file.name);
+            const imageUrl = await StorageService.uploadProfileImageSafe(imageFile, user.id);
+            
+            // 업로드된 URL로 설정
+            setProfileImage(imageUrl);
+            
+            const basicInfo: ContractorBasicInfo = {
+              name: contractor?.name || '',
+              phone: contractor?.phone || '',
+              email: contractor?.email || '',
+              address: contractor?.location?.address || '',
+              experience: experience,
+              serviceAreas: selectedRegions,
+              bankName: selectedBank,
+              bankAccount: bankAccount,
+              profileImage: imageUrl
+            };
+            await ContractorService.saveBasicInfo(user.id, basicInfo);
+            
+            // Firebase Storage에 성공적으로 업로드된 경우
+            if (StorageService.isFirebaseStorageURL(imageUrl)) {
+              setSnackbar({
+                open: true,
+                message: '프로필 사진이 서버에 저장되었습니다.',
+                severity: 'success'
+              });
+            } else {
+              // 로컬 저장된 경우
+              setSnackbar({
+                open: true,
+                message: '프로필 사진이 로컬에 저장되었습니다. (CORS 설정 완료 후 서버 저장 가능)',
+                severity: 'success'
+              });
+            }
+          } catch (error) {
+            console.error('이미지 저장 실패:', error);
+            // 로컬 저장으로 폴백
+            setProfileImage(optimizedResult.dataUrl);
+            
+            const basicInfo: ContractorBasicInfo = {
+              name: contractor?.name || '',
+              phone: contractor?.phone || '',
+              email: contractor?.email || '',
+              address: contractor?.location?.address || '',
+              experience: experience,
+              serviceAreas: selectedRegions,
+              bankName: selectedBank,
+              bankAccount: bankAccount,
+              profileImage: optimizedResult.dataUrl
+            };
+            await ContractorService.saveBasicInfo(user.id, basicInfo);
+            
+            setSnackbar({
+              open: true,
+              message: '프로필 사진이 로컬에 저장되었습니다.',
+              severity: 'success'
+            });
+          }
         } else {
           // 로컬 미리보기용 (임시)
           setProfileImage(optimizedResult.dataUrl);
@@ -187,8 +231,13 @@ const Profile: React.FC = () => {
       if (!user?.id) return;
       
       try {
+        console.log('🔍 시공자 프로필 정보 불러오기 시작:', user.id);
+        console.log('🔍 현재 user 객체:', user);
+        
+        // 기본 정보 불러오기
         const savedBasicInfo = await ContractorService.getBasicInfo(user.id);
         if (savedBasicInfo) {
+          console.log('✅ 저장된 시공자 정보:', savedBasicInfo);
           setExperience(savedBasicInfo.experience);
           setSelectedRegions(savedBasicInfo.serviceAreas);
           setSelectedBank(savedBasicInfo.bankName);
@@ -196,9 +245,39 @@ const Profile: React.FC = () => {
           if (savedBasicInfo.profileImage) {
             setProfileImage(savedBasicInfo.profileImage);
           }
+        } else {
+          console.log('⚠️ 저장된 시공자 정보 없음, users 컬렉션에서 확인');
+          // users 컬렉션에서 시공자 정보 확인
+          if (user.contractor) {
+            console.log('✅ users 컬렉션의 시공자 정보:', user.contractor);
+            setExperience(user.contractor.experience || '');
+            setSelectedRegions(user.contractor.serviceAreas || []);
+            setSelectedBank(user.contractor.bankName || '');
+            setBankAccount(user.contractor.bankAccount || '');
+            if (user.profileImage) {
+              setProfileImage(user.profileImage);
+            }
+          } else {
+            console.log('⚠️ users 컬렉션에도 시공자 정보 없음');
+            // 기본 사용자 정보로 초기화
+            setExperience('');
+            setSelectedRegions([]);
+            setSelectedBank('');
+            setBankAccount('');
+          }
         }
       } catch (error) {
-        console.error('저장된 정보 불러오기 실패:', error);
+        console.error('❌ 저장된 정보 불러오기 실패:', error);
+        // 오류 발생 시 사용자 정보로 초기화
+        if (user.contractor) {
+          setExperience(user.contractor.experience || '');
+          setSelectedRegions(user.contractor.serviceAreas || []);
+          setSelectedBank(user.contractor.bankName || '');
+          setBankAccount(user.contractor.bankAccount || '');
+          if (user.profileImage) {
+            setProfileImage(user.profileImage);
+          }
+        }
       }
     };
 

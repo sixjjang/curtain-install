@@ -18,7 +18,12 @@ import {
   LocationOn as LocationIcon,
   AttachMoney as MoneyIcon,
   Schedule as ScheduleIcon,
-  Calculate as CalculateIcon
+  Calculate as CalculateIcon,
+  AttachFile,
+  FileDownload,
+  PictureAsPdf,
+  Image,
+  Description as DescriptionIcon
 } from '@mui/icons-material';
 import { ConstructionJob, User } from '../../../types';
 import { AuthService } from '../../../shared/services/authService';
@@ -41,7 +46,7 @@ const JobDetailDialog: React.FC<JobDetailDialogProps> = ({ open, onClose, job })
           const [seller, contractor, customer] = await Promise.all([
             AuthService.getUserById(job.sellerId),
             job.contractorId ? AuthService.getUserById(job.contractorId) : null,
-            AuthService.getUserById(job.customerId)
+            job.customerId ? AuthService.getUserById(job.customerId) : null
           ]);
           
           setSellerInfo(seller);
@@ -67,7 +72,10 @@ const JobDetailDialog: React.FC<JobDetailDialogProps> = ({ open, onClose, job })
       pickup_completed: 'info',
       in_progress: 'primary',
       completed: 'success',
-      cancelled: 'error'
+      cancelled: 'error',
+      product_not_ready: 'error',
+      customer_absent: 'error',
+      schedule_changed: 'warning'
     };
     return statusColors[status];
   };
@@ -81,9 +89,46 @@ const JobDetailDialog: React.FC<JobDetailDialogProps> = ({ open, onClose, job })
       pickup_completed: '픽업완료',
       in_progress: '진행중',
       completed: '완료',
-      cancelled: '취소'
+      cancelled: '취소',
+      product_not_ready: '제품 미준비',
+      customer_absent: '소비자 부재',
+      schedule_changed: '일정 변경'
     };
     return statusLabels[status];
+  };
+
+  // 파일 크기 포맷팅
+  const formatFileSize = (bytes: number) => {
+    if (bytes === 0) return '0 Bytes';
+    const k = 1024;
+    const sizes = ['Bytes', 'KB', 'MB', 'GB'];
+    const i = Math.floor(Math.log(bytes) / Math.log(k));
+    return parseFloat((bytes / Math.pow(k, i)).toFixed(2)) + ' ' + sizes[i];
+  };
+
+  // 파일 타입에 따른 아이콘 반환
+  const getFileIcon = (fileType: string) => {
+    switch (fileType) {
+      case 'image':
+        return <Image color="primary" />;
+      case 'pdf':
+        return <PictureAsPdf color="error" />;
+      case 'document':
+        return <DescriptionIcon color="info" />;
+      default:
+        return <AttachFile color="action" />;
+    }
+  };
+
+  // 파일 다운로드 처리
+  const handleFileDownload = (fileUrl: string, fileName: string) => {
+    const link = document.createElement('a');
+    link.href = fileUrl;
+    link.download = fileName;
+    link.target = '_blank';
+    document.body.appendChild(link);
+    link.click();
+    document.body.removeChild(link);
   };
 
 
@@ -144,7 +189,7 @@ const JobDetailDialog: React.FC<JobDetailDialogProps> = ({ open, onClose, job })
                   예산 정보
                 </Typography>
                 <Typography variant="body1" fontWeight="bold" color="primary">
-                  {job.budget.min.toLocaleString()} ~ {job.budget.max.toLocaleString()}만원
+                  {job.budget?.min?.toLocaleString() || 0} ~ {job.budget?.max?.toLocaleString() || 0}만원
                 </Typography>
               </CardContent>
             </Card>
@@ -324,6 +369,59 @@ const JobDetailDialog: React.FC<JobDetailDialogProps> = ({ open, onClose, job })
               </CardContent>
             </Card>
           </Grid>
+
+          {/* 작업지시서 파일 섹션 */}
+          {job.workInstructions && job.workInstructions.length > 0 && (
+            <Grid item xs={12}>
+              <Card variant="outlined">
+                <CardContent>
+                  <Typography variant="h6" gutterBottom>
+                    작업지시서 파일 ({job.workInstructions.length}개)
+                  </Typography>
+                  <Box>
+                    {job.workInstructions.map((file, index) => (
+                      <Box
+                        key={index}
+                        sx={{
+                          display: 'flex',
+                          alignItems: 'center',
+                          justifyContent: 'space-between',
+                          p: 2,
+                          mb: 1,
+                          border: '1px solid #e0e0e0',
+                          borderRadius: 1,
+                          backgroundColor: 'white',
+                          '&:hover': {
+                            backgroundColor: '#f5f5f5'
+                          }
+                        }}
+                      >
+                        <Box sx={{ display: 'flex', alignItems: 'center', flex: 1 }}>
+                          {getFileIcon(file.fileType)}
+                          <Box sx={{ ml: 2 }}>
+                            <Typography variant="body2" fontWeight="medium">
+                              {file.fileName}
+                            </Typography>
+                            <Typography variant="caption" color="textSecondary">
+                              {formatFileSize(file.fileSize)} • {file.fileType}
+                            </Typography>
+                          </Box>
+                        </Box>
+                        <Button
+                          variant="outlined"
+                          size="small"
+                          startIcon={<FileDownload />}
+                          onClick={() => handleFileDownload(file.fileUrl, file.fileName)}
+                        >
+                          다운로드
+                        </Button>
+                      </Box>
+                    ))}
+                  </Box>
+                </CardContent>
+              </Card>
+            </Grid>
+          )}
 
           <Grid item xs={12}>
             <Card variant="outlined">

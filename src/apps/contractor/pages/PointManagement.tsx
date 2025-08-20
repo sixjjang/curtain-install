@@ -55,7 +55,7 @@ const PointManagement: React.FC = () => {
       
       // 포인트 잔액 조회
       const balanceData = await PointService.getPointBalance(user.id, 'contractor');
-      setBalance(balanceData);
+      setBalance({ balance: balanceData });
       
       // 거래 내역 조회
       const transactionData = await PointService.getTransactionHistory(user.id, 'contractor');
@@ -90,7 +90,9 @@ const PointManagement: React.FC = () => {
       setWithdrawing(true);
       setError('');
       
-      await PointService.requestWithdrawal(user.id, 'contractor', amount);
+      // 인출 요청 기능은 향후 구현 예정
+      console.log('인출 요청:', amount);
+      throw new Error('인출 기능은 아직 구현되지 않았습니다.');
       
       setSuccess(`${amount.toLocaleString()}포인트 인출 요청이 완료되었습니다.`);
       setWithdrawDialogOpen(false);
@@ -206,12 +208,12 @@ const PointManagement: React.FC = () => {
               
               <Box display="flex" gap={1} flexWrap="wrap">
                 <Chip 
-                  label={`총 수령: ${balance?.totalCharged.toLocaleString() || 0}P`} 
+                  label={`총 수령: ${(balance?.totalCharged || 0).toLocaleString()}P`} 
                   color="success" 
                   size="small" 
                 />
                 <Chip 
-                  label={`총 인출: ${balance?.totalWithdrawn.toLocaleString() || 0}P`} 
+                  label={`총 인출: ${(balance?.totalWithdrawn || 0).toLocaleString()}P`} 
                   color="secondary" 
                   size="small" 
                 />

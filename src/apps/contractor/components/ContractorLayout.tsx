@@ -1,4 +1,4 @@
-import React, { useState } from 'react';
+import React, { useState, useEffect } from 'react';
 import { useNavigate, useLocation } from 'react-router-dom';
 import {
   AppBar,
@@ -16,18 +16,20 @@ import {
   MenuItem,
   IconButton,
   Badge,
-  Chip
+  Chip,
+  Divider
 } from '@mui/material';
 import {
-  Dashboard as DashboardIcon,
-  Work as WorkIcon,
-  Assignment as AssignmentIcon,
-  Person as PersonIcon,
-  TrendingUp as LevelIcon,
-  Notifications as NotificationsIcon,
   Menu as MenuIcon,
-  ExitToApp as LogoutIcon,
-  AccountBalance as AccountBalanceIcon
+  Dashboard,
+  Work,
+  Assignment,
+  CalendarMonth,
+  Chat,
+  AccountBalance,
+  Person,
+  Notifications as NotificationsIcon,
+  Logout
 } from '@mui/icons-material';
 import { useAuth } from '../../../shared/contexts/AuthContext';
 import { ContractorInfo } from '../../../types';
@@ -49,13 +51,13 @@ const ContractorLayout: React.FC<ContractorLayoutProps> = ({ children }) => {
   const contractor = user?.contractor;
 
   const menuItems = [
-    { text: '대시보드', icon: <DashboardIcon />, path: '/contractor' },
-    { text: '시공 찾기', icon: <WorkIcon />, path: '/contractor/jobs' },
-    { text: '나의 작업', icon: <AssignmentIcon />, path: '/contractor/my-jobs' },
-    { text: '레벨 현황', icon: <LevelIcon />, path: '/contractor/level' },
-    { text: '포인트 관리', icon: <AccountBalanceIcon />, path: '/contractor/points' },
-    { text: '알림', icon: <NotificationsIcon />, path: '/contractor/notifications' },
-    { text: '프로필', icon: <PersonIcon />, path: '/contractor/profile' },
+    { text: '대시보드', icon: <Dashboard />, path: '/contractor' },
+    { text: '작업 목록', icon: <Work />, path: '/contractor/jobs' },
+    { text: '내 작업', icon: <Assignment />, path: '/contractor/my-jobs' },
+    { text: '캘린더 뷰', icon: <CalendarMonth />, path: '/contractor/calendar' },
+    { text: '판매자와 채팅', icon: <Chat />, path: '/contractor/chat' },
+    { text: '포인트 관리', icon: <AccountBalance />, path: '/contractor/points' },
+    { text: '프로필', icon: <Person />, path: '/contractor/profile' },
   ];
 
   const handleDrawerToggle = () => {
@@ -206,13 +208,13 @@ const ContractorLayout: React.FC<ContractorLayoutProps> = ({ children }) => {
       >
         <MenuItem onClick={() => navigate('/contractor/profile')}>
           <ListItemIcon>
-            <PersonIcon fontSize="small" />
+            <Person fontSize="small" />
           </ListItemIcon>
           프로필
         </MenuItem>
         <MenuItem onClick={handleLogout}>
           <ListItemIcon>
-            <LogoutIcon fontSize="small" />
+            <Logout fontSize="small" />
           </ListItemIcon>
           로그아웃
         </MenuItem>

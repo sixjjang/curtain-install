@@ -37,6 +37,7 @@ import {
 } from '@mui/icons-material';
 import { useAuth } from '../contexts/AuthContext';
 import { UserRole } from '../../types';
+import { formatPhoneInput, extractPhoneNumbers } from '../utils/phoneFormatter';
 
 // 시공 가능지역 데이터
 const regionData = {
@@ -86,6 +87,12 @@ const RegisterPage: React.FC = () => {
     pickupAddress: '',
     
     // 시공자 정보
+    businessName: '', // 상호명
+    contractorBusinessNumber: '', // 시공자 사업자등록번호
+    contractorBusinessAddress: '', // 시공자 사업장주소
+    contractorBusinessType: '', // 시공자 업태
+    contractorBusinessCategory: '', // 시공자 종목
+    contractorBusinessLicenseImage: null as File | null, // 시공자 사업자등록증
     profileImage: null as File | null,
     idCardImage: null as File | null, // 본인 반명함판 사진
     serviceAreas: [] as string[],
@@ -119,17 +126,38 @@ const RegisterPage: React.FC = () => {
       const { db } = await import('../../firebase/config');
       
       const usersRef = collection(db, 'users');
-      const q = query(usersRef, where(type, '==', value));
-      const querySnapshot = await getDocs(q);
       
-      if (!querySnapshot.empty) {
-        setError(`이미 사용 중인 ${type === 'email' ? '이메일' : '전화번호'}입니다.`);
-        setDuplicateCheck(prev => ({ ...prev, [type]: false }));
-        return false;
+      // 전화번호인 경우 숫자만 추출하여 비교
+      const searchValue = type === 'phone' ? extractPhoneNumbers(value) : value;
+      
+      // 전화번호 중복 확인 시 숫자만으로 검색
+      if (type === 'phone') {
+        const q = query(usersRef, where('phoneNumbers', '==', searchValue));
+        const querySnapshot = await getDocs(q);
+        
+        if (!querySnapshot.empty) {
+          setError(`이미 사용 중인 전화번호입니다.`);
+          setDuplicateCheck(prev => ({ ...prev, [type]: false }));
+          return false;
+        } else {
+          setDuplicateCheck(prev => ({ ...prev, [type]: true }));
+          setError('');
+          return true;
+        }
       } else {
-        setDuplicateCheck(prev => ({ ...prev, [type]: true }));
-        setError('');
-        return true;
+        // 이메일 중복 확인
+        const q = query(usersRef, where(type, '==', value));
+        const querySnapshot = await getDocs(q);
+        
+        if (!querySnapshot.empty) {
+          setError(`이미 사용 중인 이메일입니다.`);
+          setDuplicateCheck(prev => ({ ...prev, [type]: false }));
+          return false;
+        } else {
+          setDuplicateCheck(prev => ({ ...prev, [type]: true }));
+          setError('');
+          return true;
+        }
       }
     } catch (error) {
       console.error('중복 체크 실패:', error);
@@ -143,13 +171,23 @@ const RegisterPage: React.FC = () => {
 
   const handleChange = (e: React.ChangeEvent<HTMLInputElement | { name?: string; value: unknown }> | SelectChangeEvent<string>) => {
     const { name, value } = e.target;
-    setFormData(prev => ({
-      ...prev,
-      [name as string]: value
-    }));
+    
+    // 전화번호 필드인 경우 포맷팅 적용
+    if (name === 'phone' || name === 'pickupPhone') {
+      const formattedValue = formatPhoneInput(value as string);
+      setFormData(prev => ({
+        ...prev,
+        [name as string]: formattedValue
+      }));
+    } else {
+      setFormData(prev => ({
+        ...prev,
+        [name as string]: value
+      }));
+    }
   };
 
-  const handleImageChange = (event: React.ChangeEvent<HTMLInputElement>, type: 'profile' | 'license' | 'idCard') => {
+  const handleImageChange = (event: React.ChangeEvent<HTMLInputElement>, type: 'profile' | 'license' | 'idCard' | 'contractorLicense') => {
     const file = event.target.files?.[0];
     if (file) {
       // 이미지 크기 최적화 (5MB 제한)
@@ -164,6 +202,8 @@ const RegisterPage: React.FC = () => {
         setFormData(prev => ({ ...prev, businessLicenseImage: file }));
       } else if (type === 'idCard') {
         setFormData(prev => ({ ...prev, idCardImage: file }));
+      } else if (type === 'contractorLicense') {
+        setFormData(prev => ({ ...prev, contractorBusinessLicenseImage: file }));
       }
     }
   };
@@ -273,7 +313,7 @@ const RegisterPage: React.FC = () => {
         formData.email, 
         formData.password, 
         formData.name, 
-        formData.phone, 
+        formData.phone, // 포맷팅된 전화번호 (표시용)
         formData.role,
         formData.profileImage,
         formData.idCardImage,
@@ -282,6 +322,13 @@ const RegisterPage: React.FC = () => {
         formData.bankAccount,
         formData.bankName,
         formData.accountHolder,
+        // 시공자 사업 정보 (선택사항)
+        formData.businessName,
+        formData.contractorBusinessNumber,
+        formData.contractorBusinessAddress,
+        formData.contractorBusinessType,
+        formData.contractorBusinessCategory,
+        formData.contractorBusinessLicenseImage,
         // 판매자 추가 정보
         formData.companyName,
         formData.businessNumber,
@@ -291,7 +338,7 @@ const RegisterPage: React.FC = () => {
         formData.businessLicenseImage,
         // 픽업 정보
         formData.pickupCompanyName,
-        formData.pickupPhone,
+        formData.pickupPhone, // 포맷팅된 픽업 전화번호 (표시용)
         formData.pickupAddress
       );
       
@@ -663,6 +710,108 @@ const RegisterPage: React.FC = () => {
             </Typography>
           </Box>
         </Box>
+      </Grid>
+
+      {/* 시공자 사업 정보 (선택사항) */}
+      <Grid item xs={12}>
+        <Typography variant="h6" gutterBottom>
+          사업 정보 (선택사항)
+        </Typography>
+        <Typography variant="body2" color="textSecondary" gutterBottom>
+          사업자 정보는 선택사항입니다. 개인 시공자도 가입 가능합니다.
+        </Typography>
+      </Grid>
+      
+      <Grid item xs={12}>
+        <TextField
+          fullWidth
+          label="상호명"
+          name="businessName"
+          value={formData.businessName}
+          onChange={handleChange}
+          placeholder="예: 홍길동 커튼"
+        />
+      </Grid>
+      
+      <Grid item xs={12}>
+        <TextField
+          fullWidth
+          label="사업자등록번호"
+          name="contractorBusinessNumber"
+          value={formData.contractorBusinessNumber}
+          onChange={handleChange}
+          placeholder="000-00-00000"
+        />
+      </Grid>
+      
+      <Grid item xs={12}>
+        <TextField
+          fullWidth
+          label="사업장 주소"
+          name="contractorBusinessAddress"
+          value={formData.contractorBusinessAddress}
+          onChange={handleChange}
+          placeholder="사업장 주소를 입력하세요"
+        />
+      </Grid>
+      
+      <Grid item xs={12} sm={6}>
+        <TextField
+          fullWidth
+          label="업태"
+          name="contractorBusinessType"
+          value={formData.contractorBusinessType}
+          onChange={handleChange}
+          placeholder="예: 도소매업"
+        />
+      </Grid>
+      
+      <Grid item xs={12} sm={6}>
+        <TextField
+          fullWidth
+          label="종목"
+          name="contractorBusinessCategory"
+          value={formData.contractorBusinessCategory}
+          onChange={handleChange}
+          placeholder="예: 커튼도소매"
+        />
+      </Grid>
+      
+      <Grid item xs={12}>
+        <Typography variant="subtitle1" gutterBottom>
+          사업자등록증 사본 (선택사항)
+        </Typography>
+        <Box display="flex" alignItems="center" gap={2}>
+          <input
+            accept="image/*"
+            style={{ display: 'none' }}
+            id="contractor-business-license-upload"
+            type="file"
+            onChange={(e) => handleImageChange(e, 'contractorLicense')}
+          />
+          <label htmlFor="contractor-business-license-upload">
+            <Button
+              variant="outlined"
+              component="span"
+              startIcon={<Upload />}
+            >
+              사업자등록증 업로드
+            </Button>
+          </label>
+          {formData.contractorBusinessLicenseImage && (
+            <Typography variant="body2" color="success.main">
+              ✓ {formData.contractorBusinessLicenseImage.name}
+            </Typography>
+          )}
+        </Box>
+        <Alert severity="info" sx={{ mt: 1 }}>
+          <Typography variant="caption">
+            <strong>📋 사업자등록증 업로드 안내:</strong><br />
+            • 사업자등록증 사본을 업로드해주세요 (선택사항)<br />
+            • 5MB 이하의 이미지 파일만 업로드 가능합니다<br />
+            • 개인 시공자의 경우 업로드하지 않아도 됩니다
+          </Typography>
+        </Alert>
       </Grid>
 
       {/* 본인 반명함판 사진 (필수) */}

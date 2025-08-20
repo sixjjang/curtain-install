@@ -13,14 +13,18 @@ import {
   Collapse,
   Snackbar,
   Alert,
-  Paper
+  Paper,
+  TextField
 } from '@mui/material';
-import { Schedule, LocationOn, ExpandMore, ExpandLess, CalendarMonth } from '@mui/icons-material';
+import { Schedule, LocationOn, ExpandMore, ExpandLess, CalendarMonth, Cancel, AttachFile } from '@mui/icons-material';
 import { JobService } from '../../../shared/services/jobService';
+import { JobCancellationService } from '../../../shared/services/jobCancellationService';
 import { ConstructionJob } from '../../../types';
+import { useAuth } from '../../../shared/contexts/AuthContext';
 
 const JobList: React.FC = () => {
   const navigate = useNavigate();
+  const { user } = useAuth();
 
   // 주소를 구/동까지만 표시하는 함수
   const formatAddressForCard = (address: string): string => {
@@ -62,6 +66,22 @@ const JobList: React.FC = () => {
     message: '',
     severity: 'success'
   });
+
+  // 취소 관련 상태
+  const [cancelDialogOpen, setCancelDialogOpen] = useState(false);
+  const [selectedJobForCancel, setSelectedJobForCancel] = useState<ConstructionJob | null>(null);
+  const [cancelReason, setCancelReason] = useState('');
+  const [cancellationInfo, setCancellationInfo] = useState<{
+    canCancel: boolean;
+    reason?: string;
+    cancellationNumber?: number;
+    totalCancellationsToday?: number;
+    maxCancellationHours?: number;
+    maxDailyCancellations?: number;
+    feeAmount?: number;
+    feeRate?: number;
+    requiresFee?: boolean;
+  } | null>(null);
 
   // 지역 데이터 구조
   const regionData = {
@@ -107,10 +127,12 @@ const JobList: React.FC = () => {
           console.log('대기중인 작업들:', pendingJobs);
         }
 
-        // 나의 작업 (배정됨, 진행중, 완료)
-        const myJobs = allJobs.filter(job => 
-          ['assigned', 'product_preparing', 'product_ready', 'pickup_completed', 'in_progress', 'completed'].includes(job.status)
-        );
+        // 나의 작업 (배정됨, 진행중, 완료) - 현재 로그인한 시공자만
+        const myJobs = allJobs.filter(job => {
+          const statusMatch = ['assigned', 'product_preparing', 'product_ready', 'pickup_completed', 'in_progress', 'completed', 'cancelled', 'product_not_ready', 'customer_absent', 'schedule_changed'].includes(job.status);
+          const contractorMatch = job.contractorId === user?.id;
+          return statusMatch && contractorMatch;
+        });
         setMyJobs(myJobs);
       } catch (error) {
         console.error('작업 목록 가져오기 실패:', error);
@@ -128,6 +150,10 @@ const JobList: React.FC = () => {
       case 'assigned': return 'info';
       case 'in_progress': return 'primary';
       case 'completed': return 'success';
+      case 'cancelled': return 'error';
+      case 'product_not_ready': return 'error';
+      case 'customer_absent': return 'error';
+      case 'schedule_changed': return 'warning';
       default: return 'default';
     }
   };
@@ -141,6 +167,10 @@ const JobList: React.FC = () => {
       case 'pickup_completed': return '픽업완료';
       case 'in_progress': return '진행중';
       case 'completed': return '완료';
+      case 'cancelled': return '취소';
+      case 'product_not_ready': return '제품 미준비';
+      case 'customer_absent': return '소비자 부재';
+      case 'schedule_changed': return '일정 변경';
       default: return '알 수 없음';
     }
   };
@@ -186,8 +216,8 @@ const JobList: React.FC = () => {
   // 작업 수락 기능
   const handleAcceptJob = async (jobId: string) => {
     try {
-      // 작업 상태를 'assigned'로 업데이트
-      await JobService.updateJobStatus(jobId, 'assigned');
+      // 작업 상태를 'assigned'로 업데이트하고 현재 시공자 ID 설정
+      await JobService.updateJobStatus(jobId, 'assigned', user?.id);
       
       // 성공 메시지 표시
       setSnackbar({
@@ -200,10 +230,12 @@ const JobList: React.FC = () => {
       const updatedJobs = await JobService.getAllJobs();
       setJobs(updatedJobs);
       
-      // 나의 작업도 새로고침
-      const myJobs = updatedJobs.filter(job => 
-        ['assigned', 'product_preparing', 'product_ready', 'pickup_completed', 'in_progress', 'completed'].includes(job.status)
-      );
+      // 나의 작업도 새로고침 (현재 로그인한 시공자만)
+      const myJobs = updatedJobs.filter(job => {
+        const statusMatch = ['assigned', 'product_preparing', 'product_ready', 'pickup_completed', 'in_progress', 'completed', 'cancelled', 'product_not_ready', 'customer_absent', 'schedule_changed'].includes(job.status);
+        const contractorMatch = job.contractorId === user?.id;
+        return statusMatch && contractorMatch;
+      });
       setMyJobs(myJobs);
       
     } catch (error) {
@@ -211,6 +243,76 @@ const JobList: React.FC = () => {
       setSnackbar({
         open: true,
         message: '작업 수락에 실패했습니다. 다시 시도해주세요.',
+        severity: 'error'
+      });
+    }
+  };
+
+  // 작업 취소 확인 다이얼로그 열기
+  const handleCancelJobClick = async (job: ConstructionJob) => {
+    if (!user?.id) return;
+    
+    try {
+      // 취소 가능 여부 확인
+      const canCancelResult = await JobCancellationService.canCancelJob(job.id, user.id);
+      setCancellationInfo(canCancelResult);
+      setSelectedJobForCancel(job);
+      setCancelReason('');
+      setCancelDialogOpen(true);
+    } catch (error) {
+      console.error('취소 가능 여부 확인 실패:', error);
+      setSnackbar({
+        open: true,
+        message: '취소 가능 여부를 확인할 수 없습니다.',
+        severity: 'error'
+      });
+    }
+  };
+
+  // 작업 취소 실행
+  const handleCancelJob = async () => {
+    if (!selectedJobForCancel || !user?.id || !cancellationInfo?.canCancel) return;
+    
+    try {
+      await JobCancellationService.cancelJob(
+        selectedJobForCancel.id,
+        user.id,
+        user.name,
+        cancelReason
+      );
+      
+      // 성공 메시지 표시
+      const message = `작업이 성공적으로 취소되었습니다.\n\n취소 정보:\n• ${cancellationInfo.cancellationNumber}번째 취소\n• 오늘 ${cancellationInfo.totalCancellationsToday}회 취소 (최대 ${cancellationInfo.maxDailyCancellations}회)`;
+      
+      setSnackbar({
+        open: true,
+        message,
+        severity: 'success'
+      });
+      
+      // 다이얼로그 닫기
+      setCancelDialogOpen(false);
+      setSelectedJobForCancel(null);
+      setCancelReason('');
+      setCancellationInfo(null);
+      
+      // 작업 목록 새로고침
+      const updatedJobs = await JobService.getAllJobs();
+      setJobs(updatedJobs);
+      
+      // 나의 작업도 새로고침
+      const myJobs = updatedJobs.filter(job => {
+        const statusMatch = ['assigned', 'product_preparing', 'product_ready', 'pickup_completed', 'in_progress', 'completed', 'cancelled', 'product_not_ready', 'customer_absent', 'schedule_changed'].includes(job.status);
+        const contractorMatch = job.contractorId === user?.id;
+        return statusMatch && contractorMatch;
+      });
+      setMyJobs(myJobs);
+      
+    } catch (error) {
+      console.error('작업 취소 실패:', error);
+      setSnackbar({
+        open: true,
+        message: `작업 취소에 실패했습니다: ${(error as Error).message}`,
         severity: 'error'
       });
     }
@@ -932,6 +1034,29 @@ const JobList: React.FC = () => {
                                   <Typography variant="body2" mb={2} sx={{ color: job.status === 'completed' ? '#2e7d32' : '#0d47a1' }}>
                                     {job.description}
                                   </Typography>
+                                  
+                                  {/* 취소 버튼 (assigned 상태일 때만 표시) */}
+                                  {job.status === 'assigned' && (
+                                    <Box sx={{ mt: 2 }}>
+                                      <Button
+                                        variant="outlined"
+                                        color="error"
+                                        size="small"
+                                        startIcon={<Cancel />}
+                                        onClick={() => handleCancelJobClick(job)}
+                                        sx={{
+                                          borderColor: '#f44336',
+                                          color: '#f44336',
+                                          '&:hover': {
+                                            borderColor: '#d32f2f',
+                                            backgroundColor: '#ffebee'
+                                          }
+                                        }}
+                                      >
+                                        작업 취소
+                                      </Button>
+                                    </Box>
+                                  )}
                                 </Box>
                               ))}
                           </Box>
@@ -947,6 +1072,111 @@ const JobList: React.FC = () => {
                   </Box>
                 );
               })()}
+            </CardContent>
+          </Card>
+        </Snackbar>
+
+        {/* 작업 취소 확인 다이얼로그 */}
+        <Snackbar
+          open={cancelDialogOpen}
+          onClose={() => setCancelDialogOpen(false)}
+          anchorOrigin={{ vertical: 'top', horizontal: 'center' }}
+        >
+          <Card sx={{ maxWidth: 600, width: '100%' }}>
+            <CardContent>
+              {selectedJobForCancel && cancellationInfo && (
+                <Box>
+                  <Typography variant="h5" gutterBottom sx={{ color: '#f44336', fontWeight: 'bold' }}>
+                    🚫 작업 취소 확인
+                  </Typography>
+                  
+                  {!cancellationInfo.canCancel ? (
+                    <Box>
+                      <Alert severity="error" sx={{ mb: 2 }}>
+                        <Typography variant="h6" gutterBottom>
+                          취소할 수 없습니다
+                        </Typography>
+                        <Typography variant="body2">
+                          {cancellationInfo.reason}
+                        </Typography>
+                      </Alert>
+                      
+                      <Box sx={{ mt: 2 }}>
+                        <Button
+                          variant="contained"
+                          onClick={() => setCancelDialogOpen(false)}
+                          fullWidth
+                        >
+                          확인
+                        </Button>
+                      </Box>
+                    </Box>
+                  ) : (
+                    <Box>
+                      <Typography variant="body1" gutterBottom>
+                        <strong>{selectedJobForCancel.title}</strong> 작업을 취소하시겠습니까?
+                      </Typography>
+                      
+                      <Box sx={{ mb: 3, p: 2, backgroundColor: '#fff3e0', borderRadius: 1 }}>
+                        <Typography variant="body2" gutterBottom>
+                          <strong>취소 정보:</strong>
+                        </Typography>
+                        <Typography variant="body2" color="textSecondary">
+                          • {cancellationInfo.cancellationNumber}번째 취소
+                        </Typography>
+                        <Typography variant="body2" color="textSecondary">
+                          • 오늘 {cancellationInfo.totalCancellationsToday}회 취소 (최대 {cancellationInfo.maxDailyCancellations}회)
+                        </Typography>
+                        <Typography variant="body2" color="textSecondary">
+                          • 수락 후 {cancellationInfo.maxCancellationHours}시간까지 취소 가능
+                        </Typography>
+                        {cancellationInfo.requiresFee && cancellationInfo.feeAmount && (
+                          <>
+                            <Typography variant="body2" color="error" sx={{ mt: 1, fontWeight: 'bold' }}>
+                              ⚠️ 수수료 적용
+                            </Typography>
+                            <Typography variant="body2" color="error">
+                              • 수수료율: {cancellationInfo.feeRate}%
+                            </Typography>
+                            <Typography variant="body2" color="error">
+                              • 수수료 금액: {cancellationInfo.feeAmount.toLocaleString()}원
+                            </Typography>
+                          </>
+                        )}
+                      </Box>
+                      
+                      <TextField
+                        fullWidth
+                        label="취소 사유 (선택사항)"
+                        multiline
+                        rows={3}
+                        value={cancelReason}
+                        onChange={(e: React.ChangeEvent<HTMLInputElement>) => setCancelReason(e.target.value)}
+                        placeholder="취소 사유를 입력해주세요..."
+                        sx={{ mb: 3 }}
+                      />
+                      
+                      <Box sx={{ display: 'flex', gap: 2 }}>
+                        <Button
+                          variant="outlined"
+                          onClick={() => setCancelDialogOpen(false)}
+                          sx={{ flex: 1 }}
+                        >
+                          취소
+                        </Button>
+                        <Button
+                          variant="contained"
+                          color="error"
+                          onClick={handleCancelJob}
+                          sx={{ flex: 1 }}
+                        >
+                          작업 취소
+                        </Button>
+                      </Box>
+                    </Box>
+                  )}
+                </Box>
+              )}
             </CardContent>
           </Card>
         </Snackbar>
@@ -1158,9 +1388,19 @@ const JobList: React.FC = () => {
                     총 금액: {calculateTotalPrice(job).toLocaleString()}원
                   </Typography>
                   
-                  <Typography variant="body2" mb={2}>
+                  <Typography variant="body2" mb={1}>
                     {job.description}
                   </Typography>
+                  
+                  {/* 작업지시서 파일 표시 */}
+                  {job.workInstructions && job.workInstructions.length > 0 && (
+                    <Box display="flex" alignItems="center" gap={1} mb={2}>
+                      <AttachFile fontSize="small" color="primary" />
+                      <Typography variant="caption" color="primary">
+                        작업지시서 {job.workInstructions.length}개 첨부
+                      </Typography>
+                    </Box>
+                  )}
                   
                   <Box display="flex" justifyContent="space-between" alignItems="center">
                     <Chip 
@@ -1180,7 +1420,7 @@ const JobList: React.FC = () => {
                           수락
                         </Button>
                       )}
-                      {['assigned', 'product_preparing', 'product_ready', 'pickup_completed', 'in_progress', 'completed'].includes(job.status) && (
+                      {['assigned', 'product_preparing', 'product_ready', 'pickup_completed', 'in_progress', 'completed', 'cancelled', 'product_not_ready', 'customer_absent', 'schedule_changed'].includes(job.status) && (
                         <>
                           <Button 
                             variant="outlined" 

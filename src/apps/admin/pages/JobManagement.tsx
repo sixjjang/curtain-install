@@ -28,6 +28,7 @@ import {
   Add as AddIcon
 } from '@mui/icons-material';
 import { JobService } from '../../../shared/services/jobService';
+import { JobCancellationService } from '../../../shared/services/jobCancellationService';
 import { AuthService } from '../../../shared/services/authService';
 import { ConstructionJob, User } from '../../../types';
 import CreateJobDialog from '../components/CreateJobDialog';
@@ -51,6 +52,15 @@ const JobManagement: React.FC = () => {
   const [error, setError] = useState('');
   const [userInfo, setUserInfo] = useState<{ [key: string]: User }>({});
   const [selectedPeriod, setSelectedPeriod] = useState<'daily' | 'weekly' | 'monthly' | 'all'>('all');
+  const [cancellationStats, setCancellationStats] = useState<{
+    totalCancellations: number;
+    todayCancellations: number;
+    topCancellingContractors: Array<{
+      contractorId: string;
+      contractorName: string;
+      cancellationCount: number;
+    }>;
+  } | null>(null);
 
   // 상태별 색상과 라벨
   const statusConfig = {
@@ -64,7 +74,18 @@ const JobManagement: React.FC = () => {
   // 초기 데이터 로드
   useEffect(() => {
     loadJobCountsByPeriod(selectedPeriod);
+    loadCancellationStats();
   }, []);
+
+  // 취소 통계 로드
+  const loadCancellationStats = async () => {
+    try {
+      const stats = await JobCancellationService.getCancellationStats();
+      setCancellationStats(stats);
+    } catch (error) {
+      console.error('취소 통계 로드 실패:', error);
+    }
+  };
 
   // 작업 개수 로드 (기간별 필터링 적용)
   const loadJobCounts = async () => {
@@ -82,7 +103,7 @@ const JobManagement: React.FC = () => {
   // 기간별 작업 개수 로드
   const loadJobCountsByPeriod = async (period: 'daily' | 'weekly' | 'monthly' | 'all') => {
     try {
-      const statuses: ConstructionJob['status'][] = ['pending', 'assigned', 'in_progress', 'completed', 'cancelled'];
+      const statuses: ConstructionJob['status'][] = ['pending', 'assigned', 'in_progress', 'completed'];
       const counts: { [key: string]: number } = {};
       
       for (const status of statuses) {
@@ -111,7 +132,9 @@ const JobManagement: React.FC = () => {
       const userIds = new Set<string>();
       statusJobs.forEach(job => {
         userIds.add(job.sellerId);
-        userIds.add(job.customerId);
+        if (job.customerId) {
+          userIds.add(job.customerId);
+        }
         if (job.contractorId) {
           userIds.add(job.contractorId);
         }
@@ -150,7 +173,9 @@ const JobManagement: React.FC = () => {
         const userIds = new Set<string>();
         statusJobs.forEach(job => {
           userIds.add(job.sellerId);
-          userIds.add(job.customerId);
+          if (job.customerId) {
+            userIds.add(job.customerId);
+          }
           if (job.contractorId) {
             userIds.add(job.contractorId);
           }
@@ -317,6 +342,97 @@ const JobManagement: React.FC = () => {
         ))}
       </Grid>
 
+      {/* 취소 통계 섹션 */}
+      {cancellationStats && (
+        <Box sx={{ mt: 4 }}>
+          <Typography variant="h5" gutterBottom sx={{ color: '#f44336', fontWeight: 'bold' }}>
+            🚫 작업 취소 통계
+          </Typography>
+          
+          <Grid container spacing={3}>
+            <Grid item xs={12} md={4}>
+              <Card sx={{ backgroundColor: '#ffebee' }}>
+                <CardContent>
+                  <Typography variant="h6" gutterBottom>
+                    총 취소 건수
+                  </Typography>
+                  <Typography variant="h4" sx={{ color: '#f44336', fontWeight: 'bold' }}>
+                    {cancellationStats.totalCancellations}건
+                  </Typography>
+                </CardContent>
+              </Card>
+            </Grid>
+            
+            <Grid item xs={12} md={4}>
+              <Card sx={{ backgroundColor: '#fff3e0' }}>
+                <CardContent>
+                  <Typography variant="h6" gutterBottom>
+                    오늘 취소 건수
+                  </Typography>
+                  <Typography variant="h4" sx={{ color: '#ff9800', fontWeight: 'bold' }}>
+                    {cancellationStats.todayCancellations}건
+                  </Typography>
+                </CardContent>
+              </Card>
+            </Grid>
+            
+            <Grid item xs={12} md={4}>
+              <Card sx={{ backgroundColor: '#e8f5e8' }}>
+                <CardContent>
+                  <Typography variant="h6" gutterBottom>
+                    취소율
+                  </Typography>
+                  <Typography variant="h4" sx={{ color: '#4caf50', fontWeight: 'bold' }}>
+                    {jobCounts.completed > 0 
+                      ? ((cancellationStats.totalCancellations / (jobCounts.completed + cancellationStats.totalCancellations)) * 100).toFixed(1)
+                      : '0'}%
+                  </Typography>
+                </CardContent>
+              </Card>
+            </Grid>
+          </Grid>
+
+          {/* 상위 취소 시공자 */}
+          {cancellationStats.topCancellingContractors.length > 0 && (
+            <Card sx={{ mt: 3 }}>
+              <CardContent>
+                <Typography variant="h6" gutterBottom>
+                  🏆 상위 취소 시공자 (Top 5)
+                </Typography>
+                <Grid container spacing={2}>
+                  {cancellationStats.topCancellingContractors.slice(0, 5).map((contractor, index) => (
+                    <Grid item xs={12} md={6} key={contractor.contractorId}>
+                      <Box sx={{ 
+                        p: 2, 
+                        border: '1px solid #e0e0e0', 
+                        borderRadius: 1,
+                        backgroundColor: index === 0 ? '#fff3e0' : '#fafafa'
+                      }}>
+                        <Box display="flex" justifyContent="space-between" alignItems="center">
+                          <Box>
+                            <Typography variant="body1" fontWeight="bold">
+                              {index + 1}. {contractor.contractorName}
+                            </Typography>
+                            <Typography variant="body2" color="textSecondary">
+                              총 {contractor.cancellationCount}회 취소
+                            </Typography>
+                          </Box>
+                          <Chip 
+                            label={`${contractor.cancellationCount}회`}
+                            color={index === 0 ? 'warning' : 'default'}
+                            variant={index === 0 ? 'filled' : 'outlined'}
+                          />
+                        </Box>
+                      </Box>
+                    </Grid>
+                  ))}
+                </Grid>
+              </CardContent>
+            </Card>
+          )}
+        </Box>
+      )}
+
       {/* 작업 목록 다이얼로그 */}
       <Dialog 
         open={dialogOpen} 
@@ -373,7 +489,7 @@ const JobManagement: React.FC = () => {
                       {job.description}
                     </Typography>
                     <Typography variant="caption" color="textSecondary" display="block">
-                      주소: {job.address} | 예산: {job.budget.min}~{job.budget.max}만원
+                      주소: {job.address} | 예산: {job.budget?.min || 0}~{job.budget?.max || 0}만원
                     </Typography>
                     
                     {/* 판매자 정보 */}

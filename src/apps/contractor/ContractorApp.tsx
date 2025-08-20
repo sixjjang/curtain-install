@@ -5,13 +5,11 @@ import ContractorLayout from './components/ContractorLayout';
 import Dashboard from './pages/Dashboard';
 import JobList from './pages/JobList';
 import MyJobs from './pages/MyJobs';
-import CalendarView from './pages/CalendarView';
 import JobDetail from './pages/JobDetail';
+import CalendarView from './pages/CalendarView';
 import Chat from './pages/Chat';
-import Profile from './pages/Profile';
-import LevelProgress from './pages/LevelProgress';
-import Notifications from './pages/Notifications';
 import PointManagement from './pages/PointManagement';
+import Profile from './pages/Profile';
 
 const ContractorApp: React.FC = () => {
   return (
@@ -20,14 +18,13 @@ const ContractorApp: React.FC = () => {
         <Routes>
           <Route path="/" element={<Dashboard />} />
           <Route path="/jobs" element={<JobList />} />
+          <Route path="/jobs/:jobId" element={<JobDetail />} />
           <Route path="/my-jobs" element={<MyJobs />} />
           <Route path="/calendar" element={<CalendarView />} />
-          <Route path="/jobs/:jobId" element={<JobDetail />} />
+          <Route path="/chat" element={<Chat />} />
           <Route path="/chat/:jobId" element={<Chat />} />
-          <Route path="/profile" element={<Profile />} />
-          <Route path="/level" element={<LevelProgress />} />
           <Route path="/points" element={<PointManagement />} />
-          <Route path="/notifications" element={<Notifications />} />
+          <Route path="/profile" element={<Profile />} />
         </Routes>
       </Box>
     </ContractorLayout>

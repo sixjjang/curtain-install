@@ -1,35 +1,37 @@
-import React, { useState } from 'react';
-import { useNavigate, useLocation } from 'react-router-dom';
+import React, { useState, useEffect } from 'react';
 import {
   AppBar,
-  Toolbar,
-  Typography,
+  Box,
+  CssBaseline,
   Drawer,
+  IconButton,
   List,
   ListItem,
   ListItemButton,
   ListItemIcon,
   ListItemText,
-  Box,
+  Toolbar,
+  Typography,
+  Badge,
   Avatar,
   Menu,
   MenuItem,
-  IconButton,
-  Badge,
-  Chip
+  Divider
 } from '@mui/material';
 import {
-  Dashboard as DashboardIcon,
-  Work as WorkIcon,
-  People as PeopleIcon,
-  Person as PersonIcon,
-  Notifications as NotificationsIcon,
   Menu as MenuIcon,
-  ExitToApp as LogoutIcon,
-  AccountBalance as AccountBalanceIcon
+  Dashboard,
+  Work,
+  People,
+  AccountBalance,
+  Person,
+  Notifications as NotificationsIcon,
+  CalendarMonth,
+  Logout
 } from '@mui/icons-material';
+import { useNavigate, useLocation } from 'react-router-dom';
 import { useAuth } from '../../../shared/contexts/AuthContext';
-import { Seller } from '../../../types';
+import { NotificationService } from '../../../shared/services/notificationService';
 
 const drawerWidth = 240;
 
@@ -40,19 +42,27 @@ interface SellerLayoutProps {
 const SellerLayout: React.FC<SellerLayoutProps> = ({ children }) => {
   const [mobileOpen, setMobileOpen] = useState(false);
   const [anchorEl, setAnchorEl] = useState<null | HTMLElement>(null);
-  const { user, logout } = useAuth();
+  const [unreadCount, setUnreadCount] = useState(0);
   const navigate = useNavigate();
   const location = useLocation();
-
-  const seller = user?.seller;
+  const { user, logout } = useAuth();
 
   const menuItems = [
-    { text: '대시보드', icon: <DashboardIcon />, path: '/seller' },
-    { text: '시공 관리', icon: <WorkIcon />, path: '/seller/jobs' },
-    { text: '시공자 목록', icon: <PeopleIcon />, path: '/seller/contractors' },
-    { text: '포인트 관리', icon: <AccountBalanceIcon />, path: '/seller/points' },
-    { text: '프로필', icon: <PersonIcon />, path: '/seller/profile' },
+    { text: '대시보드', icon: <Dashboard />, path: '/seller' },
+    { text: '시공 작업 관리', icon: <Work />, path: '/seller/jobs' },
+    { text: '시공자 목록', icon: <People />, path: '/seller/contractors' },
+    { text: '포인트 충전', icon: <AccountBalance />, path: '/seller/points' },
+    { text: '캘린더', icon: <CalendarMonth />, path: '/seller/calendar' },
+    { text: '프로필', icon: <Person />, path: '/seller/profile' },
   ];
+
+  // 알림 구독
+  useEffect(() => {
+    if (user?.id) {
+      const unsubscribe = NotificationService.subscribeToUnreadCount(user.id, setUnreadCount);
+      return unsubscribe;
+    }
+  }, [user?.id]);
 
   const handleDrawerToggle = () => {
     setMobileOpen(!mobileOpen);
@@ -76,39 +86,21 @@ const SellerLayout: React.FC<SellerLayoutProps> = ({ children }) => {
   };
 
   const drawer = (
-    <Box>
-      <Box sx={{ p: 2, textAlign: 'center' }}>
-        <Typography variant="h6" color="primary">
+    <div>
+      <Toolbar>
+        <Typography variant="h6" noWrap component="div">
           판매자 대시보드
         </Typography>
-        {seller && (
-          <Box sx={{ mt: 2 }}>
-            <Avatar sx={{ width: 56, height: 56, mx: 'auto', mb: 1 }}>
-              {seller.companyName.charAt(0)}
-            </Avatar>
-            <Typography variant="subtitle1">{seller.companyName}</Typography>
-            <Chip 
-              label={`평점 ${Number(seller?.rating || 0).toFixed(1)}/5.0`}
-              color="primary"
-              size="small"
-              sx={{ mt: 1 }}
-            />
-          </Box>
-        )}
-      </Box>
+      </Toolbar>
+      <Divider />
       <List>
         {menuItems.map((item) => (
           <ListItem key={item.text} disablePadding>
             <ListItemButton
-              onClick={() => navigate(item.path)}
               selected={location.pathname === item.path}
-              sx={{
-                '&.Mui-selected': {
-                  backgroundColor: 'primary.light',
-                  '&:hover': {
-                    backgroundColor: 'primary.light',
-                  },
-                },
+              onClick={() => {
+                navigate(item.path);
+                setMobileOpen(false);
               }}
             >
               <ListItemIcon>{item.icon}</ListItemIcon>
@@ -117,11 +109,12 @@ const SellerLayout: React.FC<SellerLayoutProps> = ({ children }) => {
           </ListItem>
         ))}
       </List>
-    </Box>
+    </div>
   );
 
   return (
     <Box sx={{ display: 'flex' }}>
+      <CssBaseline />
       <AppBar
         position="fixed"
         sx={{
@@ -140,31 +133,32 @@ const SellerLayout: React.FC<SellerLayoutProps> = ({ children }) => {
             <MenuIcon />
           </IconButton>
           <Typography variant="h6" noWrap component="div" sx={{ flexGrow: 1 }}>
-            전문가의 손길
+            {menuItems.find(item => item.path === location.pathname)?.text || '판매자 대시보드'}
           </Typography>
           
-          <Box sx={{ display: 'flex', alignItems: 'center', gap: 2 }}>
-            <IconButton
-              color="inherit"
-              onClick={() => navigate('/seller/notifications')}
-            >
-              <Badge badgeContent={2} color="error">
-                <NotificationsIcon />
-              </Badge>
-            </IconButton>
-            
-            <IconButton
-              onClick={handleProfileMenuOpen}
-              sx={{ p: 0 }}
-            >
-              <Avatar sx={{ width: 32, height: 32 }}>
-                {seller?.companyName.charAt(0)}
-              </Avatar>
-            </IconButton>
-          </Box>
+          {/* 알림 아이콘 */}
+          <IconButton
+            color="inherit"
+            onClick={() => navigate('/seller/notifications')}
+            sx={{ mr: 2 }}
+          >
+            <Badge badgeContent={unreadCount} color="error">
+              <NotificationsIcon />
+            </Badge>
+          </IconButton>
+          
+          {/* 사용자 프로필 메뉴 */}
+          <IconButton
+            onClick={handleProfileMenuOpen}
+            sx={{ p: 0 }}
+          >
+            <Avatar sx={{ bgcolor: 'secondary.main' }}>
+              {user?.name?.charAt(0) || user?.email?.charAt(0) || 'U'}
+            </Avatar>
+          </IconButton>
         </Toolbar>
       </AppBar>
-
+      
       <Box
         component="nav"
         sx={{ width: { sm: drawerWidth }, flexShrink: { sm: 0 } }}
@@ -194,37 +188,36 @@ const SellerLayout: React.FC<SellerLayoutProps> = ({ children }) => {
           {drawer}
         </Drawer>
       </Box>
-
+      
+      <Box
+        component="main"
+        sx={{ flexGrow: 1, p: 3, width: { sm: `calc(100% - ${drawerWidth}px)` } }}
+      >
+        <Toolbar />
+        {children}
+      </Box>
+      
+      {/* 프로필 메뉴 */}
       <Menu
         anchorEl={anchorEl}
         open={Boolean(anchorEl)}
         onClose={handleProfileMenuClose}
+        onClick={handleProfileMenuClose}
       >
         <MenuItem onClick={() => navigate('/seller/profile')}>
           <ListItemIcon>
-            <PersonIcon fontSize="small" />
+            <Person fontSize="small" />
           </ListItemIcon>
           프로필
         </MenuItem>
+        <Divider />
         <MenuItem onClick={handleLogout}>
           <ListItemIcon>
-            <LogoutIcon fontSize="small" />
+            <Logout fontSize="small" />
           </ListItemIcon>
           로그아웃
         </MenuItem>
       </Menu>
-
-      <Box
-        component="main"
-        sx={{
-          flexGrow: 1,
-          p: 3,
-          width: { sm: `calc(100% - ${drawerWidth}px)` },
-          mt: 8,
-        }}
-      >
-        {children}
-      </Box>
     </Box>
   );
 };

@@ -1,166 +1,163 @@
-# 전문가의 손길 🏠
+# 커튼 시공 관리 플랫폼
 
-커튼 판매자와 시공자를 연결하는 플랫폼으로, 게임화된 레벨 시스템을 통해 시공자의 신뢰성과 숙련도를 검증하고 보상하는 웹 애플리케이션입니다.
+## 🚨 현재 상황: Firebase Storage CORS 오류
 
-## 🎯 주요 기능
+현재 Firebase Storage에서 CORS 오류가 발생하고 있습니다. 이는 Firebase Storage 설정이 완료되지 않았기 때문입니다.
 
-### 👥 사용자 역할
-- **판매자 (Seller)**: 커튼을 판매하고 시공을 의뢰
-- **시공자 (Contractor)**: 시공 작업을 수락하고 고객 댁에 방문하여 시공
-- **고객 (Customer)**: 커튼 구매 및 시공 후 평가
-- **관리자 (Admin)**: 플랫폼 전체 관리
+### ✅ 임시 해결책
+- **회원가입**: 이미지 없이도 정상적으로 회원가입이 가능합니다
+- **이미지 업로드**: 로컬에 임시 저장되어 사용할 수 있습니다
+- **사용자 경험**: 오류 없이 모든 기능을 이용할 수 있습니다
 
-### 🎮 레벨 시스템
-- 시공자가 작업 완료 시 경험치 획득
-- 고객 만족도에 따른 추가 경험치 보상
-- 레벨 상승에 따른 시공비 증가
-- 높은 레벨의 시공자에게 우선 작업 추천
+### 🔧 CORS 설정 방법 (관리자용)
 
-### 🔧 기술 스택
-- **Frontend**: React 19 + TypeScript
-- **UI Framework**: Material-UI (MUI)
-- **Backend**: Firebase (Firestore, Authentication, Storage)
-- **Routing**: React Router v7
-- **State Management**: React Context API
+1. **Firebase Console** 접속: https://console.firebase.google.com/
+2. **프로젝트**: `curtain-install` 선택
+3. **Storage** → **Rules** 탭으로 이동
+4. **CORS 설정 추가**:
+
+```json
+[
+  {
+    "origin": ["*"],
+    "method": ["GET", "POST", "PUT", "DELETE", "HEAD", "OPTIONS"],
+    "maxAgeSeconds": 3600,
+    "responseHeader": ["Content-Type", "Authorization", "Content-Length", "User-Agent", "x-goog-resumable"]
+  }
+]
+```
+
+자세한 설정 방법은 [FIREBASE_STORAGE_CORS_SETUP.md](./FIREBASE_STORAGE_CORS_SETUP.md)를 참조하세요.
+
+## 📋 프로젝트 개요
+
+커튼 시공 관리 플랫폼은 커튼 판매자와 시공업체를 연결하는 웹 애플리케이션입니다.
+
+### 주요 기능
+- **판매자**: 커튼 판매, 시공업체 매칭, 주문 관리
+- **시공업체**: 작업 수락, 일정 관리, 완료 보고
+- **관리자**: 사용자 관리, 작업 모니터링, 통계 분석
+
+### 기술 스택
+- **Frontend**: React, TypeScript, Material-UI
+- **Backend**: Firebase (Firestore, Storage, Auth)
+- **배포**: Firebase Hosting
 
 ## 🚀 시작하기
 
 ### 필수 요구사항
-- Node.js 18.0.0 이상
+- Node.js 16+ 
 - npm 또는 yarn
-- Firebase 계정
+- Firebase 프로젝트
 
 ### 설치 및 실행
 
-1. **저장소 클론**
-```bash
-git clone <repository-url>
-cd construction-platform
-```
-
-2. **의존성 설치**
+1. **의존성 설치**
 ```bash
 npm install
 ```
 
-3. **Firebase 설정**
-   - [Firebase Console](https://console.firebase.google.com/)에서 새 프로젝트 생성
-   - `FIREBASE_SETUP.md` 파일 참조하여 Firebase 서비스 설정
-   - 프로젝트 루트에 `.env` 파일 생성하고 Firebase 설정 정보 입력
+2. **환경 변수 설정**
+```bash
+cp env.example .env
+```
+`.env` 파일에 Firebase 설정을 추가하세요.
 
-4. **개발 서버 실행**
+3. **개발 서버 실행**
 ```bash
 npm start
 ```
 
-브라우저에서 [http://localhost:3000](http://localhost:3000)으로 접속하여 애플리케이션을 확인할 수 있습니다.
+4. **빌드**
+```bash
+npm run build
+```
 
 ## 📁 프로젝트 구조
 
 ```
 src/
-├── apps/                    # 역할별 애플리케이션
+├── apps/                    # 애플리케이션별 컴포넌트
 │   ├── admin/              # 관리자 앱
-│   ├── contractor/         # 시공자 앱
-│   ├── customer/           # 고객 설문
+│   ├── contractor/         # 시공업체 앱
+│   ├── customer/           # 고객 앱
 │   └── seller/             # 판매자 앱
 ├── shared/                 # 공통 컴포넌트 및 서비스
-│   ├── components/         # 공통 UI 컴포넌트
+│   ├── components/         # 공통 컴포넌트
 │   ├── contexts/           # React Context
-│   └── services/           # 비즈니스 로직 서비스
-├── firebase/               # Firebase 설정
-└── types.ts               # TypeScript 타입 정의
+│   ├── services/           # API 서비스
+│   └── utils/              # 유틸리티 함수
+├── types/                  # TypeScript 타입 정의
+└── firebase/               # Firebase 설정
 ```
 
-## 🔐 환경 변수 설정
+## 🔐 인증 및 권한
 
-프로젝트 루트에 `.env` 파일을 생성하고 다음 정보를 입력하세요:
+### 사용자 역할
+- **판매자**: 커튼 판매 및 주문 관리
+- **시공업체**: 시공 작업 수행
+- **관리자**: 시스템 전체 관리
 
-```env
-REACT_APP_FIREBASE_API_KEY=your_api_key_here
-REACT_APP_FIREBASE_AUTH_DOMAIN=your_project_id.firebaseapp.com
-REACT_APP_FIREBASE_PROJECT_ID=your_project_id
-REACT_APP_FIREBASE_STORAGE_BUCKET=your_project_id.appspot.com
-REACT_APP_FIREBASE_MESSAGING_SENDER_ID=your_messaging_sender_id
-REACT_APP_FIREBASE_APP_ID=your_app_id
-```
+### 승인 프로세스
+1. 회원가입 → 관리자 승인 대기
+2. 관리자 승인 → 서비스 이용 가능
+3. 거부 시 → 서비스 이용 불가
 
-## 📦 사용 가능한 스크립트
+## 📱 주요 페이지
 
-- `npm start` - 개발 서버 실행
-- `npm run build` - 프로덕션 빌드
-- `npm test` - 테스트 실행
-- `npm run deploy` - Firebase Hosting에 배포
-- `npm run deploy:preview` - 미리보기 채널에 배포
-- `npm run analyze` - 빌드 분석
+### 판매자
+- 대시보드: 매출 통계, 주문 현황
+- 작업 관리: 주문 목록, 시공업체 매칭
+- 프로필: 기본 정보, 픽업 정보
 
-## 🌐 배포
+### 시공업체
+- 대시보드: 작업 현황, 수익 통계
+- 작업 목록: 수락한 작업, 완료된 작업
+- 프로필: 기본 정보, 서비스 지역
 
-### Firebase Hosting 배포
+### 관리자
+- 사용자 관리: 승인, 거부, 정지
+- 작업 관리: 전체 작업 모니터링
+- 통계: 매출, 작업 완료율 등
 
-1. **Firebase CLI 설치**
-```bash
-npm install -g firebase-tools
-```
+## 🔧 개발 가이드
 
-2. **Firebase 로그인**
-```bash
-firebase login
-```
+### 코드 스타일
+- TypeScript 사용
+- Material-UI 컴포넌트 활용
+- 함수형 컴포넌트 및 Hooks 사용
 
-3. **프로젝트 초기화**
-```bash
-firebase init hosting
-```
+### 상태 관리
+- React Context API 사용
+- Firebase 실시간 데이터베이스 활용
 
-4. **배포**
-```bash
-npm run deploy
-```
+### 에러 처리
+- 사용자 친화적 에러 메시지
+- 네트워크 오류 대응
+- CORS 오류 임시 해결책
 
-### 다른 배포 옵션
-- **Vercel**: `vercel --prod`
-- **Netlify**: `netlify deploy --prod`
-- **GitHub Pages**: `npm run deploy`
+## 🚨 알려진 문제
 
-## 🎮 레벨 시스템 상세
+### Firebase Storage CORS 오류
+- **현상**: 이미지 업로드 시 CORS 오류 발생
+- **원인**: Firebase Storage CORS 설정 미완료
+- **해결책**: 
+  1. Firebase Console에서 CORS 설정
+  2. 임시로 로컬 저장 사용
+  3. 설정 완료 후 서버 저장으로 전환
 
-### 경험치 계산
-- 기본 작업 완료: 50 경험치
-- 고객 만족도 5점: +25 경험치
-- 고객 만족도 4점: +15 경험치
-- 고객 만족도 3점: +5 경험치
-- 고객 만족도 2점 이하: +0 경험치
-
-### 레벨별 혜택
-- **레벨 1-5**: 초급 시공자 (기본 시공비)
-- **레벨 6-10**: 중급 시공자 (시공비 +10%)
-- **레벨 11-15**: 고급 시공자 (시공비 +20%)
-- **레벨 16+**: 마스터 시공자 (시공비 +30%)
-
-## 🔒 보안
-
-- Firebase 보안 규칙을 통한 데이터 접근 제어
-- 사용자 인증 및 권한 관리
-- API 키 보안 유지
-- 정기적인 보안 규칙 검토
-
-## 🤝 기여하기
-
-1. Fork the Project
-2. Create your Feature Branch (`git checkout -b feature/AmazingFeature`)
-3. Commit your Changes (`git commit -m 'Add some AmazingFeature'`)
-4. Push to the Branch (`git push origin feature/AmazingFeature`)
-5. Open a Pull Request
-
-## 📄 라이선스
-
-이 프로젝트는 MIT 라이선스 하에 배포됩니다. 자세한 내용은 `LICENSE` 파일을 참조하세요.
+### 임시 해결책
+- 이미지 없이 회원가입 가능
+- 로컬에 임시 저장하여 사용
+- CORS 설정 완료 후 자동으로 서버 저장 전환
 
 ## 📞 지원
 
-프로젝트에 대한 질문이나 문제가 있으시면 이슈를 생성해 주세요.
+문제가 발생하면 다음을 확인하세요:
+1. [FIREBASE_STORAGE_CORS_SETUP.md](./FIREBASE_STORAGE_CORS_SETUP.md)
+2. [FIREBASE_SETUP.md](./FIREBASE_SETUP.md)
+3. [QUICK_START.md](./QUICK_START.md)
 
----
+## 📄 라이선스
 
-**전문가의 손길** - 신뢰할 수 있는 시공 서비스로 더 나은 고객 경험을 제공합니다.
+이 프로젝트는 MIT 라이선스 하에 배포됩니다.

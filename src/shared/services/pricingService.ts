@@ -19,6 +19,7 @@ export class PricingService {
   private static travelFeeCollectionName = 'systemSettings';
   private static emergencySettingsCollectionName = 'emergencyJobSettings';
   private static optionsCollectionName = 'pricingOptions';
+  private static categoriesCollectionName = 'pricingCategories';
 
   // 모든 품목 가져오기
   static async getAllItems(): Promise<PricingItem[]> {
@@ -455,6 +456,194 @@ export class PricingService {
 
     for (const option of defaultOptions) {
       await this.addOption(option);
+    }
+  }
+
+  // 카테고리 관리 함수들
+  static async getAllCategories(): Promise<string[]> {
+    try {
+      const querySnapshot = await getDocs(collection(db, this.categoriesCollectionName));
+      const categories: string[] = [];
+      
+      querySnapshot.forEach((doc) => {
+        const data = doc.data();
+        if (data.isActive !== false) {
+          categories.push(data.name);
+        }
+      });
+      
+      return categories.sort();
+    } catch (error) {
+      console.error('카테고리 목록 가져오기 실패:', error);
+      // 기본 카테고리 반환
+      return ['기본', '전동', '배터리전동', 'IoT세팅', '높이추가', '콘크리트추가', '석고추가', '철거추가', '폐기추가', '기타시공'];
+    }
+  }
+
+  static async addCategory(name: string): Promise<string> {
+    try {
+      const docRef = await addDoc(collection(db, this.categoriesCollectionName), {
+        name: name.trim(),
+        isActive: true,
+        createdAt: new Date(),
+        updatedAt: new Date()
+      });
+      return docRef.id;
+    } catch (error) {
+      console.error('카테고리 추가 실패:', error);
+      throw error;
+    }
+  }
+
+  static async updateCategory(oldName: string, newName: string): Promise<void> {
+    try {
+      // 카테고리 문서 찾기
+      const q = query(collection(db, this.categoriesCollectionName), where('name', '==', oldName));
+      const querySnapshot = await getDocs(q);
+      
+      if (!querySnapshot.empty) {
+        const docRef = doc(db, this.categoriesCollectionName, querySnapshot.docs[0].id);
+        await updateDoc(docRef, {
+          name: newName.trim(),
+          updatedAt: new Date()
+        });
+      }
+
+      // 해당 카테고리를 사용하는 모든 품목과 옵션 업데이트
+      await this.updateItemsCategory(oldName, newName);
+      await this.updateOptionsCategory(oldName, newName);
+    } catch (error) {
+      console.error('카테고리 수정 실패:', error);
+      throw error;
+    }
+  }
+
+  static async deleteCategory(name: string): Promise<void> {
+    try {
+      // 카테고리 문서 찾기
+      const q = query(collection(db, this.categoriesCollectionName), where('name', '==', name));
+      const querySnapshot = await getDocs(q);
+      
+      if (!querySnapshot.empty) {
+        const docRef = doc(db, this.categoriesCollectionName, querySnapshot.docs[0].id);
+        await updateDoc(docRef, {
+          isActive: false,
+          updatedAt: new Date()
+        });
+      }
+    } catch (error) {
+      console.error('카테고리 삭제 실패:', error);
+      throw error;
+    }
+  }
+
+  private static async updateItemsCategory(oldName: string, newName: string): Promise<void> {
+    try {
+      const q = query(collection(db, this.collectionName), where('category', '==', oldName));
+      const querySnapshot = await getDocs(q);
+      
+      const updatePromises = querySnapshot.docs.map(docRef => 
+        updateDoc(doc(db, this.collectionName, docRef.id), {
+          category: newName,
+          updatedAt: new Date()
+        })
+      );
+      
+      await Promise.all(updatePromises);
+    } catch (error) {
+      console.error('품목 카테고리 업데이트 실패:', error);
+      throw error;
+    }
+  }
+
+  private static async updateOptionsCategory(oldName: string, newName: string): Promise<void> {
+    try {
+      const q = query(collection(db, this.optionsCollectionName), where('category', '==', oldName));
+      const querySnapshot = await getDocs(q);
+      
+      const updatePromises = querySnapshot.docs.map(docRef => 
+        updateDoc(doc(db, this.optionsCollectionName, docRef.id), {
+          category: newName,
+          updatedAt: new Date()
+        })
+      );
+      
+      await Promise.all(updatePromises);
+    } catch (error) {
+      console.error('옵션 카테고리 업데이트 실패:', error);
+      throw error;
+    }
+  }
+
+  static async initializeDefaultCategories(): Promise<void> {
+    const defaultCategories = [
+      '기본', '전동', '배터리전동', 'IoT세팅', '높이추가', '콘크리트추가', '석고추가', '철거추가', '폐기추가', '기타시공'
+    ];
+
+    // 기존 카테고리 목록 가져오기
+    const existingCategories = await this.getAllCategories();
+    
+    for (const categoryName of defaultCategories) {
+      // 이미 존재하는 카테고리는 건너뛰기
+      if (!existingCategories.includes(categoryName)) {
+        try {
+          await this.addCategory(categoryName);
+          console.log(`카테고리 ${categoryName} 추가됨`);
+        } catch (error) {
+          console.error(`카테고리 ${categoryName} 추가 실패:`, error);
+        }
+      } else {
+        console.log(`카테고리 ${categoryName} 이미 존재함 - 건너뜀`);
+      }
+    }
+  }
+
+  // 중복 카테고리 정리 함수
+  static async cleanupDuplicateCategories(): Promise<void> {
+    try {
+      const querySnapshot = await getDocs(collection(db, this.categoriesCollectionName));
+      const categories: { id: string; name: string; isActive: boolean }[] = [];
+      
+      querySnapshot.forEach((doc) => {
+        const data = doc.data();
+        categories.push({
+          id: doc.id,
+          name: data.name,
+          isActive: data.isActive !== false
+        });
+      });
+
+      // 이름별로 그룹화하여 중복 찾기
+      const nameGroups: { [key: string]: { id: string; name: string; isActive: boolean }[] } = {};
+      categories.forEach(category => {
+        if (!nameGroups[category.name]) {
+          nameGroups[category.name] = [];
+        }
+        nameGroups[category.name].push(category);
+      });
+
+      // 중복된 카테고리 중 하나만 남기고 나머지는 비활성화
+      for (const [name, duplicates] of Object.entries(nameGroups)) {
+        if (duplicates.length > 1) {
+          console.log(`중복 카테고리 발견: ${name} (${duplicates.length}개)`);
+          
+          // 활성 상태인 것 중 첫 번째를 유지하고 나머지는 비활성화
+          const activeOnes = duplicates.filter(cat => cat.isActive);
+          const toDeactivate = activeOnes.slice(1); // 첫 번째 이후의 것들
+          
+          for (const category of toDeactivate) {
+            const docRef = doc(db, this.categoriesCollectionName, category.id);
+            await updateDoc(docRef, {
+              isActive: false,
+              updatedAt: new Date()
+            });
+            console.log(`카테고리 ${name} (ID: ${category.id}) 비활성화됨`);
+          }
+        }
+      }
+    } catch (error) {
+      console.error('중복 카테고리 정리 실패:', error);
+      throw error;
     }
   }
 }

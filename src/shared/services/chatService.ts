@@ -14,6 +14,7 @@ import {
 } from 'firebase/firestore';
 import { db } from '../../firebase/config';
 import { ChatMessage, ChatRoom, Customer } from '../../types';
+import { NotificationService } from './notificationService';
 
 export class ChatService {
   // 채팅방 생성 또는 가져오기
@@ -83,6 +84,29 @@ export class ChatService {
         },
         updatedAt: serverTimestamp()
       });
+
+      // 채팅방 참가자들에게 알림 전송 (본인 제외)
+      try {
+        const chatRoomDoc = await getDoc(chatRoomRef);
+        if (chatRoomDoc.exists()) {
+          const chatRoomData = chatRoomDoc.data();
+          const participants = chatRoomData.participants || [];
+          
+          for (const participant of participants) {
+            if (participant.id !== senderId) {
+              await NotificationService.createChatNotification(
+                jobId,
+                senderId,
+                senderName,
+                content,
+                participant.id
+              );
+            }
+          }
+        }
+      } catch (notificationError) {
+        console.warn('채팅 알림 전송 실패:', notificationError);
+      }
     } catch (error) {
       console.error('메시지 전송 실패:', error);
       throw error;

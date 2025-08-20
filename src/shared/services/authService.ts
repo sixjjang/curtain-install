@@ -9,6 +9,8 @@ import { doc, setDoc, getDoc, deleteDoc, collection, query, where, getDocs } fro
 import { ref, uploadBytes, getDownloadURL } from 'firebase/storage';
 import { auth, db, storage } from '../../firebase/config';
 import { User, UserRole, ApprovalStatus } from '../../types';
+import { StorageService } from './storageService';
+import { extractPhoneNumbers } from '../utils/phoneFormatter';
 
 // 임시 사용자 데이터 타입
 interface TempUserData {
@@ -51,6 +53,13 @@ export class AuthService {
     bankAccount?: string,
     bankName?: string,
     accountHolder?: string,
+    // 시공자 사업 정보 (선택사항)
+    businessName?: string,
+    contractorBusinessNumber?: string,
+    contractorBusinessAddress?: string,
+    contractorBusinessType?: string,
+    contractorBusinessCategory?: string,
+    contractorBusinessLicenseImage?: File | null,
     // 판매자 추가 정보
     companyName?: string,
     businessNumber?: string,
@@ -92,9 +101,9 @@ export class AuthService {
           const timestamp = Date.now();
           const fileExtension = file.name.split('.').pop() || 'jpg';
           const safeFileName = `${type}_${timestamp}.${fileExtension}`;
-          const imageRef = ref(storage, `${path}/${user.uid}/${safeFileName}`);
-          await uploadBytes(imageRef, file);
-          const downloadUrl = await getDownloadURL(imageRef);
+          
+          // StorageService의 안전한 업로드 메서드 사용
+          const downloadUrl = await StorageService.uploadImageSafe(file, `${path}/${user.uid}/${safeFileName}`);
           console.log(`✅ ${type} 업로드 완료:`, downloadUrl);
           return downloadUrl;
         } catch (error) {
@@ -124,7 +133,8 @@ export class AuthService {
         id: user.uid,
         email,
         name,
-        phone,
+        phone, // 포맷팅된 전화번호 (표시용)
+        phoneNumbers: extractPhoneNumbers(phone), // 숫자만 저장 (검색용)
         role,
         approvalStatus: 'pending' as ApprovalStatus,
         createdAt: new Date(),
@@ -135,8 +145,20 @@ export class AuthService {
       // 역할별 추가 데이터 설정
       if (role === 'contractor') {
         console.log('🔧 시공자 데이터 구성 중...');
+        // 시공자 사업자등록증 업로드
+        let contractorBusinessLicenseImageUrl = '';
+        if (contractorBusinessLicenseImage) {
+          contractorBusinessLicenseImageUrl = await uploadImage(contractorBusinessLicenseImage, 'contractor-business-licenses', 'contractorLicense');
+        }
+
         const contractorData = {
           ...userData,
+          businessName: businessName || '', // 상호명 (User 레벨에 저장)
+          businessNumber: contractorBusinessNumber || '', // 사업자등록번호 (User 레벨에 저장)
+          businessAddress: contractorBusinessAddress || '', // 사업장주소 (User 레벨에 저장)
+          businessType: contractorBusinessType || '', // 업태 (User 레벨에 저장)
+          businessCategory: contractorBusinessCategory || '', // 종목 (User 레벨에 저장)
+          businessLicenseImage: contractorBusinessLicenseImageUrl, // 사업자등록증 (User 레벨에 저장)
           profileImage: profileImageUrl,
           idCardImage: idCardImageUrl, // 본인 반명함판 사진
           level: 1,
@@ -180,7 +202,8 @@ export class AuthService {
           ...(pickupCompanyName && pickupCompanyName.trim() ? {
             pickupInfo: {
               companyName: pickupCompanyName,
-              phone: (pickupPhone && pickupPhone.trim()) || '',
+              phone: (pickupPhone && pickupPhone.trim()) || '', // 포맷팅된 픽업 전화번호 (표시용)
+              phoneNumbers: pickupPhone ? extractPhoneNumbers(pickupPhone) : '', // 숫자만 저장 (검색용)
               address: (pickupAddress && pickupAddress.trim()) || ''
             }
           } : {})
@@ -559,9 +582,9 @@ export class AuthService {
           const timestamp = Date.now();
           const fileExtension = file.name.split('.').pop() || 'jpg';
           const safeFileName = `${type}_${timestamp}.${fileExtension}`;
-          const imageRef = ref(storage, `${path}/${user.uid}/${safeFileName}`);
-          await uploadBytes(imageRef, file);
-          const downloadUrl = await getDownloadURL(imageRef);
+          
+          // StorageService의 안전한 업로드 메서드 사용
+          const downloadUrl = await StorageService.uploadImageSafe(file, `${path}/${user.uid}/${safeFileName}`);
           console.log(`✅ ${type} 업로드 완료:`, downloadUrl);
           return downloadUrl;
         } catch (error) {

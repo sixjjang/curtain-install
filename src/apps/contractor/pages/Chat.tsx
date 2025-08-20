@@ -5,387 +5,336 @@ import {
   Typography,
   Card,
   CardContent,
-  Grid,
   TextField,
   Button,
   List,
   ListItem,
   ListItemText,
-  ListItemAvatar,
-  Avatar,
-  Divider,
   Paper,
+  Divider,
   Chip,
-  IconButton,
-  Dialog,
-  DialogTitle,
-  DialogContent,
-  DialogActions,
-  FormControl,
-  InputLabel,
-  Select,
-  MenuItem
+  Alert,
+  CircularProgress
 } from '@mui/material';
-import {
-  Send,
-  Person,
-  Business,
-  Home,
-  ArrowBack
-} from '@mui/icons-material';
+import { Send, Chat as ChatIcon } from '@mui/icons-material';
+import { useAuth } from '../../../shared/contexts/AuthContext';
 import { ChatService } from '../../../shared/services/chatService';
 import { JobService } from '../../../shared/services/jobService';
-import { ChatMessage, ChatRoom, ConstructionJob, Customer } from '../../../types';
+import { ConstructionJob } from '../../../types';
 
 const Chat: React.FC = () => {
   const { jobId } = useParams<{ jobId: string }>();
-  const [job, setJob] = useState<ConstructionJob | null>(null);
-  const [customer, setCustomer] = useState<Customer | null>(null);
-  const [messages, setMessages] = useState<ChatMessage[]>([]);
+  const { user } = useAuth();
+  const [jobs, setJobs] = useState<ConstructionJob[]>([]);
+  const [selectedJob, setSelectedJob] = useState<ConstructionJob | null>(null);
+  const [messages, setMessages] = useState<any[]>([]);
   const [newMessage, setNewMessage] = useState('');
-  const [chatRoomId, setChatRoomId] = useState<string>('');
-  const [loading, setLoading] = useState(true);
-  const [chatType, setChatType] = useState<'seller' | 'customer'>('seller');
-  const [showCustomerDialog, setShowCustomerDialog] = useState(false);
-  const [customerInfo, setCustomerInfo] = useState({
-    name: '',
-    phone: '',
-    email: ''
-  });
+  const [loading, setLoading] = useState(false);
+  const [error, setError] = useState('');
 
   useEffect(() => {
-    if (jobId) {
-      loadJobAndChat();
-    }
-  }, [jobId]);
+    loadMyJobs();
+  }, [user]);
 
-  const loadJobAndChat = async () => {
+  useEffect(() => {
+    if (selectedJob) {
+      loadChatMessages(selectedJob.id);
+      subscribeToChat(selectedJob.id);
+    }
+  }, [selectedJob]);
+
+  const loadMyJobs = async () => {
+    if (!user?.id) return;
+    
     try {
       setLoading(true);
+      const allJobs = await JobService.getAllJobs();
+      const myJobs = allJobs.filter(job => 
+        job.contractorId === user.id && 
+        ['assigned', 'product_preparing', 'product_ready', 'pickup_completed', 'in_progress', 'completed'].includes(job.status)
+      );
+      setJobs(myJobs);
       
-      // 작업 정보 가져오기
-      const jobData = await JobService.getJobById(jobId!);
-      setJob(jobData);
-      
-      // 고객 정보 가져오기
-      const customerData = await ChatService.getCustomerByJobId(jobId!);
-      setCustomer(customerData);
-      
-      // 채팅방 생성 또는 가져오기
-      const participants: {
-        id: string;
-        type: 'contractor' | 'seller' | 'customer';
-        name: string;
-      }[] = [
-        {
-          id: jobData.contractorId || 'contractor',
-          type: 'contractor',
-          name: '시공자'
-        },
-        {
-          id: jobData.sellerId,
-          type: 'seller',
-          name: '판매자'
+      // URL 파라미터로 전달된 jobId가 있으면 해당 작업을 자동 선택
+      if (jobId) {
+        const targetJob = myJobs.find(job => job.id === jobId);
+        if (targetJob) {
+          setSelectedJob(targetJob);
         }
-      ];
-      
-      if (customerData) {
-        participants.push({
-          id: customerData.id,
-          type: 'customer',
-          name: customerData.name
-        });
       }
-      
-      const roomId = await ChatService.getOrCreateChatRoom(jobId!, participants);
-      setChatRoomId(roomId);
-      
-      // 메시지 구독
-      const unsubscribe = ChatService.subscribeToMessages(roomId, (messages) => {
-        setMessages(messages);
-      });
-      
-      return unsubscribe;
     } catch (error) {
-      console.error('채팅 로드 실패:', error);
+      console.error('작업 목록 로드 실패:', error);
+      setError('작업 목록을 불러오는데 실패했습니다.');
     } finally {
       setLoading(false);
     }
   };
 
+  const loadChatMessages = async (jobId: string) => {
+    try {
+      const chatMessages = await ChatService.getMessages(jobId);
+      setMessages(chatMessages);
+    } catch (error) {
+      console.error('채팅 메시지 로드 실패:', error);
+      setError('채팅 메시지를 불러오는데 실패했습니다.');
+    }
+  };
+
+  const subscribeToChat = (jobId: string) => {
+    return ChatService.subscribeToMessages(jobId, (newMessages: any[]) => {
+      setMessages(newMessages);
+    });
+  };
+
   const handleSendMessage = async () => {
-    if (!newMessage.trim() || !chatRoomId || !job) return;
-    
+    if (!selectedJob || !newMessage.trim() || !user) return;
+
     try {
       await ChatService.sendMessage(
-        chatRoomId,
-        job.id,
-        job.contractorId || 'contractor',
+        selectedJob.id,
+        selectedJob.id,
+        user.id,
         'contractor',
-        '시공자',
+        user.name || user.email || '시공자',
         newMessage.trim()
       );
       setNewMessage('');
     } catch (error) {
       console.error('메시지 전송 실패:', error);
+      setError('메시지 전송에 실패했습니다.');
     }
   };
 
-  const handleCreateCustomer = async () => {
-    if (!jobId || !customerInfo.name || !customerInfo.phone) return;
-    
-    try {
-      const customerId = await ChatService.createCustomerForChat(
-        customerInfo.name,
-        customerInfo.phone,
-        customerInfo.email,
-        jobId
-      );
-      
-      // 고객 정보 새로고침
-      const customerData = await ChatService.getCustomer(customerId);
-      setCustomer(customerData);
-      
-      // 채팅방 새로고침
-      await loadJobAndChat();
-      
-      setShowCustomerDialog(false);
-      setCustomerInfo({ name: '', phone: '', email: '' });
-    } catch (error) {
-      console.error('고객 생성 실패:', error);
+  const handleKeyPress = (event: React.KeyboardEvent) => {
+    if (event.key === 'Enter' && !event.shiftKey) {
+      event.preventDefault();
+      handleSendMessage();
     }
   };
 
   const formatTime = (date: Date) => {
-    return date.toLocaleTimeString('ko-KR', {
+    return new Date(date).toLocaleTimeString('ko-KR', {
       hour: '2-digit',
       minute: '2-digit'
     });
   };
 
-  const getSenderIcon = (senderType: string) => {
-    switch (senderType) {
-      case 'contractor':
-        return <Person />;
-      case 'seller':
-        return <Business />;
-      case 'customer':
-        return <Home />;
-      default:
-        return <Person />;
+  const getStatusText = (status: string) => {
+    switch (status) {
+      case 'pending': return '대기중';
+      case 'assigned': return '배정됨';
+      case 'product_preparing': return '자재준비';
+      case 'product_ready': return '자재완료';
+      case 'pickup_completed': return '픽업완료';
+      case 'in_progress': return '시공중';
+      case 'completed': return '완료';
+      default: return '알 수 없음';
     }
   };
 
-  const getSenderColor = (senderType: string) => {
-    switch (senderType) {
-      case 'contractor':
-        return 'primary';
-      case 'seller':
-        return 'secondary';
-      case 'customer':
-        return 'success';
-      default:
-        return 'default';
+  const getStatusColor = (status: string) => {
+    switch (status) {
+      case 'pending': return 'default';
+      case 'assigned': return 'primary';
+      case 'product_preparing': return 'warning';
+      case 'product_ready': return 'info';
+      case 'pickup_completed': return 'secondary';
+      case 'in_progress': return 'success';
+      case 'completed': return 'success';
+      default: return 'default';
     }
   };
 
   if (loading) {
     return (
-      <Box>
-        <Typography>로딩 중...</Typography>
-      </Box>
-    );
-  }
-
-  if (!job) {
-    return (
-      <Box>
-        <Typography>작업을 찾을 수 없습니다.</Typography>
+      <Box display="flex" justifyContent="center" py={4}>
+        <CircularProgress />
       </Box>
     );
   }
 
   return (
     <Box>
-      {/* 헤더 */}
-      <Card sx={{ mb: 3 }}>
-        <CardContent>
-          <Box display="flex" alignItems="center" gap={2}>
-            <IconButton onClick={() => window.history.back()}>
-              <ArrowBack />
-            </IconButton>
-            <Box>
-              <Typography variant="h6">{job.title}</Typography>
-              <Typography variant="body2" color="textSecondary">
-                {job.address}
-              </Typography>
-            </Box>
-          </Box>
-          
-          <Box display="flex" gap={1} mt={2}>
-            <Chip
-              label="판매자와 채팅"
-              color={chatType === 'seller' ? 'primary' : 'default'}
-              onClick={() => setChatType('seller')}
-              icon={<Business />}
-            />
-            <Chip
-              label="고객과 채팅"
-              color={chatType === 'customer' ? 'primary' : 'default'}
-              onClick={() => setChatType('customer')}
-              icon={<Home />}
-            />
-            {!customer && (
-              <Button
-                variant="outlined"
-                size="small"
-                onClick={() => setShowCustomerDialog(true)}
-              >
-                고객 정보 등록
-              </Button>
-            )}
-          </Box>
-        </CardContent>
-      </Card>
+      <Typography variant="h4" gutterBottom sx={{ display: 'flex', alignItems: 'center', gap: 1 }}>
+        <ChatIcon />
+        판매자와 채팅
+      </Typography>
 
-      {/* 채팅 영역 */}
-      <Paper sx={{ height: 500, display: 'flex', flexDirection: 'column' }}>
-        {/* 메시지 목록 */}
-        <Box sx={{ flexGrow: 1, overflow: 'auto', p: 2 }}>
-          {messages.length === 0 ? (
-            <Box textAlign="center" py={4}>
-              <Typography color="textSecondary">
-                아직 메시지가 없습니다. 첫 메시지를 보내보세요!
-              </Typography>
-            </Box>
-          ) : (
-            <List>
-              {messages.map((message, index) => (
-                <ListItem
-                  key={message.id}
-                  sx={{
-                    flexDirection: 'column',
-                    alignItems: message.senderType === 'contractor' ? 'flex-end' : 'flex-start',
-                    px: 0
-                  }}
-                >
-                  <Box
-                    sx={{
-                      display: 'flex',
-                      alignItems: 'center',
-                      gap: 1,
-                      mb: 0.5
-                    }}
-                  >
-                    <Avatar
-                      sx={{
-                        width: 24,
-                        height: 24,
-                        bgcolor: `${getSenderColor(message.senderType)}.main`
-                      }}
-                    >
-                      {getSenderIcon(message.senderType)}
-                    </Avatar>
-                    <Typography variant="caption" color="textSecondary">
-                      {message.senderName}
-                    </Typography>
-                    <Typography variant="caption" color="textSecondary">
-                      {formatTime(message.timestamp)}
-                    </Typography>
-                  </Box>
-                  <Paper
-                    sx={{
-                      p: 1.5,
-                      maxWidth: '70%',
-                      bgcolor: message.senderType === 'contractor' ? 'primary.main' : 'grey.100',
-                      color: message.senderType === 'contractor' ? 'white' : 'text.primary'
-                    }}
-                  >
-                    <Typography variant="body2">
-                      {message.content}
-                    </Typography>
-                  </Paper>
+      {error && (
+        <Alert severity="error" sx={{ mb: 2 }}>
+          {error}
+        </Alert>
+      )}
+
+      <Box display="flex" gap={2} sx={{ height: 'calc(100vh - 200px)' }}>
+        {/* 작업 목록 */}
+        <Card sx={{ width: 300, flexShrink: 0 }}>
+          <CardContent>
+            <Typography variant="h6" gutterBottom>
+              내 시공 작업
+            </Typography>
+            <List sx={{ maxHeight: 'calc(100vh - 300px)', overflow: 'auto' }}>
+              {jobs.length === 0 ? (
+                <ListItem>
+                  <ListItemText 
+                    primary="배정된 작업이 없습니다." 
+                    secondary="판매자로부터 작업을 배정받으면 채팅할 수 있습니다."
+                  />
                 </ListItem>
-              ))}
+              ) : (
+                jobs.map((job) => (
+                  <ListItem 
+                    key={job.id}
+                    button
+                    selected={selectedJob?.id === job.id}
+                    onClick={() => setSelectedJob(job)}
+                    sx={{ mb: 1, borderRadius: 1 }}
+                  >
+                    <ListItemText
+                      primary={
+                        <Box display="flex" justifyContent="space-between" alignItems="center">
+                          <Typography variant="subtitle2" noWrap>
+                            {job.title}
+                          </Typography>
+                          <Chip 
+                            label={getStatusText(job.status)} 
+                            color={getStatusColor(job.status)} 
+                            size="small"
+                          />
+                        </Box>
+                      }
+                      secondary={
+                        <Box>
+                          <Typography variant="body2" color="textSecondary" noWrap>
+                            {job.address}
+                          </Typography>
+                          <Typography variant="caption" color="textSecondary">
+                            예산: {job.budget?.min?.toLocaleString()}~{job.budget?.max?.toLocaleString()}원
+                          </Typography>
+                        </Box>
+                      }
+                    />
+                  </ListItem>
+                ))
+              )}
             </List>
-          )}
-        </Box>
-        
-        <Divider />
-        
-        {/* 메시지 입력 */}
-        <Box sx={{ p: 2 }}>
-          <Grid container spacing={1}>
-            <Grid item xs>
-              <TextField
-                fullWidth
-                placeholder="메시지를 입력하세요..."
-                value={newMessage}
-                onChange={(e) => setNewMessage(e.target.value)}
-                onKeyPress={(e) => {
-                  if (e.key === 'Enter' && !e.shiftKey) {
-                    e.preventDefault();
-                    handleSendMessage();
-                  }
-                }}
-                multiline
-                maxRows={3}
-              />
-            </Grid>
-            <Grid item>
-              <Button
-                variant="contained"
-                onClick={handleSendMessage}
-                disabled={!newMessage.trim()}
-                startIcon={<Send />}
-              >
-                전송
-              </Button>
-            </Grid>
-          </Grid>
-        </Box>
-      </Paper>
+          </CardContent>
+        </Card>
 
-      {/* 고객 정보 등록 다이얼로그 */}
-      <Dialog open={showCustomerDialog} onClose={() => setShowCustomerDialog(false)}>
-        <DialogTitle>고객 정보 등록</DialogTitle>
-        <DialogContent>
-          <Box sx={{ pt: 1 }}>
-            <TextField
-              fullWidth
-              label="고객 이름"
-              value={customerInfo.name}
-              onChange={(e) => setCustomerInfo(prev => ({ ...prev, name: e.target.value }))}
-              sx={{ mb: 2 }}
-            />
-            <TextField
-              fullWidth
-              label="전화번호"
-              value={customerInfo.phone}
-              onChange={(e) => setCustomerInfo(prev => ({ ...prev, phone: e.target.value }))}
-              sx={{ mb: 2 }}
-            />
-            <TextField
-              fullWidth
-              label="이메일 (선택사항)"
-              value={customerInfo.email}
-              onChange={(e) => setCustomerInfo(prev => ({ ...prev, email: e.target.value }))}
-            />
-          </Box>
-        </DialogContent>
-        <DialogActions>
-          <Button onClick={() => setShowCustomerDialog(false)}>
-            취소
-          </Button>
-          <Button
-            onClick={handleCreateCustomer}
-            disabled={!customerInfo.name || !customerInfo.phone}
-            variant="contained"
-          >
-            등록
-          </Button>
-        </DialogActions>
-      </Dialog>
+        {/* 채팅 영역 */}
+        <Card sx={{ flexGrow: 1, display: 'flex', flexDirection: 'column' }}>
+          <CardContent sx={{ flexGrow: 1, display: 'flex', flexDirection: 'column', p: 0 }}>
+            {selectedJob ? (
+              <>
+                {/* 채팅 헤더 */}
+                <Box sx={{ p: 2, borderBottom: 1, borderColor: 'divider' }}>
+                  <Typography variant="h6">
+                    {selectedJob.title}
+                  </Typography>
+                  <Typography variant="body2" color="textSecondary">
+                    {selectedJob.address}
+                  </Typography>
+                  <Chip 
+                    label={getStatusText(selectedJob.status)} 
+                    color={getStatusColor(selectedJob.status)} 
+                    size="small"
+                    sx={{ mt: 1 }}
+                  />
+                </Box>
+
+                {/* 메시지 목록 */}
+                <Box sx={{ flexGrow: 1, p: 2, overflow: 'auto', maxHeight: 'calc(100vh - 400px)' }}>
+                  {messages.length === 0 ? (
+                    <Box textAlign="center" py={4}>
+                      <Typography color="textSecondary">
+                        아직 메시지가 없습니다.
+                      </Typography>
+                      <Typography variant="body2" color="textSecondary">
+                        판매자와 첫 메시지를 시작해보세요!
+                      </Typography>
+                    </Box>
+                  ) : (
+                    messages.map((message, index) => (
+                      <Box
+                        key={message.id || index}
+                        sx={{
+                          display: 'flex',
+                          justifyContent: message.senderId === user?.id ? 'flex-end' : 'flex-start',
+                          mb: 2
+                        }}
+                      >
+                        <Paper
+                          sx={{
+                            p: 1.5,
+                            maxWidth: '70%',
+                            backgroundColor: message.senderId === user?.id ? 'primary.main' : 'grey.100',
+                            color: message.senderId === user?.id ? 'white' : 'text.primary'
+                          }}
+                        >
+                          <Typography variant="body2" sx={{ wordBreak: 'break-word' }}>
+                            {message.content}
+                          </Typography>
+                          <Typography 
+                            variant="caption" 
+                            sx={{ 
+                              display: 'block', 
+                              mt: 0.5,
+                              opacity: 0.7
+                            }}
+                          >
+                            {formatTime(message.createdAt)}
+                          </Typography>
+                        </Paper>
+                      </Box>
+                    ))
+                  )}
+                </Box>
+
+                {/* 메시지 입력 */}
+                <Box sx={{ p: 2, borderTop: 1, borderColor: 'divider' }}>
+                  <Box display="flex" gap={1}>
+                    <TextField
+                      fullWidth
+                      multiline
+                      maxRows={3}
+                      placeholder="판매자에게 메시지를 보내세요..."
+                      value={newMessage}
+                      onChange={(e) => setNewMessage(e.target.value)}
+                      onKeyPress={handleKeyPress}
+                      size="small"
+                    />
+                    <Button
+                      variant="contained"
+                      onClick={handleSendMessage}
+                      disabled={!newMessage.trim()}
+                      sx={{ minWidth: 'auto', px: 2 }}
+                    >
+                      <Send />
+                    </Button>
+                  </Box>
+                </Box>
+              </>
+            ) : (
+              <Box 
+                display="flex" 
+                alignItems="center" 
+                justifyContent="center" 
+                sx={{ height: '100%' }}
+              >
+                <Box textAlign="center">
+                  <ChatIcon sx={{ fontSize: 64, color: 'text.secondary', mb: 2 }} />
+                  <Typography variant="h6" color="textSecondary" gutterBottom>
+                    채팅할 작업을 선택하세요
+                  </Typography>
+                  <Typography variant="body2" color="textSecondary">
+                    왼쪽에서 판매자와 채팅할 작업을 선택하세요.
+                  </Typography>
+                </Box>
+              </Box>
+            )}
+          </CardContent>
+        </Card>
+      </Box>
     </Box>
   );
 };

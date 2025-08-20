@@ -46,7 +46,12 @@ import {
   Info,
   CheckCircleOutline,
   PlayArrow,
-  Stop
+  Stop,
+  AttachFile,
+  FileDownload,
+  PictureAsPdf,
+  Image,
+  Description as DescriptionIcon
 } from '@mui/icons-material';
 import { JobService } from '../../../shared/services/jobService';
 import { CustomerService, CustomerInfo } from '../../../shared/services/customerService';
@@ -78,6 +83,40 @@ const JobDetail: React.FC = () => {
     severity: 'success'
   });
 
+  // 파일 크기 포맷팅
+  const formatFileSize = (bytes: number) => {
+    if (bytes === 0) return '0 Bytes';
+    const k = 1024;
+    const sizes = ['Bytes', 'KB', 'MB', 'GB'];
+    const i = Math.floor(Math.log(bytes) / Math.log(k));
+    return parseFloat((bytes / Math.pow(k, i)).toFixed(2)) + ' ' + sizes[i];
+  };
+
+  // 파일 타입에 따른 아이콘 반환
+  const getFileIcon = (fileType: string) => {
+    switch (fileType) {
+      case 'image':
+        return <Image color="primary" />;
+      case 'pdf':
+        return <PictureAsPdf color="error" />;
+      case 'document':
+        return <DescriptionIcon color="info" />;
+      default:
+        return <AttachFile color="action" />;
+    }
+  };
+
+  // 파일 다운로드 처리
+  const handleFileDownload = (fileUrl: string, fileName: string) => {
+    const link = document.createElement('a');
+    link.href = fileUrl;
+    link.download = fileName;
+    link.target = '_blank';
+    document.body.appendChild(link);
+    link.click();
+    document.body.removeChild(link);
+  };
+
   useEffect(() => {
     const fetchJobAndCustomer = async () => {
       if (!jobId) return;
@@ -92,13 +131,14 @@ const JobDetail: React.FC = () => {
         
         // 고객 정보 가져오기
         try {
-          const customerData = await CustomerService.getCustomerInfo(jobData.customerId);
-          if (customerData) {
-            setCustomerInfo(customerData);
+          if (jobData.customerId) {
+            const customerData = await CustomerService.getCustomerInfo(jobData.customerId);
+            if (customerData) {
+              setCustomerInfo(customerData);
+            }
           }
-        } catch (customerError) {
-          console.warn('고객 정보 가져오기 실패:', customerError);
-          // 고객 정보가 없어도 작업은 계속 진행
+        } catch (error) {
+          console.error('고객 정보 가져오기 실패:', error);
         }
       } catch (error) {
         console.error('작업 상세 정보 가져오기 실패:', error);
@@ -182,19 +222,22 @@ const JobDetail: React.FC = () => {
         // 만족도 조사 생성
         const surveyId = await SatisfactionService.createSurvey(
           job!.id, 
-          job!.customerId, 
+          job!.customerId || '', 
           'current-contractor-id' // 실제로는 현재 로그인한 시공자 ID
         );
         
         // 고객 정보 조회
-        const customerInfo = await CustomerService.getCustomerInfo(job!.customerId);
-        if (customerInfo && customerInfo.phone) {
-          // 카카오톡으로 만족도 조사 링크 발송
-          await SatisfactionService.sendSurveyLink(
-            customerInfo.phone, 
-            surveyId, 
-            customerInfo.name || '고객님'
-          );
+        if (job!.customerId) {
+          const customerInfo = await CustomerService.getCustomerInfo(job!.customerId);
+          if (customerInfo && customerInfo.phone) {
+            // 카카오톡으로 만족도 조사 링크 발송
+            await SatisfactionService.sendSurveyLink(
+              customerInfo.phone,
+              surveyId,
+              customerInfo.name || '고객님'
+            );
+            alert('고객에게 만족도 조사 링크를 전송했습니다.');
+          }
         }
       } catch (surveyError) {
         console.warn('만족도 조사 생성 실패:', surveyError);
@@ -769,6 +812,54 @@ const JobDetail: React.FC = () => {
                 </>
               )}
 
+              {job.workInstructions && job.workInstructions.length > 0 && (
+                <>
+                  <Typography variant="h6" gutterBottom>
+                    작업지시서 파일
+                  </Typography>
+                  <Box sx={{ mb: 2 }}>
+                    {job.workInstructions.map((file, index) => (
+                      <Box
+                        key={index}
+                        sx={{
+                          display: 'flex',
+                          alignItems: 'center',
+                          justifyContent: 'space-between',
+                          p: 2,
+                          mb: 1,
+                          border: '1px solid #e0e0e0',
+                          borderRadius: 1,
+                          backgroundColor: 'white',
+                          '&:hover': {
+                            backgroundColor: '#f5f5f5'
+                          }
+                        }}
+                      >
+                        <Box sx={{ display: 'flex', alignItems: 'center', flex: 1 }}>
+                          {getFileIcon(file.fileType)}
+                          <Box sx={{ ml: 2 }}>
+                            <Typography variant="body2" fontWeight="medium">
+                              {file.fileName}
+                            </Typography>
+                            <Typography variant="caption" color="textSecondary">
+                              {formatFileSize(file.fileSize)} • {file.fileType}
+                            </Typography>
+                          </Box>
+                        </Box>
+                        <Button
+                          variant="outlined"
+                          size="small"
+                          startIcon={<FileDownload />}
+                          onClick={() => handleFileDownload(file.fileUrl, file.fileName)}
+                        >
+                          다운로드
+                        </Button>
+                      </Box>
+                    ))}
+                  </Box>
+                </>
+              )}
+
               {job.requirements && job.requirements.length > 0 && (
                 <>
                   <Typography variant="h6" gutterBottom>
@@ -1136,9 +1227,16 @@ const JobDetail: React.FC = () => {
                   <Typography variant="body2" color="textSecondary">
                     고객 정보를 불러올 수 없습니다.
                   </Typography>
-                  <Typography variant="body2" color="textSecondary">
-                    고객 ID: {job?.customerId}
-                  </Typography>
+                  {customerInfo && (
+                    <Box>
+                      <Typography variant="h6" gutterBottom>
+                        고객 정보
+                      </Typography>
+                      <Typography variant="body2" color="textSecondary">
+                        고객 ID: {job?.customerId || '정보 없음'}
+                      </Typography>
+                    </Box>
+                  )}
                 </Box>
               )}
             </CardContent>

@@ -98,7 +98,7 @@ export class AnalyticsService {
     
     // 총 수익 계산
     const totalRevenue = completedJobs.reduce((sum, job) => {
-      return sum + job.items.reduce((itemSum, item) => itemSum + item.totalPrice, 0);
+      return sum + (job.items?.reduce((itemSum, item) => itemSum + item.totalPrice, 0) || 0);
     }, 0);
     
     // 평균 수익
@@ -126,7 +126,7 @@ export class AnalyticsService {
     for (const job of jobs) {
       if (job.contractorId) {
         const existing = contractorMap.get(job.contractorId) || { jobs: 0, revenue: 0, totalTime: 0, ratings: [] };
-        const jobRevenue = job.items.reduce((sum, item) => sum + item.totalPrice, 0);
+        const jobRevenue = job.items?.reduce((sum, item) => sum + item.totalPrice, 0) || 0;
         
         existing.jobs += 1;
         existing.revenue += jobRevenue;
@@ -211,7 +211,7 @@ export class AnalyticsService {
     for (const job of jobs) {
       const district = this.extractDistrict(job.address);
       const existing = locationMap.get(district) || { jobs: 0, revenue: 0 };
-      const jobRevenue = job.items.reduce((sum, item) => sum + item.totalPrice, 0);
+      const jobRevenue = job.items?.reduce((sum, item) => sum + item.totalPrice, 0) || 0;
       
       existing.jobs += 1;
       existing.revenue += jobRevenue;
@@ -241,7 +241,7 @@ export class AnalyticsService {
     
     for (const job of jobs) {
       const existing = sellerMap.get(job.sellerId) || { jobs: 0, revenue: 0 };
-      const jobRevenue = job.items.reduce((sum, item) => sum + item.totalPrice, 0);
+      const jobRevenue = job.items?.reduce((sum, item) => sum + item.totalPrice, 0) || 0;
       
       existing.jobs += 1;
       existing.revenue += jobRevenue;
@@ -329,7 +329,7 @@ export class AnalyticsService {
     
     for (const job of jobs) {
       const month = job.completedDate?.toISOString().slice(0, 7) || job.updatedAt.toISOString().slice(0, 7);
-      const revenue = job.items.reduce((sum, item) => sum + item.totalPrice, 0);
+      const revenue = job.items?.reduce((sum, item) => sum + item.totalPrice, 0) || 0;
       monthlyMap.set(month, (monthlyMap.get(month) || 0) + revenue);
     }
     
@@ -343,7 +343,7 @@ export class AnalyticsService {
     const statusMap = new Map<string, number>();
     
     for (const job of jobs) {
-      const revenue = job.items.reduce((sum, item) => sum + item.totalPrice, 0);
+      const revenue = job.items?.reduce((sum, item) => sum + item.totalPrice, 0) || 0;
       statusMap.set(job.status, (statusMap.get(job.status) || 0) + revenue);
     }
     

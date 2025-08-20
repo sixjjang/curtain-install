@@ -37,13 +37,17 @@ import {
   PlayArrow,
   Assignment,
   Star,
-  Engineering
+  Engineering,
+  Chat
 } from '@mui/icons-material';
 import { useAuth } from '../../../shared/contexts/AuthContext';
 import { JobService } from '../../../shared/services/jobService';
 import { CustomerService } from '../../../shared/services/customerService';
 import { ConstructionJob } from '../../../types';
 import CreateJobDialog from '../components/CreateJobDialog';
+import { useNavigate } from 'react-router-dom';
+import { NotificationService } from '../../../shared/services/notificationService';
+import { PointService } from '../../../shared/services/pointService';
 
 interface TabPanelProps {
   children?: React.ReactNode;
@@ -73,6 +77,7 @@ function TabPanel(props: TabPanelProps) {
 
 const JobManagement: React.FC = () => {
   const { user } = useAuth();
+  const navigate = useNavigate();
   const [createDialogOpen, setCreateDialogOpen] = useState(false);
   const [detailDialogOpen, setDetailDialogOpen] = useState(false);
   const [selectedJob, setSelectedJob] = useState<ConstructionJob | null>(null);
@@ -88,15 +93,55 @@ const JobManagement: React.FC = () => {
   const [selectedDate, setSelectedDate] = useState<Date | null>(null);
   const [selectedJobs, setSelectedJobs] = useState<ConstructionJob[]>([]);
   const [calendarDialogOpen, setCalendarDialogOpen] = useState(false);
+  const [chatNotifications, setChatNotifications] = useState<{[jobId: string]: number}>({});
+  const [pointBalance, setPointBalance] = useState(0);
+
+  // 포인트 잔액 가져오기
+  const fetchPointBalance = async () => {
+    if (user?.id) {
+      try {
+        const balance = await PointService.getPointBalance(user.id, 'seller');
+        setPointBalance(balance);
+      } catch (error) {
+        console.error('포인트 잔액 조회 실패:', error);
+      }
+    }
+  };
 
   // 작업 목록 가져오기
   const fetchJobs = async () => {
     try {
       setLoading(true);
       setError('');
-      const allJobs = await JobService.getAllJobs();
-      // 현재 로그인한 판매자의 작업만 필터링
-      const sellerJobs = allJobs.filter(job => job.sellerId === user?.id);
+      
+      if (!user?.id) {
+        console.warn('사용자 ID가 없습니다.');
+        setJobs([]);
+        return;
+      }
+      
+      // 현재 로그인한 판매자의 작업만 가져오기
+      const sellerJobs = await JobService.getJobsBySeller(user.id);
+      
+      // 각 작업별 채팅 알림 개수 가져오기
+      try {
+        const notifications = await NotificationService.getNotifications(user.id);
+        const chatNotifMap: {[jobId: string]: number} = {};
+        
+        notifications.forEach(notification => {
+          if (notification.type === 'info' && notification.actionUrl?.includes('/chat/')) {
+            const jobId = notification.actionUrl.split('/chat/')[1];
+            if (jobId && !notification.isRead) {
+              chatNotifMap[jobId] = (chatNotifMap[jobId] || 0) + 1;
+            }
+          }
+        });
+        
+        setChatNotifications(chatNotifMap);
+      } catch (notificationError) {
+        console.warn('알림 정보 가져오기 실패:', notificationError);
+        setChatNotifications({});
+      }
       
       // 디버깅: 대기중인 작업들의 scheduledDate 확인
       const pendingJobs = sellerJobs.filter(job => job.status === 'pending');
@@ -129,8 +174,31 @@ const JobManagement: React.FC = () => {
   useEffect(() => {
     if (user) {
       fetchJobs();
+      fetchPointBalance();
     }
   }, [user]);
+
+  // 실시간 알림 구독
+  useEffect(() => {
+    if (user?.id) {
+      const unsubscribe = NotificationService.subscribeToNotifications(user.id, (notifications) => {
+        const chatNotifMap: {[jobId: string]: number} = {};
+        
+        notifications.forEach(notification => {
+          if (notification.type === 'info' && notification.actionUrl?.includes('/chat/')) {
+            const jobId = notification.actionUrl.split('/chat/')[1];
+            if (jobId && !notification.isRead) {
+              chatNotifMap[jobId] = (chatNotifMap[jobId] || 0) + 1;
+            }
+          }
+        });
+        
+        setChatNotifications(chatNotifMap);
+      });
+      
+      return unsubscribe;
+    }
+  }, [user?.id]);
 
   const handleJobCreated = () => {
     // 작업 생성 후 목록 새로고침
@@ -343,16 +411,21 @@ const JobManagement: React.FC = () => {
   return (
     <Box>
       <Box display="flex" justifyContent="space-between" alignItems="center" mb={3}>
-        <Typography variant="h4">
-          시공 작업 관리
-        </Typography>
-                 <Button 
-           variant="contained" 
-           startIcon={<Add />}
-           onClick={() => setCreateDialogOpen(true)}
-         >
-           시공의뢰
-         </Button>
+        <Box>
+          <Typography variant="h4">
+            시공 작업 관리
+          </Typography>
+          <Typography variant="body2" color="textSecondary" sx={{ mt: 1 }}>
+            현재 포인트 잔액: <strong>{pointBalance.toLocaleString()}포인트</strong>
+          </Typography>
+        </Box>
+        <Button 
+          variant="contained" 
+          startIcon={<Add />}
+          onClick={() => setCreateDialogOpen(true)}
+        >
+          시공의뢰
+        </Button>
       </Box>
 
       {error && (
@@ -396,7 +469,22 @@ const JobManagement: React.FC = () => {
                            <Typography variant="h6" sx={{ flex: 1, mr: 2 }}>
                              {job.title}
                            </Typography>
-                           <Box display="flex" gap={1}>
+                           <Box display="flex" gap={1} alignItems="center">
+                             {chatNotifications[job.id] > 0 && (
+                               <Chip 
+                                 label={`💬 ${chatNotifications[job.id]}`}
+                                 color="error"
+                                 size="small"
+                                 sx={{ 
+                                   animation: 'pulse 1.5s infinite',
+                                   '@keyframes pulse': {
+                                     '0%': { transform: 'scale(1)' },
+                                     '50%': { transform: 'scale(1.05)' },
+                                     '100%': { transform: 'scale(1)' }
+                                   }
+                                 }}
+                               />
+                             )}
                              <Chip 
                                label={getStatusText(job.status)} 
                                color={getStatusColor(job.status)} 
@@ -431,7 +519,7 @@ const JobManagement: React.FC = () => {
                         <Box display="flex" alignItems="center" gap={1} mb={2}>
                           <AttachMoney fontSize="small" color="action" />
                           <Typography variant="body2" color="textSecondary">
-                            {job.finalAmount ? `${job.finalAmount.toLocaleString()}원` : `${job.budget.min.toLocaleString()}원 ~ ${job.budget.max.toLocaleString()}원`}
+                            {job.finalAmount ? `${job.finalAmount.toLocaleString()}원` : `${job.budget?.min?.toLocaleString() || 0}원 ~ ${job.budget?.max?.toLocaleString() || 0}원`}
                           </Typography>
                         </Box>
 
@@ -544,13 +632,59 @@ const JobManagement: React.FC = () => {
                           </Box>
                         )}
 
-                        <Button 
-                          variant="outlined" 
-                          size="small"
-                          onClick={() => handleDetailClick(job)}
-                        >
-                          상세보기
-                        </Button>
+                        <Box display="flex" gap={1}>
+                          {job.contractorId && (
+                            <Button
+                              variant="contained"
+                              color="primary"
+                              size="small"
+                              startIcon={<Chat />}
+                              onClick={async () => {
+                                // 해당 작업의 채팅 알림을 읽음 처리
+                                if (chatNotifications[job.id] > 0) {
+                                  try {
+                                    const notifications = await NotificationService.getNotifications(user!.id);
+                                    const chatNotificationsForJob = notifications.filter(
+                                      notification => 
+                                        notification.type === 'info' && 
+                                        notification.actionUrl?.includes(`/chat/${job.id}`) &&
+                                        !notification.isRead
+                                    );
+                                    
+                                    await Promise.all(
+                                      chatNotificationsForJob.map(notification => 
+                                        NotificationService.markAsRead(notification.id)
+                                      )
+                                    );
+                                  } catch (error) {
+                                    console.error('채팅 알림 읽음 처리 실패:', error);
+                                  }
+                                }
+                                navigate(`/seller/chat/${job.id}`);
+                              }}
+                              sx={{
+                                ...(chatNotifications[job.id] > 0 && {
+                                  animation: 'pulse 1.5s infinite',
+                                  '@keyframes pulse': {
+                                    '0%': { transform: 'scale(1)' },
+                                    '50%': { transform: 'scale(1.05)' },
+                                    '100%': { transform: 'scale(1)' }
+                                  }
+                                })
+                              }}
+                            >
+                              채팅
+                              {chatNotifications[job.id] > 0 && ` (${chatNotifications[job.id]})`}
+                            </Button>
+                          )}
+                          <Button 
+                            variant="outlined" 
+                            size="small"
+                            onClick={() => handleDetailClick(job)}
+                          >
+                            상세보기
+                          </Button>
+                        </Box>
                       </CardContent>
                     </Card>
                   </Grid>
@@ -824,7 +958,7 @@ const JobManagement: React.FC = () => {
                     </Typography>
                   </Box>
                   <Typography variant="body1" sx={{ ml: 3 }}>
-                    {selectedJob.budget.min.toLocaleString()}원 ~ {selectedJob.budget.max.toLocaleString()}원
+                    {selectedJob.budget?.min?.toLocaleString() || 0}원 ~ {selectedJob.budget?.max?.toLocaleString() || 0}원
                   </Typography>
                 </Grid>
 
@@ -1103,6 +1237,19 @@ const JobManagement: React.FC = () => {
               </Grid>
             </DialogContent>
             <DialogActions>
+              {selectedJob && selectedJob.contractorId && (
+                <Button
+                  variant="contained"
+                  color="primary"
+                  startIcon={<Chat />}
+                  onClick={() => {
+                    handleDetailClose();
+                    navigate(`/seller/chat/${selectedJob.id}`);
+                  }}
+                >
+                  채팅하기
+                </Button>
+              )}
               <Button onClick={handleDetailClose}>
                 닫기
               </Button>

@@ -7,6 +7,7 @@ export interface User {
   email: string;
   name: string;
   phone: string;
+  phoneNumbers?: string; // 숫자만 추출된 전화번호 (검색용)
   role: UserRole;
   approvalStatus: ApprovalStatus;
   approvalDate?: Date;
@@ -20,12 +21,22 @@ export interface User {
   contractor?: ContractorInfo;
   seller?: SellerInfo;
   warningMessage?: string; // 승인 대기 중 경고 메시지
+  // 판매자 정보 (직접 저장)
+  companyName?: string; // 판매자 상호명
+  // 시공자 사업 정보 (직접 저장)
+  businessName?: string; // 상호명
+  businessNumber?: string; // 사업자등록번호
+  businessAddress?: string; // 사업장주소
+  businessType?: string; // 업태
+  businessCategory?: string; // 종목
+  businessLicenseImage?: string; // 사업자등록증 이미지 URL
 }
 
 // 판매자 픽업 정보 타입
 export interface SellerPickupInfo {
   companyName: string;
   phone: string;
+  phoneNumbers?: string; // 숫자만 추출된 픽업 전화번호 (검색용)
   address: string;
 }
 
@@ -52,6 +63,12 @@ export interface ContractorInfo {
   name: string;
   phone: string;
   email: string;
+  businessName?: string; // 상호명
+  businessNumber?: string; // 사업자등록번호
+  businessAddress?: string; // 사업장주소
+  businessType?: string; // 업태
+  businessCategory?: string; // 종목
+  businessLicenseImage?: string; // 사업자등록증 이미지 URL
   location?: {
     address: string;
     coordinates?: {
@@ -94,6 +111,104 @@ export interface JobItem {
   optionPrices?: number; // 옵션 가격 합계
 }
 
+// 포인트 거래 타입
+export interface PointTransaction {
+  id: string;
+  userId: string;
+  userRole: 'seller' | 'contractor';
+  type: 'charge' | 'withdraw' | 'escrow' | 'release' | 'refund' | 'payment';
+  amount: number;
+  balance: number; // 거래 후 잔액
+  description: string;
+  jobId?: string; // 관련 작업 ID
+  relatedJobId?: string; // 관련 작업 ID (별칭)
+  status: 'pending' | 'completed' | 'failed' | 'cancelled';
+  createdAt: Date;
+  completedAt?: Date;
+  adminId?: string; // 관리자 승인 ID
+  notes?: string;
+}
+
+// 포인트 에스크로 타입
+export interface PointEscrow {
+  id: string;
+  jobId: string;
+  sellerId: string;
+  contractorId?: string;
+  amount: number;
+  status: 'pending' | 'released' | 'refunded' | 'disputed';
+  createdAt: Date;
+  releasedAt?: Date;
+  refundedAt?: Date;
+  disputeDeadline: Date; // 자동 지급 시간
+  notes?: string;
+}
+
+// 시스템 설정 타입
+// 작업 취소 기록 타입
+export interface JobCancellation {
+  id: string;
+  jobId: string;
+  contractorId: string;
+  contractorName: string;
+  cancelledAt: Date;
+  reason?: string;
+  cancellationNumber: number; // 해당 시공자의 N번째 취소
+  totalCancellationsToday: number; // 오늘 총 취소 횟수
+  feeAmount?: number; // 취소 수수료 금액
+  feeRate?: number; // 적용된 수수료율
+}
+
+// 작업 보상 기록 타입
+export interface JobCompensation {
+  id: string;
+  jobId: string;
+  contractorId: string;
+  contractorName: string;
+  compensationType: 'product_not_ready' | 'customer_absent' | 'schedule_change';
+  compensationAmount: number;
+  compensationRate: number;
+  reason: string;
+  compensatedAt: Date;
+  processedBy: string; // 처리한 관리자 ID
+}
+
+// 일정 변경 기록 타입
+export interface JobScheduleChange {
+  id: string;
+  jobId: string;
+  contractorId: string;
+  contractorName: string;
+  oldScheduledDate: Date;
+  newScheduledDate: Date;
+  changeReason: string;
+  changedAt: Date;
+  changedBy: string; // 변경한 시공자 ID
+  feeAmount?: number; // 일정 변경 수수료
+  feeRate?: number; // 적용된 수수료율
+}
+
+// 시스템 설정 타입
+export interface SystemSettings {
+  id: string;
+  escrowAutoReleaseHours: number; // 에스크로 자동 지급 시간 (시간 단위)
+  // 취소 정책 설정
+  jobCancellationPolicy: {
+    maxCancellationHours: number; // 수락 후 취소 가능 시간 (시간 단위)
+    maxDailyCancellations: number; // 하루 최대 취소 횟수
+    cancellationFeeRate: number; // 취소 수수료율 (기본 5%)
+  };
+  // 보상 정책 설정
+  compensationPolicy: {
+    productNotReadyRate: number; // 제품 준비 미완료 시 보상율 (기본 30%)
+    customerAbsentRate: number; // 소비자 부재 시 보상율 (기본 100%)
+    scheduleChangeFeeRate: number; // 일정 변경 시 수수료율 (기본 0%)
+  };
+  createdAt: Date;
+  updatedAt: Date;
+  updatedBy: string; // 관리자 ID
+}
+
 // 픽업 정보 타입
 export interface PickupInfo {
   companyName: string;
@@ -124,34 +239,42 @@ export interface JobProgressStep {
 // 시공 작업 타입
 export interface ConstructionJob {
   id: string;
-  sellerId: string;
-  customerId: string;
-  contractorId?: string;
   title: string;
   description: string;
   address: string;
-  coordinates: {
+  coordinates?: {
     lat: number;
     lng: number;
   };
-  budget: {
+  scheduledDate?: Date;
+  completedDate?: Date;
+  budget?: {
     min: number;
     max: number;
   };
-  items: JobItem[];
-  status: 'pending' | 'assigned' | 'product_preparing' | 'product_ready' | 'pickup_completed' | 'in_progress' | 'completed' | 'cancelled';
-  isInternal?: boolean; // 자사 직접 시공 여부
+  status: 'pending' | 'assigned' | 'product_preparing' | 'product_ready' | 'pickup_completed' | 'in_progress' | 'completed' | 'cancelled' | 'product_not_ready' | 'customer_absent' | 'schedule_changed';
+  sellerId: string;
+  customerId?: string;
+  contractorId?: string;
+  contractorName?: string;
+  // 취소 관련 정보
+  acceptedAt?: Date; // 시공자가 작업을 수락한 시간
+  cancelledAt?: Date; // 작업이 취소된 시간
+  cancellationReason?: string; // 취소 사유
+  items?: JobItem[];
+  requirements?: string[];
+  pickupInfo?: PickupInfo;
+  progressHistory?: JobProgressStep[];
+  finalAmount?: number;
+  isInternal?: boolean;
+  images?: string[];
+  workInstructions?: WorkInstruction[];
   createdAt: Date;
   updatedAt: Date;
-  scheduledDate?: Date;
-  completedDate?: Date;
-  images: string[];
-  requirements: string[];
-  pickupInfo?: PickupInfo; // 픽업 정보 (선택사항)
-  progressHistory?: JobProgressStep[]; // 작업 진행 단계별 시간 추적
-  finalAmount?: number; // 확정된 최종 금액
-  customerSatisfaction?: number; // 고객 만족도 평가 점수 (1-5)
-  workInstructions?: WorkInstruction[]; // 작업지시서 파일들
+  customerSatisfaction?: number;
+  satisfactionComment?: string;
+  satisfactionSubmittedAt?: Date;
+  recommendToOthers?: boolean;
 }
 
 // 평가 타입
@@ -273,29 +396,11 @@ export interface EmergencyJobSettings {
   updatedAt: Date;
 }
 
-// 포인트 거래 타입
-export interface PointTransaction {
-  id: string;
-  userId: string;
-  userRole: 'seller' | 'contractor';
-  type: 'charge' | 'payment' | 'withdrawal' | 'refund';
-  amount: number;
-  balance: number;
-  description: string;
-  status: 'pending' | 'completed' | 'failed' | 'cancelled';
-  relatedJobId?: string;
-  createdAt: Date;
-  completedAt?: Date;
-}
-
-// 포인트 잔액 타입
+// 포인트 잔액 타입 (간단한 버전)
 export interface PointBalance {
-  userId: string;
-  userRole: 'seller' | 'contractor';
   balance: number;
-  totalCharged: number;
-  totalWithdrawn: number;
-  updatedAt: Date;
+  totalCharged?: number; // 총 충전 금액
+  totalWithdrawn?: number; // 총 인출 금액
 }
 
 // 시공자 레벨 관리 타입

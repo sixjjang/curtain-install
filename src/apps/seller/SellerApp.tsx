@@ -10,6 +10,9 @@ import PaymentSimulation from './pages/PaymentSimulation';
 import PaymentComplete from './pages/PaymentComplete';
 import PaymentFail from './pages/PaymentFail';
 import Profile from './pages/Profile';
+import Chat from './pages/Chat';
+import Notifications from './pages/Notifications';
+import CalendarView from './pages/CalendarView';
 
 const SellerApp: React.FC = () => {
   return (
@@ -19,11 +22,14 @@ const SellerApp: React.FC = () => {
           <Route path="/" element={<Dashboard />} />
           <Route path="/jobs" element={<JobManagement />} />
           <Route path="/contractors" element={<ContractorList />} />
-              <Route path="/points" element={<PointCharge />} />
-    <Route path="/payment-simulation" element={<PaymentSimulation />} />
-    <Route path="/payment-complete" element={<PaymentComplete />} />
-    <Route path="/payment-fail" element={<PaymentFail />} />
-    <Route path="/profile" element={<Profile />} />
+          <Route path="/points" element={<PointCharge />} />
+          <Route path="/payment-simulation" element={<PaymentSimulation />} />
+          <Route path="/payment-complete" element={<PaymentComplete />} />
+          <Route path="/payment-fail" element={<PaymentFail />} />
+          <Route path="/profile" element={<Profile />} />
+          <Route path="/chat/:jobId" element={<Chat />} />
+          <Route path="/notifications" element={<Notifications />} />
+          <Route path="/calendar" element={<CalendarView />} />
         </Routes>
       </Box>
     </SellerLayout>
