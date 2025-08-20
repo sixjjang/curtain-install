@@ -14,6 +14,7 @@ import CustomerChat from './apps/customer/CustomerChat';
 import SimpleSatisfactionSurvey from './apps/customer/SimpleSatisfactionSurvey';
 import SatisfactionSurvey from './apps/customer/SatisfactionSurvey';
 import KakaoCallback from './shared/components/KakaoCallback';
+import GoogleCallback from './shared/components/GoogleCallback';
 
 // 공통 컴포넌트들
 import LoginPage from './shared/components/LoginPage';
@@ -104,6 +105,9 @@ function App() {
             
             {/* 카카오 로그인 콜백 */}
             <Route path="/auth/kakao/callback" element={<KakaoCallback />} />
+            
+            {/* 구글 캘린더 연동 콜백 */}
+            <Route path="/google-callback" element={<GoogleCallback />} />
             
             {/* Firebase 테스트 페이지 */}
             <Route path="/test" element={<FirebaseTest />} />
