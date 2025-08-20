@@ -26,7 +26,6 @@ import {
   AccountBalance,
   Person,
   Notifications as NotificationsIcon,
-  CalendarMonth,
   Logout
 } from '@mui/icons-material';
 import { useNavigate, useLocation } from 'react-router-dom';
@@ -52,7 +51,6 @@ const SellerLayout: React.FC<SellerLayoutProps> = ({ children }) => {
     { text: '시공 작업 관리', icon: <Work />, path: '/seller/jobs' },
     { text: '시공자 목록', icon: <People />, path: '/seller/contractors' },
     { text: '포인트 충전', icon: <AccountBalance />, path: '/seller/points' },
-    { text: '캘린더', icon: <CalendarMonth />, path: '/seller/calendar' },
     { text: '프로필', icon: <Person />, path: '/seller/profile' },
   ];
 

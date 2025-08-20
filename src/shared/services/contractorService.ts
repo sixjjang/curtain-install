@@ -1,5 +1,5 @@
 import { db } from '../../firebase/config';
-import { doc, getDoc, updateDoc, setDoc } from 'firebase/firestore';
+import { doc, getDoc, updateDoc, setDoc, collection, addDoc, deleteDoc, query, where, getDocs } from 'firebase/firestore';
 import { ContractorInfo } from '../../types';
 
 // 시공자 기본 정보 타입
@@ -13,6 +13,14 @@ export interface ContractorBasicInfo {
   bankName: string;
   bankAccount: string;
   profileImage?: string;
+}
+
+// 선호 지역 타입
+export interface PreferredRegion {
+  id: string;
+  name: string;
+  regions: string[];
+  createdAt: Date;
 }
 
 export class ContractorService {
@@ -104,6 +112,54 @@ export class ContractorService {
     }
   }
 
+  // 시공자 통계 정보 불러오기
+  static async getContractorStats(contractorId: string): Promise<{
+    totalJobs: number;
+    completedJobs: number;
+    totalEarnings: number;
+    rating: number;
+    level: number;
+    points: number;
+  }> {
+    try {
+      const contractorRef = doc(db, 'users', contractorId);
+      const contractorDoc = await getDoc(contractorRef);
+      
+      if (contractorDoc.exists()) {
+        const contractorData = contractorDoc.data();
+        return {
+          totalJobs: contractorData.totalJobs || 0,
+          completedJobs: contractorData.completedJobs || 0,
+          totalEarnings: contractorData.totalEarnings || 0,
+          rating: contractorData.rating || 0,
+          level: contractorData.level || 1,
+          points: contractorData.points || 0
+        };
+      }
+      
+      // 기본값 반환
+      return {
+        totalJobs: 0,
+        completedJobs: 0,
+        totalEarnings: 0,
+        rating: 0,
+        level: 1,
+        points: 0
+      };
+    } catch (error) {
+      console.error('시공자 통계 정보 불러오기 실패:', error);
+      // 에러 발생 시 기본값 반환
+      return {
+        totalJobs: 0,
+        completedJobs: 0,
+        totalEarnings: 0,
+        rating: 0,
+        level: 1,
+        points: 0
+      };
+    }
+  }
+
   // 시공자 정보 업데이트
   static async updateContractorProfile(contractorId: string, profileData: Partial<ContractorBasicInfo>): Promise<void> {
     try {
@@ -160,6 +216,84 @@ export class ContractorService {
     } catch (error) {
       console.error('시공자 프로필 업데이트 실패:', error);
       throw new Error('프로필 업데이트에 실패했습니다.');
+    }
+  }
+
+  // 선호 지역 저장
+  static async savePreferredRegion(contractorId: string, name: string, regions: string[]): Promise<string> {
+    try {
+      const preferredRegionsRef = collection(db, 'preferredRegions');
+      const docRef = await addDoc(preferredRegionsRef, {
+        contractorId,
+        name,
+        regions,
+        createdAt: new Date()
+      });
+      
+      console.log('선호 지역 저장 완료:', docRef.id);
+      return docRef.id;
+    } catch (error) {
+      console.error('선호 지역 저장 실패:', error);
+      throw new Error('선호 지역 저장에 실패했습니다.');
+    }
+  }
+
+  // 선호 지역 목록 불러오기
+  static async getPreferredRegions(contractorId: string): Promise<PreferredRegion[]> {
+    try {
+      const preferredRegionsRef = collection(db, 'preferredRegions');
+      const q = query(preferredRegionsRef, where('contractorId', '==', contractorId));
+      const querySnapshot = await getDocs(q);
+      
+      const preferredRegions: PreferredRegion[] = [];
+      querySnapshot.forEach((doc) => {
+        const data = doc.data();
+        preferredRegions.push({
+          id: doc.id,
+          name: data.name,
+          regions: data.regions,
+          createdAt: data.createdAt.toDate()
+        });
+      });
+      
+      // 생성일 기준으로 정렬 (최신순)
+      preferredRegions.sort((a, b) => b.createdAt.getTime() - a.createdAt.getTime());
+      
+      console.log('선호 지역 목록 불러오기 완료:', preferredRegions.length, '개');
+      return preferredRegions;
+    } catch (error) {
+      console.error('선호 지역 목록 불러오기 실패:', error);
+      throw new Error('선호 지역 목록을 불러올 수 없습니다.');
+    }
+  }
+
+  // 선호 지역 삭제
+  static async deletePreferredRegion(regionId: string): Promise<void> {
+    try {
+      const regionRef = doc(db, 'preferredRegions', regionId);
+      await deleteDoc(regionRef);
+      
+      console.log('선호 지역 삭제 완료:', regionId);
+    } catch (error) {
+      console.error('선호 지역 삭제 실패:', error);
+      throw new Error('선호 지역 삭제에 실패했습니다.');
+    }
+  }
+
+  // 선호 지역 업데이트
+  static async updatePreferredRegion(regionId: string, name: string, regions: string[]): Promise<void> {
+    try {
+      const regionRef = doc(db, 'preferredRegions', regionId);
+      await updateDoc(regionRef, {
+        name,
+        regions,
+        updatedAt: new Date()
+      });
+      
+      console.log('선호 지역 업데이트 완료:', regionId);
+    } catch (error) {
+      console.error('선호 지역 업데이트 실패:', error);
+      throw new Error('선호 지역 업데이트에 실패했습니다.');
     }
   }
 }

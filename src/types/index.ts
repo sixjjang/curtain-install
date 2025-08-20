@@ -238,9 +238,15 @@ export interface ExcelJobData {
   scheduledTime?: string;
   customerName: string;
   customerPhone: string;
+  customerAddress?: string;
   budgetMin?: number;
   budgetMax?: number;
   isInternal: boolean;
+  pickupCompanyName?: string;
+  pickupPhone?: string;
+  pickupAddress?: string;
+  pickupScheduledDate?: string;
+  pickupScheduledTime?: string;
   workInstructions?: WorkInstruction[];
   status: 'pending' | 'ready' | 'error';
   errorMessage?: string;

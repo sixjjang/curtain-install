@@ -14,14 +14,24 @@ import {
   Snackbar,
   Alert,
   Paper,
-  TextField
+  TextField,
+  Dialog,
+  DialogTitle,
+  DialogContent,
+  DialogActions,
+  List,
+  ListItem,
+  ListItemText,
+  ListItemSecondaryAction,
+  IconButton
 } from '@mui/material';
-import { Schedule, LocationOn, ExpandMore, ExpandLess, CalendarMonth, Cancel, AttachFile } from '@mui/icons-material';
+import { Schedule, LocationOn, ExpandMore, ExpandLess, Cancel, AttachFile, Delete, Save, FolderOpen } from '@mui/icons-material';
 import { JobService } from '../../../shared/services/jobService';
 import { JobCancellationService } from '../../../shared/services/jobCancellationService';
+import { ContractorService, PreferredRegion } from '../../../shared/services/contractorService';
 import { ConstructionJob } from '../../../types';
 import { useAuth } from '../../../shared/contexts/AuthContext';
-import CalendarView from './CalendarView';
+
 
 const JobList: React.FC = () => {
   const navigate = useNavigate();
@@ -47,8 +57,8 @@ const JobList: React.FC = () => {
   const [loading, setLoading] = useState(true);
   const [regionFilter, setRegionFilter] = useState<string[]>([]);
   const [expandedRegions, setExpandedRegions] = useState<string[]>([]);
-  const [viewMode, setViewMode] = useState<'list' | 'calendar'>('list');
-  const [regionFilterExpanded, setRegionFilterExpanded] = useState(true);
+  const [viewMode, setViewMode] = useState<'list'>('list');
+  const [regionFilterExpanded, setRegionFilterExpanded] = useState(false);
   const [snackbar, setSnackbar] = useState<{
     open: boolean;
     message: string;
@@ -58,6 +68,12 @@ const JobList: React.FC = () => {
     message: '',
     severity: 'success'
   });
+
+  // 선호 지역 관련 상태
+  const [preferredRegions, setPreferredRegions] = useState<PreferredRegion[]>([]);
+  const [showSaveDialog, setShowSaveDialog] = useState(false);
+  const [saveRegionName, setSaveRegionName] = useState('');
+  const [showLoadDialog, setShowLoadDialog] = useState(false);
 
   // 취소 관련 상태
   const [cancelDialogOpen, setCancelDialogOpen] = useState(false);
@@ -76,8 +92,9 @@ const JobList: React.FC = () => {
   } | null>(null);
 
   // 지역 데이터 구조
-  const regionData = {
+  const regionData: { [key: string]: string[] } = {
     '서울특별시': ['강남구', '서초구', '마포구', '송파구', '영등포구', '종로구', '중구', '용산구', '성동구', '광진구', '동대문구', '중랑구', '성북구', '강북구', '도봉구', '노원구', '은평구', '서대문구', '강서구', '구로구', '금천구', '동작구', '관악구'],
+    '경기도': ['수원시', '성남시', '의정부시', '안양시', '부천시', '광명시', '평택시', '동두천시', '안산시', '고양시', '과천시', '구리시', '남양주시', '오산시', '시흥시', '군포시', '의왕시', '하남시', '용인시', '파주시', '이천시', '안성시', '김포시', '화성시', '광주시', '여주시', '양평군', '고양군', '연천군', '가평군'],
     '부산광역시': ['중구', '서구', '동구', '영도구', '부산진구', '동래구', '남구', '북구', '해운대구', '사하구', '금정구', '강서구', '연제구', '수영구', '사상구', '기장군'],
     '대구광역시': ['중구', '동구', '서구', '남구', '북구', '수성구', '달서구', '달성군'],
     '인천광역시': ['중구', '동구', '미추홀구', '연수구', '남동구', '부평구', '계양구', '서구', '강화군', '옹진군'],
@@ -85,7 +102,6 @@ const JobList: React.FC = () => {
     '대전광역시': ['동구', '중구', '서구', '유성구', '대덕구'],
     '울산광역시': ['중구', '남구', '동구', '북구', '울주군'],
     '세종특별자치시': ['세종특별자치시'],
-    '경기도': ['수원시', '성남시', '의정부시', '안양시', '부천시', '광명시', '평택시', '동두천시', '안산시', '고양시', '과천시', '구리시', '남양주시', '오산시', '시흥시', '군포시', '의왕시', '하남시', '용인시', '파주시', '이천시', '안성시', '김포시', '화성시', '광주시', '여주시', '양평군', '고양군', '연천군', '가평군'],
     '강원도': ['춘천시', '원주시', '강릉시', '동해시', '태백시', '속초시', '삼척시', '홍천군', '횡성군', '영월군', '평창군', '정선군', '철원군', '화천군', '양구군', '인제군', '고성군', '양양군'],
     '충청북도': ['청주시', '충주시', '제천시', '보은군', '옥천군', '영동군', '증평군', '진천군', '괴산군', '음성군', '단양군'],
     '충청남도': ['천안시', '공주시', '보령시', '아산시', '서산시', '논산시', '계룡시', '당진시', '금산군', '부여군', '서천군', '청양군', '홍성군', '예산군', '태안군'],
@@ -100,12 +116,12 @@ const JobList: React.FC = () => {
   const loadData = async () => {
     if (!user) return;
     
-      try {
-        setLoading(true);
+    try {
+      setLoading(true);
       
       // 모든 작업 조회
       const allJobs = await JobService.getAllJobs();
-          setJobs(allJobs);
+      setJobs(allJobs);
       
       // 내 작업 필터링 (배정된 작업들)
       const myJobs = allJobs.filter(job => 
@@ -114,6 +130,10 @@ const JobList: React.FC = () => {
       );
       setMyJobs(myJobs);
       
+      // 선호 지역 불러오기
+      const preferredRegionsData = await ContractorService.getPreferredRegions(user.id);
+      setPreferredRegions(preferredRegionsData);
+      
     } catch (error: unknown) {
       console.error('데이터 로드 실패:', error);
       setSnackbar({
@@ -121,10 +141,10 @@ const JobList: React.FC = () => {
         message: '데이터를 불러오는데 실패했습니다.',
         severity: 'error'
       });
-      } finally {
-        setLoading(false);
-      }
-    };
+    } finally {
+      setLoading(false);
+    }
+  };
 
   useEffect(() => {
     loadData();
@@ -165,6 +185,61 @@ const JobList: React.FC = () => {
       setSnackbar({
         open: true,
         message: '취소 가능 여부를 확인할 수 없습니다.',
+        severity: 'error'
+      });
+    }
+  };
+
+  // 선호 지역 저장
+  const handleSavePreferredRegion = async () => {
+    if (!user?.id || !saveRegionName.trim()) return;
+    
+    try {
+      await ContractorService.savePreferredRegion(user.id, saveRegionName.trim(), regionFilter);
+      setSnackbar({
+        open: true,
+        message: '선호 지역이 저장되었습니다!',
+        severity: 'success'
+      });
+      setShowSaveDialog(false);
+      setSaveRegionName('');
+      await loadData(); // 선호 지역 목록 새로고침
+    } catch (error) {
+      console.error('선호 지역 저장 실패:', error);
+      setSnackbar({
+        open: true,
+        message: '선호 지역 저장에 실패했습니다.',
+        severity: 'error'
+      });
+    }
+  };
+
+  // 선호 지역 불러오기
+  const handleLoadPreferredRegion = (regions: string[]) => {
+    setRegionFilter(regions);
+    setShowLoadDialog(false);
+    setSnackbar({
+      open: true,
+      message: '선호 지역이 적용되었습니다!',
+      severity: 'success'
+    });
+  };
+
+  // 선호 지역 삭제
+  const handleDeletePreferredRegion = async (regionId: string) => {
+    try {
+      await ContractorService.deletePreferredRegion(regionId);
+      setSnackbar({
+        open: true,
+        message: '선호 지역이 삭제되었습니다.',
+        severity: 'success'
+      });
+      await loadData(); // 선호 지역 목록 새로고침
+    } catch (error) {
+      console.error('선호 지역 삭제 실패:', error);
+      setSnackbar({
+        open: true,
+        message: '선호 지역 삭제에 실패했습니다.',
         severity: 'error'
       });
     }
@@ -340,25 +415,7 @@ const JobList: React.FC = () => {
     );
   }
 
-  // 캘린더 뷰 모드일 때
-  if ((viewMode as string) === 'calendar') {
-    return (
-      <Box>
-        <Box display="flex" justifyContent="space-between" alignItems="center" mb={3}>
-          <Typography variant="h4">
-            대기중인 시공건 - 캘린더 보기
-          </Typography>
-          <Button
-            variant="outlined"
-            onClick={() => setViewMode('list')}
-          >
-            목록 보기
-          </Button>
-        </Box>
-        <CalendarView />
-              </Box>
-    );
-  }
+
 
   // 목록 뷰 모드
   const filteredJobs = getFilteredJobs();
@@ -368,85 +425,259 @@ const JobList: React.FC = () => {
                   <Box>
                     <Box display="flex" justifyContent="space-between" alignItems="center" mb={3}>
         <Typography variant="h4">
-          대기중인 시공건
+          시공건 찾기
                       </Typography>
-                      <Box display="flex" gap={2}>
-                                      <Button 
-            variant={(viewMode as string) === 'list' ? "contained" : "outlined"}
-            startIcon={<Schedule />}
-            onClick={() => setViewMode('list')}
-          >
-            목록 보기
-                                      </Button>
-        <Button
-            variant={(viewMode as string) === 'calendar' ? "contained" : "outlined"}
-          startIcon={<CalendarMonth />}
-          onClick={() => setViewMode('calendar')}
-        >
-          스케줄 보기
-        </Button>
-        </Box>
+
       </Box>
       
              {/* 지역 필터 */}
        <Card sx={{ mb: 3 }}>
-         <CardContent>
-             <Box display="flex" justifyContent="space-between" alignItems="center" mb={2}>
-            <Typography variant="h6">
-              지역 필터
-               </Typography>
-               <Button
-                 size="small"
+         <CardContent sx={{ p: { xs: 1.5, sm: 2 } }}>
+             <Box display="flex" justifyContent="space-between" alignItems="center" mb={1.5}>
+               <Box 
+                 display="flex" 
+                 alignItems="center" 
+                 gap={1}
                  onClick={() => setRegionFilterExpanded(!regionFilterExpanded)}
+                 sx={{ 
+                   cursor: 'pointer',
+                   '&:hover': {
+                     opacity: 0.8
+                   }
+                 }}
                >
-              {regionFilterExpanded ? <ExpandLess /> : <ExpandMore />}
-               </Button>
+                 <Typography variant="h6" sx={{ fontSize: { xs: '1rem', sm: '1.25rem' } }}>
+                   지역 필터
+                 </Typography>
+                 <Typography 
+                   variant="body2" 
+                   color="textSecondary" 
+                   sx={{ 
+                     fontSize: { xs: '0.75rem', sm: '0.875rem' },
+                     fontStyle: 'italic'
+                   }}
+                 >
+                   {regionFilter.length > 0 
+                     ? (() => {
+                         // 선택된 지역들을 대분류별로 그룹화
+                         const groupedRegions: { [key: string]: string[] } = {};
+                         regionFilter.forEach(regionDistrict => {
+                           const parts = regionDistrict.split(' ');
+                           if (parts.length >= 2) {
+                             const region = parts[0];
+                             const district = parts.slice(1).join(' ');
+                             if (!groupedRegions[region]) {
+                               groupedRegions[region] = [];
+                             }
+                             groupedRegions[region].push(district);
+                           }
+                         });
+                         
+                         // 대분류별로 정렬된 문자열 생성 (전체 선택 여부 확인)
+                         return Object.entries(groupedRegions)
+                           .map(([region, districts]) => {
+                             // 해당 지역의 모든 구/군 목록 가져오기
+                             const allDistricts = regionData[region] || [];
+                             
+                             // 모든 구/군이 선택되었는지 확인
+                             const allSelected = allDistricts.every((district: string) => 
+                               groupedRegions[region].includes(district)
+                             );
+                             
+                             if (allSelected && allDistricts.length > 0) {
+                               return `${region} 전체`;
+                             } else {
+                               return `${region} ${districts.join(', ')}`;
+                             }
+                           })
+                           .join(', ');
+                       })()
+                     : '원하는 지역을 선택하세요'
+                   }
+                 </Typography>
+               </Box>
+               <Box display="flex" gap={1}>
+                 {/* 선호 지역 저장 버튼 */}
+                 {regionFilter.length > 0 && (
+                   <Button
+                     size="small"
+                     variant="outlined"
+                     onClick={() => setShowSaveDialog(true)}
+                     sx={{ 
+                       minWidth: 'auto', 
+                       p: { xs: 0.5, sm: 1 },
+                       fontSize: { xs: '0.75rem', sm: '0.875rem' }
+                     }}
+                   >
+                     저장
+                   </Button>
+                 )}
+                 
+                 {/* 선호 지역 불러오기 버튼 */}
+                 {preferredRegions.length > 0 && (
+                   <Button
+                     size="small"
+                     variant="outlined"
+                     onClick={() => setShowLoadDialog(true)}
+                     sx={{ 
+                       minWidth: 'auto', 
+                       p: { xs: 0.5, sm: 1 },
+                       fontSize: { xs: '0.75rem', sm: '0.875rem' }
+                     }}
+                   >
+                     불러오기
+                   </Button>
+                 )}
+                 
+                 <Button
+                   size="small"
+                   onClick={() => setRegionFilterExpanded(!regionFilterExpanded)}
+                   sx={{ minWidth: 'auto', p: { xs: 0.5, sm: 1 } }}
+                 >
+                   {regionFilterExpanded ? <ExpandLess /> : <ExpandMore />}
+                 </Button>
+               </Box>
              </Box>
             
                          <Collapse in={regionFilterExpanded}>
-            <Grid container spacing={2}>
+            <Grid container spacing={{ xs: 1, sm: 2 }}>
               {Object.entries(regionData).map(([region, districts]) => (
                 <Grid item xs={12} sm={6} md={4} key={region}>
-                  <Card variant="outlined">
+                  <Card variant="outlined" sx={{ 
+                    '& .MuiCardContent-root': { 
+                      p: { xs: 1, sm: 1.5 } 
+                    } 
+                  }}>
                     <CardContent>
-                      <Box display="flex" justifyContent="space-between" alignItems="center" mb={1}>
-                        <Typography variant="subtitle2" fontWeight="bold">
-                          {region}
-                        </Typography>
-                 <Button
-                   size="small"
+                      <Box 
+                        display="flex" 
+                        justifyContent="space-between" 
+                        alignItems="center" 
+                        mb={0.5}
+                      >
+                        <Box 
+                          display="flex" 
+                          alignItems="center" 
+                          gap={1}
                           onClick={() => toggleRegion(region)}
+                          sx={{ 
+                            cursor: 'pointer',
+                            flex: 1,
+                            '&:hover': {
+                              opacity: 0.8
+                            }
+                          }}
                         >
+                          <Typography variant="subtitle2" fontWeight="bold" sx={{ 
+                            fontSize: { xs: '0.875rem', sm: '1rem' } 
+                          }}>
+                            {region}
+                          </Typography>
+                        </Box>
+                        
+                        {/* 전체 선택 체크박스 */}
+                        <FormControlLabel
+                          control={
+                            <Checkbox
+                              size="small"
+                              checked={(() => {
+                                const regionDistricts = districts.map(district => `${region} ${district}`);
+                                return regionDistricts.every(district => regionFilter.includes(district));
+                              })()}
+                              indeterminate={(() => {
+                                const regionDistricts = districts.map(district => `${region} ${district}`);
+                                const selectedCount = regionDistricts.filter(district => regionFilter.includes(district)).length;
+                                return selectedCount > 0 && selectedCount < regionDistricts.length;
+                              })()}
+                              onChange={(e) => {
+                                e.stopPropagation();
+                                const regionDistricts = districts.map(district => `${region} ${district}`);
+                                const allSelected = regionDistricts.every(district => regionFilter.includes(district));
+                                
+                                if (allSelected) {
+                                  // 모든 지역 해제
+                                  setRegionFilter(prev => prev.filter(item => !regionDistricts.includes(item)));
+                                } else {
+                                  // 모든 지역 선택
+                                  const newFilter = [...regionFilter];
+                                  regionDistricts.forEach(district => {
+                                    if (!newFilter.includes(district)) {
+                                      newFilter.push(district);
+                                    }
+                                  });
+                                  setRegionFilter(newFilter);
+                                }
+                              }}
+                              onClick={(e) => e.stopPropagation()}
+                              sx={{ p: { xs: 0.25, sm: 0.5 } }}
+                            />
+                          }
+                          label="전체"
+                          sx={{ 
+                            m: 0,
+                            '& .MuiFormControlLabel-label': {
+                              fontSize: { xs: '0.75rem', sm: '0.875rem' }
+                            }
+                          }}
+                        />
+                        
+                        <Box sx={{ display: { xs: 'none', sm: 'block' } }}>
+                          <Button
+                            size="small"
+                            onClick={(e) => {
+                              e.stopPropagation();
+                              toggleRegion(region);
+                            }}
+                            sx={{ minWidth: 'auto', p: { xs: 0.25, sm: 0.5 } }}
+                          >
+                            {expandedRegions.includes(region) ? <ExpandLess /> : <ExpandMore />}
+                          </Button>
+                        </Box>
+                        <Box sx={{ display: { xs: 'block', sm: 'none' } }}>
                           {expandedRegions.includes(region) ? <ExpandLess /> : <ExpandMore />}
-                 </Button>
-               </Box>
+                        </Box>
+                      </Box>
                
                       <Collapse in={expandedRegions.includes(region)}>
-                        <Box display="flex" flexDirection="column" gap={0.5}>
-                          {districts.map(district => {
-                            const regionDistrict = `${region} ${district}`;
-                            const isSelected = regionFilter.includes(regionDistrict);
-                 
-                 return (
-                       <FormControlLabel
-                                key={district}
-                         control={
-                           <Checkbox
-                             size="small"
-                                    checked={isSelected}
-                                    onChange={() => toggleRegionFilter(regionDistrict)}
-                                   />
-                                 }
-                                 label={
-                                  <Typography variant="body2">
-                                    {district}
-                                   </Typography>
-                                 }
-                              />
-                 );
-                                })}
-               </Box>
-             </Collapse>
+                        <Box>
+                          <Grid container spacing={0.5}>
+                            {districts.map(district => {
+                              const regionDistrict = `${region} ${district}`;
+                              const isSelected = regionFilter.includes(regionDistrict);
+                   
+                    return (
+                          <Grid item xs={6} sm={4} md={3} key={district}>
+                            <FormControlLabel
+                              control={
+                                <Checkbox
+                                  size="small"
+                                  checked={isSelected}
+                                  onChange={() => toggleRegionFilter(regionDistrict)}
+                                  sx={{ p: { xs: 0.25, sm: 0.5 } }}
+                                />
+                              }
+                              label={
+                                <Typography variant="body2" sx={{ 
+                                  fontSize: { xs: '0.75rem', sm: '0.875rem' },
+                                  lineHeight: { xs: 1.2, sm: 1.4 }
+                                }}>
+                                  {district}
+                                </Typography>
+                              }
+                              sx={{ 
+                                m: 0, 
+                                py: { xs: 0.25, sm: 0.5 },
+                                '& .MuiFormControlLabel-label': {
+                                  fontSize: { xs: '0.75rem', sm: '0.875rem' }
+                                }
+                              }}
+                            />
+                          </Grid>
+                    );
+                              })}
+                          </Grid>
+                        </Box>
+                      </Collapse>
                     </CardContent>
                   </Card>
                 </Grid>
@@ -457,12 +688,12 @@ const JobList: React.FC = () => {
        </Card>
 
       {/* 작업 목록 */}
-      <Grid container spacing={3}>
+      <Grid container spacing={{ xs: 2, sm: 3 }}>
         {filteredJobs.length === 0 ? (
           <Grid item xs={12}>
             <Card>
-              <CardContent>
-                <Typography variant="h6" textAlign="center" color="textSecondary" py={4}>
+              <CardContent sx={{ p: { xs: 2, sm: 3 } }}>
+                <Typography variant="h6" textAlign="center" color="textSecondary" py={{ xs: 3, sm: 4 }}>
                   {regionFilter.length > 0 ? '선택한 지역에 작업이 없습니다.' : '등록된 작업이 없습니다.'}
                 </Typography>
               </CardContent>
@@ -472,9 +703,9 @@ const JobList: React.FC = () => {
           filteredJobs.map((job) => (
             <Grid item xs={12} key={job.id}>
               <Card>
-                <CardContent>
-                  <Box display="flex" justifyContent="space-between" alignItems="flex-start" mb={2}>
-                    <Typography variant="h6">
+                <CardContent sx={{ p: { xs: 1.5, sm: 2 } }}>
+                  <Box display="flex" justifyContent="space-between" alignItems="flex-start" mb={{ xs: 1, sm: 2 }}>
+                    <Typography variant="h6" sx={{ fontSize: { xs: '1rem', sm: '1.25rem' } }}>
                       {job.title}
                     </Typography>
                         <Chip 
@@ -484,27 +715,36 @@ const JobList: React.FC = () => {
                         />
                   </Box>
                   
-                  <Typography variant="body2" color="textSecondary" mb={1}>
+                  <Typography variant="body2" color="textSecondary" mb={{ xs: 0.5, sm: 1 }} sx={{ 
+                    fontSize: { xs: '0.875rem', sm: '1rem' },
+                    lineHeight: { xs: 1.3, sm: 1.5 }
+                  }}>
                     {job.description}
                   </Typography>
                   
-                  <Box display="flex" alignItems="center" gap={1} mb={1}>
+                  <Box display="flex" alignItems="center" gap={1} mb={{ xs: 0.5, sm: 1 }}>
                     <LocationOn fontSize="small" color="action" />
-                    <Typography variant="body2" color="textSecondary">
+                    <Typography variant="body2" color="textSecondary" sx={{ 
+                      fontSize: { xs: '0.875rem', sm: '1rem' } 
+                    }}>
                       {formatAddressForCard(job.address)}
                     </Typography>
                   </Box>
 
                   {job.scheduledDate && (
-                    <Box display="flex" alignItems="center" gap={1} mb={1}>
+                    <Box display="flex" alignItems="center" gap={1} mb={{ xs: 0.5, sm: 1 }}>
                       <Schedule fontSize="small" color="action" />
-                      <Typography variant="body2" color="textSecondary">
+                      <Typography variant="body2" color="textSecondary" sx={{ 
+                        fontSize: { xs: '0.875rem', sm: '1rem' } 
+                      }}>
                         {formatDate(job.scheduledDate)} {formatTime(job.scheduledDate)}
                       </Typography>
                     </Box>
                   )}
                   
-                  <Typography variant="body2" color="textSecondary" mb={2}>
+                  <Typography variant="body2" color="textSecondary" mb={{ xs: 1, sm: 2 }} sx={{ 
+                    fontSize: { xs: '0.875rem', sm: '1rem' } 
+                  }}>
                     예산: {job.budget?.min?.toLocaleString()}~{job.budget?.max?.toLocaleString()}원
                   </Typography>
                   
@@ -513,7 +753,7 @@ const JobList: React.FC = () => {
                           variant="contained" 
                       color="primary"
                           onClick={() => handleAcceptJob(job.id)}
-                      sx={{ mr: 1 }}
+                      sx={{ mr: 1, fontSize: { xs: '0.875rem', sm: '1rem' } }}
                         >
                       작업 수락
                         </Button>
@@ -525,6 +765,7 @@ const JobList: React.FC = () => {
                       color="error"
                       startIcon={<Cancel />}
                       onClick={() => handleCancelJobClick(job)}
+                      sx={{ fontSize: { xs: '0.875rem', sm: '1rem' } }}
                           >
                       작업 취소
                           </Button>
@@ -656,6 +897,153 @@ const JobList: React.FC = () => {
           {snackbar.message}
         </Alert>
       </Snackbar>
+
+      {/* 선호 지역 저장 다이얼로그 */}
+      <Dialog 
+        open={showSaveDialog} 
+        onClose={() => setShowSaveDialog(false)}
+        maxWidth="sm"
+        fullWidth
+      >
+        <DialogTitle>
+          <Box display="flex" alignItems="center" gap={1}>
+            <Save />
+            선호 지역 저장
+          </Box>
+        </DialogTitle>
+        <DialogContent>
+          <Typography variant="body2" color="textSecondary" sx={{ mb: 2 }}>
+            현재 선택된 지역을 선호 지역으로 저장합니다.
+          </Typography>
+          <TextField
+            fullWidth
+            label="선호 지역 이름"
+            value={saveRegionName}
+            onChange={(e) => setSaveRegionName(e.target.value)}
+            placeholder="예: 서울 강남구, 서초구"
+            sx={{ mb: 2 }}
+          />
+          <Typography variant="body2" color="textSecondary">
+            선택된 지역: {regionFilter.join(', ')}
+          </Typography>
+        </DialogContent>
+        <DialogActions>
+          <Button onClick={() => setShowSaveDialog(false)}>
+            취소
+          </Button>
+          <Button 
+            onClick={handleSavePreferredRegion}
+            variant="contained"
+            disabled={!saveRegionName.trim()}
+          >
+            저장
+          </Button>
+        </DialogActions>
+      </Dialog>
+
+      {/* 선호 지역 불러오기 다이얼로그 */}
+      <Dialog 
+        open={showLoadDialog} 
+        onClose={() => setShowLoadDialog(false)}
+        maxWidth="sm"
+        fullWidth
+      >
+        <DialogTitle>
+          <Box display="flex" alignItems="center" gap={1}>
+            <FolderOpen />
+            선호 지역 불러오기
+          </Box>
+        </DialogTitle>
+        <DialogContent>
+          {preferredRegions.length === 0 ? (
+            <Typography variant="body2" color="textSecondary" textAlign="center" py={3}>
+              저장된 선호 지역이 없습니다.
+            </Typography>
+          ) : (
+            <List>
+              {preferredRegions.map((preferredRegion) => (
+                <ListItem 
+                  key={preferredRegion.id}
+                  sx={{ 
+                    border: '1px solid #e0e0e0', 
+                    borderRadius: 1, 
+                    mb: 1,
+                    '&:hover': {
+                      backgroundColor: '#f5f5f5'
+                    }
+                  }}
+                >
+                                   <ListItemText
+                   primary={
+                     <Box display="flex" justifyContent="space-between" alignItems="center">
+                       <Typography variant="body1" fontWeight="bold">
+                         {preferredRegion.name}
+                       </Typography>
+                       <Box display="flex" gap={1}>
+                         <Button
+                           size="small"
+                           variant="outlined"
+                           onClick={() => handleLoadPreferredRegion(preferredRegion.regions)}
+                         >
+                           불러오기
+                         </Button>
+                         <IconButton
+                           size="small"
+                           onClick={() => handleDeletePreferredRegion(preferredRegion.id)}
+                           color="error"
+                         >
+                           <Delete />
+                         </IconButton>
+                       </Box>
+                     </Box>
+                   }
+                   secondary={(() => {
+                     // 선택된 지역들을 대분류별로 그룹화
+                     const groupedRegions: { [key: string]: string[] } = {};
+                     preferredRegion.regions.forEach(regionDistrict => {
+                       const parts = regionDistrict.split(' ');
+                       if (parts.length >= 2) {
+                         const region = parts[0];
+                         const district = parts.slice(1).join(' ');
+                         if (!groupedRegions[region]) {
+                           groupedRegions[region] = [];
+                         }
+                         groupedRegions[region].push(district);
+                       }
+                     });
+                     
+                     // 대분류별로 정렬된 문자열 생성 (전체 선택 여부 확인)
+                     return Object.entries(groupedRegions)
+                       .map(([region, districts]) => {
+                         // 해당 지역의 모든 구/군 목록 가져오기
+                         const allDistricts = regionData[region] || [];
+                         
+                         // 모든 구/군이 선택되었는지 확인
+                         const allSelected = allDistricts.every((district: string) => 
+                           groupedRegions[region].includes(district)
+                         );
+                         
+                         if (allSelected && allDistricts.length > 0) {
+                           return `${region} 전체`;
+                         } else {
+                           return `${region} ${districts.join(', ')}`;
+                         }
+                       })
+                       .join(', ');
+                   })()}
+                   secondaryTypographyProps={{ fontSize: '0.875rem' }}
+                 />
+                </ListItem>
+              ))}
+            </List>
+          )}
+        </DialogContent>
+        <DialogActions>
+          <Button onClick={() => setShowLoadDialog(false)}>
+            닫기
+          </Button>
+        </DialogActions>
+      </Dialog>
     </Box>
   );
 };

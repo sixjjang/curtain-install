@@ -333,6 +333,11 @@ const ExcelJobUpload: React.FC = () => {
               </Button>
             </Grid>
             <Grid item>
+              <Typography variant="body2" color="textSecondary">
+                📋 템플릿에는 다음 필드들이 포함됩니다: 제목, 설명, 시공주소, 시공일시, 고객정보, 예산, 픽업정보 등
+              </Typography>
+            </Grid>
+            <Grid item>
               <input
                 accept=".xlsx,.xls"
                 style={{ display: 'none' }}
@@ -457,10 +462,11 @@ const ExcelJobUpload: React.FC = () => {
                     </TableCell>
                     <TableCell>상태</TableCell>
                     <TableCell>제목</TableCell>
-                    <TableCell>고객명</TableCell>
-                    <TableCell>주소</TableCell>
+                    <TableCell>고객정보</TableCell>
+                    <TableCell>시공주소</TableCell>
                     <TableCell>시공일시</TableCell>
                     <TableCell>예산</TableCell>
+                    <TableCell>픽업정보</TableCell>
                     <TableCell>작업지시서</TableCell>
                     <TableCell>작업</TableCell>
                   </TableRow>
@@ -499,6 +505,11 @@ const ExcelJobUpload: React.FC = () => {
                         <Typography variant="caption" color="textSecondary">
                           {job.customerPhone}
                         </Typography>
+                        {job.customerAddress && (
+                          <Typography variant="caption" color="textSecondary" display="block">
+                            {job.customerAddress}
+                          </Typography>
+                        )}
                       </TableCell>
                       <TableCell>
                         <Typography variant="body2">
@@ -520,6 +531,21 @@ const ExcelJobUpload: React.FC = () => {
                             : '-'
                           }
                         </Typography>
+                      </TableCell>
+                      <TableCell>
+                        <Typography variant="body2">
+                          {job.pickupCompanyName || '-'}
+                        </Typography>
+                        {job.pickupPhone && (
+                          <Typography variant="caption" color="textSecondary">
+                            {job.pickupPhone}
+                          </Typography>
+                        )}
+                        {job.pickupScheduledDate && job.pickupScheduledTime && (
+                          <Typography variant="caption" color="textSecondary" display="block">
+                            {job.pickupScheduledDate} {job.pickupScheduledTime}
+                          </Typography>
+                        )}
                       </TableCell>
                       <TableCell>
                         <Box display="flex" alignItems="center" gap={1}>
@@ -590,7 +616,7 @@ const ExcelJobUpload: React.FC = () => {
               <Grid item xs={12}>
                 <TextField
                   fullWidth
-                  label="주소"
+                  label="시공주소"
                   value={editingJob.address}
                   onChange={(e) => setEditingJob({ ...editingJob, address: e.target.value })}
                   required
@@ -634,6 +660,14 @@ const ExcelJobUpload: React.FC = () => {
                   required
                 />
               </Grid>
+              <Grid item xs={12}>
+                <TextField
+                  fullWidth
+                  label="고객주소"
+                  value={editingJob.customerAddress || ''}
+                  onChange={(e) => setEditingJob({ ...editingJob, customerAddress: e.target.value })}
+                />
+              </Grid>
               <Grid item xs={6}>
                 <TextField
                   fullWidth
@@ -661,6 +695,57 @@ const ExcelJobUpload: React.FC = () => {
                     />
                   }
                   label="내부 작업"
+                />
+              </Grid>
+              
+              {/* 픽업 정보 섹션 */}
+              <Grid item xs={12}>
+                <Typography variant="h6" gutterBottom>
+                  픽업 정보
+                </Typography>
+              </Grid>
+              <Grid item xs={6}>
+                <TextField
+                  fullWidth
+                  label="픽업 상호"
+                  value={editingJob.pickupCompanyName || ''}
+                  onChange={(e) => setEditingJob({ ...editingJob, pickupCompanyName: e.target.value })}
+                />
+              </Grid>
+              <Grid item xs={6}>
+                <TextField
+                  fullWidth
+                  label="픽업 연락처"
+                  value={editingJob.pickupPhone || ''}
+                  onChange={(e) => setEditingJob({ ...editingJob, pickupPhone: formatPhoneInput(e.target.value) })}
+                />
+              </Grid>
+              <Grid item xs={12}>
+                <TextField
+                  fullWidth
+                  label="픽업 주소"
+                  value={editingJob.pickupAddress || ''}
+                  onChange={(e) => setEditingJob({ ...editingJob, pickupAddress: e.target.value })}
+                />
+              </Grid>
+              <Grid item xs={6}>
+                <TextField
+                  fullWidth
+                  label="준비예정일"
+                  type="date"
+                  value={editingJob.pickupScheduledDate || ''}
+                  onChange={(e) => setEditingJob({ ...editingJob, pickupScheduledDate: e.target.value })}
+                  InputLabelProps={{ shrink: true }}
+                />
+              </Grid>
+              <Grid item xs={6}>
+                <TextField
+                  fullWidth
+                  label="준비예정시간"
+                  type="time"
+                  value={editingJob.pickupScheduledTime || ''}
+                  onChange={(e) => setEditingJob({ ...editingJob, pickupScheduledTime: e.target.value })}
+                  InputLabelProps={{ shrink: true }}
                 />
               </Grid>
             </Grid>

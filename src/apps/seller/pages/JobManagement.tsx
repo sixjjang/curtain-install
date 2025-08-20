@@ -30,15 +30,13 @@ import {
   AttachMoney, 
   Person, 
   Description,
-  ChevronLeft,
-  ChevronRight,
-  Today,
   CheckCircle,
   PlayArrow,
   Assignment,
   Star,
   Engineering,
-  Chat
+  Chat,
+  Phone
 } from '@mui/icons-material';
 import { useAuth } from '../../../shared/contexts/AuthContext';
 import { JobService } from '../../../shared/services/jobService';
@@ -89,11 +87,7 @@ const JobManagement: React.FC = () => {
   const [error, setError] = useState('');
   const [tabValue, setTabValue] = useState(0);
   
-  // 캘린더 관련 상태
-  const [currentDate, setCurrentDate] = useState(new Date());
-  const [selectedDate, setSelectedDate] = useState<Date | null>(null);
-  const [selectedJobs, setSelectedJobs] = useState<ConstructionJob[]>([]);
-  const [calendarDialogOpen, setCalendarDialogOpen] = useState(false);
+
   const [chatNotifications, setChatNotifications] = useState<{[jobId: string]: number}>({});
   const [pointBalance, setPointBalance] = useState(0);
 
@@ -319,95 +313,13 @@ const JobManagement: React.FC = () => {
     return job.items.reduce((total, item) => total + item.totalPrice, 0);
   };
 
-  const handleDateClick = (date: Date) => {
-    const dateStr = formatDate(date);
-    const jobsOnDate = jobs.filter(job => {
-      if (!job.scheduledDate) return false;
-      return formatDate(job.scheduledDate) === dateStr;
-    });
-    
-    setSelectedDate(date);
-    setSelectedJobs(jobsOnDate);
-    setCalendarDialogOpen(true);
-  };
 
-  const getDaysInMonth = (date: Date) => {
-    const year = date.getFullYear();
-    const month = date.getMonth();
-    const firstDay = new Date(year, month, 1);
-    const lastDay = new Date(year, month + 1, 0);
-    const daysInMonth = lastDay.getDate();
-    const startingDay = firstDay.getDay();
-    
-    return { daysInMonth, startingDay };
-  };
-
-  const getJobsForDate = (date: Date) => {
-    const dateStr = formatDate(date);
-    const todayStr = formatDate(new Date());
-    
-    const filteredJobs = jobs.filter(job => {
-      // scheduledDate가 있는 경우 해당 날짜와 비교
-      if (job.scheduledDate) {
-        const jobDateStr = formatDate(job.scheduledDate);
-        const matches = jobDateStr === dateStr;
-        
-        // 디버깅: 대기중인 작업의 날짜 매칭 확인
-        if (job.status === 'pending') {
-          console.log(`대기중인 작업 "${job.title}":`, {
-            jobDate: jobDateStr,
-            targetDate: dateStr,
-            matches: matches,
-            scheduledDate: job.scheduledDate
-          });
-        }
-        
-        return matches;
-      }
-      
-      // scheduledDate가 없고 대기중인 작업인 경우 오늘 날짜에 표시
-      if (job.status === 'pending' && !job.scheduledDate && dateStr === todayStr) {
-        console.log(`scheduledDate가 없는 대기중인 작업 "${job.title}"을 오늘 날짜에 표시`);
-        return true;
-      }
-      
-      return false;
-    });
-    
-    // 디버깅: 해당 날짜에 표시될 작업들
-    if (filteredJobs.length > 0) {
-      console.log(`${dateStr}에 표시될 작업들:`, filteredJobs.map(job => ({
-        title: job.title,
-        status: job.status,
-        scheduledDate: job.scheduledDate,
-        hasScheduledDate: !!job.scheduledDate
-      })));
-    }
-    
-    return filteredJobs;
-  };
-
-  const goToPreviousMonth = () => {
-    setCurrentDate(new Date(currentDate.getFullYear(), currentDate.getMonth() - 1, 1));
-  };
-
-  const goToNextMonth = () => {
-    setCurrentDate(new Date(currentDate.getFullYear(), currentDate.getMonth() + 1, 1));
-  };
-
-  const goToToday = () => {
-    setCurrentDate(new Date());
-  };
 
   const handleTabChange = (event: React.SyntheticEvent, newValue: number) => {
     setTabValue(newValue);
   };
 
-  const { daysInMonth, startingDay } = getDaysInMonth(currentDate);
-  const monthNames = [
-    '1월', '2월', '3월', '4월', '5월', '6월',
-    '7월', '8월', '9월', '10월', '11월', '12월'
-  ];
+
 
   return (
     <Box>
@@ -439,7 +351,6 @@ const JobManagement: React.FC = () => {
       <Box sx={{ borderBottom: 1, borderColor: 'divider', mb: 3 }}>
         <Tabs value={tabValue} onChange={handleTabChange} aria-label="작업 관리 탭">
           <Tab label="목록 보기" />
-          <Tab label="스케줄 보기" />
           <Tab label="시공의뢰(엑셀업로드)" />
         </Tabs>
       </Box>
@@ -521,7 +432,10 @@ const JobManagement: React.FC = () => {
                         <Box display="flex" alignItems="center" gap={1} mb={2}>
                           <AttachMoney fontSize="small" color="action" />
                           <Typography variant="body2" color="textSecondary">
-                            {job.finalAmount ? `${job.finalAmount.toLocaleString()}원` : `${job.budget?.min?.toLocaleString() || 0}원 ~ ${job.budget?.max?.toLocaleString() || 0}원`}
+                            {job.finalAmount 
+                              ? `${job.finalAmount.toLocaleString()}원` 
+                              : `${job.budget?.min?.toLocaleString() || 0}원 ~ ${job.budget?.max?.toLocaleString() || 0}원`
+                            }
                           </Typography>
                         </Box>
 
@@ -695,189 +609,10 @@ const JobManagement: React.FC = () => {
             )}
           </TabPanel>
 
-          {/* 스케줄 보기 탭 */}
-          <TabPanel value={tabValue} index={1}>
-            {/* 캘린더 헤더 */}
-            <Card sx={{ mb: 3 }}>
-                                <CardContent sx={{ p: { xs: 2, sm: 3 } }}>
-                   <Box display="flex" alignItems="center" justifyContent="space-between" flexDirection={{ xs: 'column', sm: 'row' }} gap={2}>
-                     <Box display="flex" alignItems="center" gap={{ xs: 1, sm: 2 }}>
-                       <IconButton onClick={goToPreviousMonth} size="small">
-                         <ChevronLeft />
-                       </IconButton>
-                       <Typography variant="h5" sx={{ fontSize: { xs: '1.25rem', sm: '1.5rem' } }}>
-                         {currentDate.getFullYear()}년 {monthNames[currentDate.getMonth()]}
-                       </Typography>
-                       <IconButton onClick={goToNextMonth} size="small">
-                         <ChevronRight />
-                       </IconButton>
-                     </Box>
-                     <Button
-                       variant="outlined"
-                       startIcon={<Today />}
-                       onClick={goToToday}
-                       size="small"
-                     >
-                       오늘
-                     </Button>
-                   </Box>
-                   
-                   {/* 캘린더 범례 */}
-                   <Box sx={{ mt: 2, display: 'flex', flexWrap: 'wrap', gap: 1, alignItems: 'center' }}>
-                     <Typography variant="body2" color="textSecondary" sx={{ mr: 1 }}>
-                       범례:
-                     </Typography>
-                     <Box sx={{ display: 'flex', alignItems: 'center', gap: 1 }}>
-                       <Box sx={{ width: 12, height: 12, bgcolor: 'warning.light', border: '2px dashed warning.main', borderRadius: 0.5 }} />
-                       <Typography variant="caption">대기중</Typography>
-                     </Box>
-                     <Box sx={{ display: 'flex', alignItems: 'center', gap: 1 }}>
-                       <Box sx={{ width: 12, height: 12, bgcolor: 'primary.light', borderRadius: 0.5 }} />
-                       <Typography variant="caption">시공의뢰</Typography>
-                     </Box>
-                     <Box sx={{ display: 'flex', alignItems: 'center', gap: 1 }}>
-                       <Box sx={{ width: 12, height: 12, bgcolor: 'secondary.light', border: '1px solid secondary.main', borderRadius: 0.5 }} />
-                       <Typography variant="caption">자사시공</Typography>
-                     </Box>
-                   </Box>
-                 </CardContent>
-             </Card>
 
-                         {/* 캘린더 그리드 */}
-             <Paper sx={{ p: { xs: 1, sm: 2 } }}>
-               <Grid container>
-                 {/* 날짜 칸들 */}
-                 {Array.from({ length: daysInMonth }).map((_, index) => {
-                   const day = index + 1;
-                   const date = new Date(currentDate.getFullYear(), currentDate.getMonth(), day);
-                   const jobsOnDate = getJobsForDate(date);
-                   const isToday = formatDate(date) === formatDate(new Date());
-                   const dayOfWeek = date.getDay();
-                   const dayNames = ['일', '월', '화', '수', '목', '금', '토'];
-
-                   return (
-                     <Grid item xs key={day}>
-                                               <Box
-                          sx={{
-                            p: { xs: 0.5, sm: 1 },
-                            minHeight: { xs: 80, sm: 120 },
-                            height: 'auto',
-                            border: isToday ? '4px solid #1976d2' : '1px solid grey.300',
-                            backgroundColor: 'white',
-                            cursor: 'pointer',
-                            '&:hover': {
-                              backgroundColor: 'grey.100'
-                            }
-                          }}
-                          onClick={() => handleDateClick(date)}
-                        >
-                         {/* 요일 표시 */}
-                         <Typography
-                           variant="caption"
-                           sx={{
-                             display: 'block',
-                             textAlign: 'center',
-                             fontWeight: 'bold',
-                             color: dayOfWeek === 0 ? 'error.main' : dayOfWeek === 6 ? 'primary.main' : 'text.secondary',
-                             mb: { xs: 0.25, sm: 0.5 },
-                             fontSize: { xs: '0.6rem', sm: '0.75rem' }
-                           }}
-                         >
-                           {dayNames[dayOfWeek]}
-                         </Typography>
-                         
-                         {/* 날짜 표시 */}
-                         <Typography
-                           variant="body2"
-                           sx={{
-                             textAlign: 'center',
-                             fontWeight: isToday ? 'bold' : 'normal',
-                             color: 'text.primary',
-                             mb: { xs: 0.5, sm: 1 },
-                             fontSize: { xs: '0.75rem', sm: '0.875rem' }
-                           }}
-                         >
-                           {day}
-                         </Typography>
-                         
-                                                                              {/* 작업 표시 */}
-                           {jobsOnDate.map((job, jobIndex) => {
-                             // 대기중인 작업인지 확인
-                             const isPending = job.status === 'pending';
-                             
-                             return (
-                               <Box
-                                 key={job.id}
-                                 sx={{
-                                   mt: { xs: 0.25, sm: 0.5 },
-                                   p: { xs: 0.25, sm: 0.5 },
-                                   backgroundColor: isPending 
-                                     ? 'warning.light' 
-                                     : job.isInternal 
-                                       ? 'secondary.light' 
-                                       : `${getStatusColor(job.status)}.light`,
-                                   border: isPending 
-                                     ? '2px dashed warning.main'
-                                     : job.isInternal 
-                                       ? '1px solid secondary.main' 
-                                       : 'none',
-                                   borderRadius: 1,
-                                   fontSize: { xs: '0.6rem', sm: '0.75rem' },
-                                   overflow: 'hidden',
-                                   textOverflow: 'ellipsis',
-                                   whiteSpace: 'nowrap',
-                                   mb: jobIndex === jobsOnDate.length - 1 ? 0 : { xs: 0.25, sm: 0.5 },
-                                   // 대기중인 작업은 점선 애니메이션 추가
-                                   ...(isPending && {
-                                     animation: 'dashedBorder 2s infinite',
-                                     '@keyframes dashedBorder': {
-                                       '0%': { borderColor: 'warning.main' },
-                                       '50%': { borderColor: 'warning.dark' },
-                                       '100%': { borderColor: 'warning.main' }
-                                     }
-                                   })
-                                 }}
-                               >
-                                 <Typography 
-                                   variant="caption" 
-                                   sx={{ 
-                                     fontWeight: 'bold',
-                                     fontSize: { xs: '0.6rem', sm: '0.75rem' },
-                                     color: isPending ? 'warning.dark' : 'inherit'
-                                   }}
-                                 >
-                                   {isPending ? '⏳ ' : ''}
-                                   {job.scheduledDate ? formatTime(job.scheduledDate) : '미정'} {job.title}
-                                 </Typography>
-                                 <Typography 
-                                   variant="caption" 
-                                   sx={{ 
-                                     display: 'block',
-                                     fontSize: { xs: '0.5rem', sm: '0.6rem' },
-                                     color: isPending 
-                                       ? 'warning.dark' 
-                                       : job.isInternal 
-                                         ? 'secondary.dark' 
-                                         : 'text.secondary'
-                                   }}
-                                 >
-                                   {isPending 
-                                     ? (job.scheduledDate ? "대기중" : "대기중 (일정미정)") 
-                                     : job.isInternal ? "자사시공" : "시공의뢰"}
-                                 </Typography>
-                               </Box>
-                             );
-                           })}
-                       </Box>
-                     </Grid>
-                   );
-                 })}
-               </Grid>
-             </Paper>
-          </TabPanel>
 
           {/* 엑셀 업로드 탭 */}
-          <TabPanel value={tabValue} index={2}>
+          <TabPanel value={tabValue} index={1}>
             <ExcelJobUpload />
           </TabPanel>
         </>
@@ -928,6 +663,29 @@ const JobManagement: React.FC = () => {
                   <Divider sx={{ mb: 2 }} />
                 </Grid>
 
+                {/* 시공일시 */}
+                {selectedJob.scheduledDate && (
+                  <Grid item xs={12}>
+                    <Box display="flex" alignItems="center" gap={1} mb={1}>
+                      <Schedule color="action" />
+                      <Typography variant="subtitle1" fontWeight="bold">
+                        시공일시
+                      </Typography>
+                    </Box>
+                    <Typography variant="body1" sx={{ ml: 3 }}>
+                      {selectedJob.scheduledDate.toLocaleDateString('ko-KR', {
+                        year: 'numeric',
+                        month: 'long',
+                        day: 'numeric',
+                        weekday: 'long'
+                      })} {selectedJob.scheduledDate.toLocaleTimeString('ko-KR', {
+                        hour: '2-digit',
+                        minute: '2-digit'
+                      })}
+                    </Typography>
+                  </Grid>
+                )}
+
                 {/* 주소 정보 */}
                 <Grid item xs={12}>
                   <Box display="flex" alignItems="center" gap={1} mb={1}>
@@ -941,17 +699,19 @@ const JobManagement: React.FC = () => {
                   </Typography>
                 </Grid>
 
-                {/* 시공일시 */}
-                {selectedJob.scheduledDate && (
+
+
+                {/* 고객 연락처 */}
+                {customerInfo && customerInfo.phone && (
                   <Grid item xs={12}>
                     <Box display="flex" alignItems="center" gap={1} mb={1}>
-                      <Schedule color="action" />
+                      <Phone color="action" />
                       <Typography variant="subtitle1" fontWeight="bold">
-                        시공일시
+                        고객 연락처
                       </Typography>
                     </Box>
                     <Typography variant="body1" sx={{ ml: 3 }}>
-                      {formatDateTime(selectedJob.scheduledDate)}
+                      {customerInfo.phone}
                     </Typography>
                   </Grid>
                 )}
@@ -1265,187 +1025,7 @@ const JobManagement: React.FC = () => {
         )}
       </Dialog>
 
-             {/* 캘린더 상세 다이얼로그 */}
-       <Dialog
-         open={calendarDialogOpen}
-         onClose={() => setCalendarDialogOpen(false)}
-         maxWidth="md"
-         fullWidth
-       >
-         <DialogTitle>
-           {selectedDate && `${formatDate(selectedDate)} 작업 일정`}
-         </DialogTitle>
-         <DialogContent>
-           {selectedJobs.length === 0 ? (
-             <Typography color="textSecondary">
-               해당 날짜에 예정된 작업이 없습니다.
-             </Typography>
-           ) : (
-             <List>
-               {selectedJobs
-                 .sort((a, b) => (a.scheduledDate?.getTime() || 0) - (b.scheduledDate?.getTime() || 0))
-                 .map((job, index) => (
-                   <React.Fragment key={job.id}>
-                     <ListItem>
-                       <Box sx={{ width: '100%' }}>
-                         <Box display="flex" justifyContent="space-between" alignItems="flex-start" mb={1}>
-                           <Typography variant="h6">{job.title}</Typography>
-                           <Box display="flex" gap={1}>
-                             <Chip 
-                               label={getStatusText(job.status)} 
-                               color={getStatusColor(job.status)} 
-                               size="small" 
-                             />
-                             <Chip 
-                               label={job.isInternal ? "자사시공" : "시공의뢰"} 
-                               color={job.isInternal ? "secondary" : "primary"} 
-                               size="small" 
-                               variant="outlined"
-                             />
-                           </Box>
-                         </Box>
-                         
-                         <Box display="flex" alignItems="center" gap={1} mb={1}>
-                           <Schedule fontSize="small" color="action" />
-                           <Typography variant="body2" color="textSecondary">
-                             {job.scheduledDate && formatTime(job.scheduledDate)}
-                           </Typography>
-                         </Box>
-                         
-                         <Box display="flex" alignItems="center" gap={1} mb={1}>
-                           <LocationOn fontSize="small" color="action" />
-                           <Typography variant="body2" color="textSecondary">
-                             {job.address}
-                           </Typography>
-                         </Box>
-                         
-                         <Typography variant="body2" color="textSecondary" mb={2}>
-                           총 금액: {calculateTotalPrice(job).toLocaleString()}원
-                         </Typography>
-                         
-                         <Typography variant="body2" mb={2}>
-                           {job.description}
-                         </Typography>
-                         
-                         {/* 제품준비 상태 관리 버튼 */}
-                         {job.status === 'assigned' && (
-                           <Box display="flex" gap={1} mb={2}>
-                             <Button 
-                               variant="contained" 
-                               size="medium"
-                               fullWidth
-                               color="warning"
-                               sx={{ 
-                                 fontSize: '1rem', 
-                                 fontWeight: 'bold',
-                                 py: 1.5,
-                                 mb: 1,
-                                 background: 'linear-gradient(45deg, #FF9800 30%, #FFB74D 90%)',
-                                 boxShadow: '0 3px 5px 2px rgba(255, 152, 0, .3)',
-                                 animation: 'pulse 2s infinite',
-                                 '@keyframes pulse': {
-                                   '0%': {
-                                     transform: 'scale(1)',
-                                     boxShadow: '0 3px 5px 2px rgba(255, 152, 0, .3)'
-                                   },
-                                   '50%': {
-                                     transform: 'scale(1.02)',
-                                     boxShadow: '0 5px 15px 2px rgba(255, 152, 0, .5)'
-                                   },
-                                   '100%': {
-                                     transform: 'scale(1)',
-                                     boxShadow: '0 3px 5px 2px rgba(255, 152, 0, .3)'
-                                   }
-                                 },
-                                 '&:hover': {
-                                   background: 'linear-gradient(45deg, #F57C00 30%, #FF9800 90%)',
-                                   transform: 'scale(1.05)',
-                                   transition: 'all 0.3s ease'
-                                 }
-                               }}
-                               onClick={() => handleProductStatusChange(job.id, 'product_preparing')}
-                             >
-                               📦 제품 준비를 시작합니다~ 클릭!!
-                             </Button>
-                           </Box>
-                         )}
 
-                         {job.status === 'product_preparing' && (
-                           <Box display="flex" gap={1} mb={2}>
-                             <Button 
-                               variant="contained" 
-                               size="medium"
-                               fullWidth
-                               color="success"
-                               sx={{ 
-                                 fontSize: '1rem', 
-                                 fontWeight: 'bold',
-                                 py: 1.5,
-                                 mb: 1,
-                                 background: 'linear-gradient(45deg, #FF9800 30%, #FFB74D 90%)',
-                                 boxShadow: '0 3px 5px 2px rgba(255, 152, 0, .3)',
-                                 animation: 'pulse 2s infinite',
-                                 '@keyframes pulse': {
-                                   '0%': {
-                                     transform: 'scale(1)',
-                                     boxShadow: '0 3px 5px 2px rgba(255, 152, 0, .3)'
-                                   },
-                                   '50%': {
-                                     transform: 'scale(1.02)',
-                                     boxShadow: '0 5px 15px 2px rgba(255, 152, 0, .5)'
-                                   },
-                                   '100%': {
-                                     transform: 'scale(1)',
-                                     boxShadow: '0 3px 5px 2px rgba(255, 152, 0, .3)'
-                                   }
-                                 },
-                                 '&:hover': {
-                                   background: 'linear-gradient(45deg, #F57C00 30%, #FF9800 90%)',
-                                   transform: 'scale(1.05)',
-                                   transition: 'all 0.3s ease'
-                                 }
-                               }}
-                               onClick={() => handleProductStatusChange(job.id, 'product_ready')}
-                             >
-                               📦 제품이 모두 준비된 후 클릭해주세요!!
-                             </Button>
-                           </Box>
-                         )}
-                         
-                         <Button 
-                           variant="outlined" 
-                           size="small"
-                           onClick={() => {
-                             setCalendarDialogOpen(false);
-                             handleDetailClick(job);
-                           }}
-                         >
-                           상세보기
-                         </Button>
-                       </Box>
-                     </ListItem>
-                     {index < selectedJobs.length - 1 && <Divider />}
-                   </React.Fragment>
-                 ))}
-             </List>
-           )}
-         </DialogContent>
-         <DialogActions sx={{ justifyContent: 'space-between' }}>
-           <Button 
-             variant="contained" 
-             startIcon={<Add />}
-             onClick={() => {
-               setCalendarDialogOpen(false);
-               setCreateDialogOpen(true);
-             }}
-           >
-             일정추가
-           </Button>
-           <Button onClick={() => setCalendarDialogOpen(false)}>
-             닫기
-           </Button>
-         </DialogActions>
-       </Dialog>
     </Box>
   );
 };

@@ -870,13 +870,7 @@ const JobDetail: React.FC = () => {
                 </Box>
               </Box>
 
-              <Grid container spacing={2} mb={3}>
-                <Grid item xs={12} sm={6}>
-                  <Box display="flex" alignItems="center" mb={1}>
-                    <LocationOn color="action" sx={{ mr: 1 }} />
-                    <Typography variant="body2">{job.address}</Typography>
-                  </Box>
-                </Grid>
+                            <Grid container spacing={2} mb={3}>
                 {job.scheduledDate && (
                   <Grid item xs={12} sm={6}>
                     <Box display="flex" alignItems="center" mb={1}>
@@ -885,6 +879,12 @@ const JobDetail: React.FC = () => {
                     </Box>
                   </Grid>
                 )}
+                <Grid item xs={12} sm={6}>
+                  <Box display="flex" alignItems="center" mb={1}>
+                    <LocationOn color="action" sx={{ mr: 1 }} />
+                    <Typography variant="body2">{job.address}</Typography>
+                  </Box>
+                </Grid>
                 <Grid item xs={12} sm={6}>
                   <Box display="flex" alignItems="center" mb={1}>
                     <AttachMoney color="action" sx={{ mr: 1 }} />

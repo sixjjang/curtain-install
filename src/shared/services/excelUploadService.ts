@@ -11,14 +11,20 @@ export class ExcelUploadService {
       {
         '제목': '예시: 커튼 설치',
         '설명': '예시: 거실 커튼 설치 작업입니다.',
-        '주소': '예시: 서울시 강남구 테헤란로 123',
+        '시공주소': '예시: 서울시 강남구 테헤란로 123',
         '시공일': '2024-01-15',
         '시공시간': '14:00',
         '고객명': '홍길동',
         '고객연락처': '010-1234-5678',
+        '고객주소': '예시: 서울시 강남구 역삼동 456',
         '최소예산': 50000,
         '최대예산': 80000,
-        '내부작업여부': 'N'
+        '내부작업여부': 'N',
+        '픽업상호': '예시: ABC커튼',
+        '픽업연락처': '010-9876-5432',
+        '픽업주소': '예시: 서울시 강남구 논현동 789',
+        '준비예정일': '2024-01-14',
+        '준비예정시간': '09:00'
       }
     ];
 
@@ -30,14 +36,20 @@ export class ExcelUploadService {
     ws['!cols'] = [
       { width: 20 }, // 제목
       { width: 30 }, // 설명
-      { width: 25 }, // 주소
+      { width: 25 }, // 시공주소
       { width: 12 }, // 시공일
       { width: 10 }, // 시공시간
       { width: 15 }, // 고객명
       { width: 15 }, // 고객연락처
+      { width: 25 }, // 고객주소
       { width: 12 }, // 최소예산
       { width: 12 }, // 최대예산
-      { width: 15 }  // 내부작업여부
+      { width: 15 }, // 내부작업여부
+      { width: 20 }, // 픽업상호
+      { width: 15 }, // 픽업연락처
+      { width: 25 }, // 픽업주소
+      { width: 12 }, // 준비예정일
+      { width: 12 }  // 준비예정시간
     ];
 
     const excelBuffer = XLSX.write(wb, { bookType: 'xlsx', type: 'array' });
@@ -73,14 +85,20 @@ export class ExcelUploadService {
                 id: `excel-${Date.now()}-${index}`,
                 title: this.getCellValue(row, headers, '제목') || '',
                 description: this.getCellValue(row, headers, '설명') || '',
-                address: this.getCellValue(row, headers, '주소') || '',
+                address: this.getCellValue(row, headers, '시공주소') || '',
                 scheduledDate: this.getCellValue(row, headers, '시공일'),
                 scheduledTime: this.getCellValue(row, headers, '시공시간'),
                 customerName: this.getCellValue(row, headers, '고객명') || '',
                 customerPhone: this.getCellValue(row, headers, '고객연락처') || '',
+                customerAddress: this.getCellValue(row, headers, '고객주소') || '',
                 budgetMin: this.parseNumber(this.getCellValue(row, headers, '최소예산')),
                 budgetMax: this.parseNumber(this.getCellValue(row, headers, '최대예산')),
                 isInternal: this.getCellValue(row, headers, '내부작업여부')?.toUpperCase() === 'Y',
+                pickupCompanyName: this.getCellValue(row, headers, '픽업상호') || '',
+                pickupPhone: this.getCellValue(row, headers, '픽업연락처') || '',
+                pickupAddress: this.getCellValue(row, headers, '픽업주소') || '',
+                pickupScheduledDate: this.getCellValue(row, headers, '준비예정일'),
+                pickupScheduledTime: this.getCellValue(row, headers, '준비예정시간'),
                 workInstructions: [],
                 status: 'pending',
                 isSelected: true
@@ -189,14 +207,20 @@ export class ExcelUploadService {
     const exportData = jobs.map(job => ({
       '제목': job.title,
       '설명': job.description,
-      '주소': job.address,
+      '시공주소': job.address,
       '시공일': job.scheduledDate || '',
       '시공시간': job.scheduledTime || '',
       '고객명': job.customerName,
       '고객연락처': job.customerPhone,
+      '고객주소': job.customerAddress || '',
       '최소예산': job.budgetMin || '',
       '최대예산': job.budgetMax || '',
       '내부작업여부': job.isInternal ? 'Y' : 'N',
+      '픽업상호': job.pickupCompanyName || '',
+      '픽업연락처': job.pickupPhone || '',
+      '픽업주소': job.pickupAddress || '',
+      '준비예정일': job.pickupScheduledDate || '',
+      '준비예정시간': job.pickupScheduledTime || '',
       '상태': job.status === 'ready' ? '준비완료' : job.status === 'error' ? '오류' : '대기중',
       '오류메시지': job.errorMessage || ''
     }));

@@ -12,7 +12,7 @@ import PaymentFail from './pages/PaymentFail';
 import Profile from './pages/Profile';
 import Chat from './pages/Chat';
 import Notifications from './pages/Notifications';
-import CalendarView from './pages/CalendarView';
+
 
 const SellerApp: React.FC = () => {
   return (
@@ -29,7 +29,7 @@ const SellerApp: React.FC = () => {
           <Route path="/profile" element={<Profile />} />
           <Route path="/chat/:jobId" element={<Chat />} />
           <Route path="/notifications" element={<Notifications />} />
-          <Route path="/calendar" element={<CalendarView />} />
+
         </Routes>
       </Box>
     </SellerLayout>

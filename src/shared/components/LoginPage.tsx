@@ -15,7 +15,7 @@ import {
 } from '@mui/material';
 import { useAuth } from '../contexts/AuthContext';
 import { AuthService } from '../services/authService';
-import { KakaoAuthService } from '../services/kakaoAuthService';
+
 import { UserRole } from '../../types';
 
 const LoginPage: React.FC = () => {
@@ -64,15 +64,7 @@ const LoginPage: React.FC = () => {
     }
   };
 
-  const handleKakaoLogin = () => {
-    try {
-      setError('');
-      KakaoAuthService.initiateKakaoLogin();
-    } catch (error) {
-      console.error('카카오 로그인 시작 실패:', error);
-      setError('카카오 로그인을 시작할 수 없습니다.');
-    }
-  };
+
 
   const createTestAccount = async (role: 'admin' | 'seller' | 'contractor') => {
     try {
@@ -244,25 +236,7 @@ const LoginPage: React.FC = () => {
                 {loading ? '로그인 중...' : '로그인'}
               </Button>
 
-              <Button
-                fullWidth
-                variant="outlined"
-                sx={{ 
-                  mt: 1, 
-                  mb: 2,
-                  backgroundColor: '#FEE500',
-                  color: '#000000',
-                  borderColor: '#FEE500',
-                  '&:hover': {
-                    backgroundColor: '#FDD835',
-                    borderColor: '#FDD835'
-                  }
-                }}
-                onClick={handleKakaoLogin}
-                disabled={loading}
-              >
-                카카오톡으로 로그인
-              </Button>
+
               
               <Box textAlign="center">
                 <Link to="/register" style={{ textDecoration: 'none' }}>

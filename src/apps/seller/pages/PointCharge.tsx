@@ -57,7 +57,7 @@ const PointCharge: React.FC = () => {
   const [chargeDialogOpen, setChargeDialogOpen] = useState(false);
   const [chargeAmount, setChargeAmount] = useState('');
   const [selectedAmount, setSelectedAmount] = useState<number | null>(null);
-  const [paymentMethod, setPaymentMethod] = useState<'simulation' | 'kakao_pay' | 'toss_payments'>('simulation');
+  const [paymentMethod, setPaymentMethod] = useState<'simulation' | 'toss_payments'>('simulation');
   const [tossPaymentMethod, setTossPaymentMethod] = useState('card');
 
   // 충전 금액 옵션
@@ -124,15 +124,6 @@ const PointCharge: React.FC = () => {
       
       // 결제 수단에 따른 처리
       switch (paymentMethod) {
-        case 'kakao_pay':
-          paymentResult = await PaymentService.requestKakaoPay({
-            amount,
-            orderId,
-            itemName: `${amount.toLocaleString()}포인트 충전`,
-            userId: user.id,
-            userRole: 'seller'
-          });
-          break;
           
         case 'toss_payments':
           paymentResult = await PaymentService.requestTossPayments({
@@ -430,7 +421,7 @@ const PointCharge: React.FC = () => {
             <FormControl component="fieldset" fullWidth>
               <RadioGroup
                 value={paymentMethod}
-                onChange={(e) => setPaymentMethod(e.target.value as 'simulation' | 'kakao_pay' | 'toss_payments')}
+                onChange={(e) => setPaymentMethod(e.target.value as 'simulation' | 'toss_payments')}
               >
                 <FormControlLabel
                   value="simulation"
@@ -442,16 +433,7 @@ const PointCharge: React.FC = () => {
                     </Box>
                   }
                 />
-                <FormControlLabel
-                  value="kakao_pay"
-                  control={<Radio />}
-                  label={
-                    <Box display="flex" alignItems="center" gap={1}>
-                      <Payment color="primary" />
-                      <Typography component="span">카카오페이</Typography>
-                    </Box>
-                  }
-                />
+
                 <FormControlLabel
                   value="toss_payments"
                   control={<Radio />}

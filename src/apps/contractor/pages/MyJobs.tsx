@@ -30,11 +30,11 @@ import {
   Checkbox,
   Paper
 } from '@mui/material';
-import { Search, Schedule, LocationOn, CheckCircle, CalendarMonth, Assignment, Chat, CheckCircleOutline } from '@mui/icons-material';
+import { Search, Schedule, LocationOn, CheckCircle, Assignment, Chat, CheckCircleOutline } from '@mui/icons-material';
 import { JobService } from '../../../shared/services/jobService';
 import { ConstructionJob } from '../../../types';
 import { useAuth } from '../../../shared/contexts/AuthContext';
-import MyJobsCalendarView from './MyJobsCalendarView';
+
 
 const MyJobs: React.FC = () => {
   const navigate = useNavigate();
@@ -52,7 +52,7 @@ const MyJobs: React.FC = () => {
     message: '',
     severity: 'success'
   });
-  const [viewMode, setViewMode] = useState<'list' | 'calendar'>('list');
+  const [viewMode, setViewMode] = useState<'list'>('list');
   
   // 시공완료 다이얼로그 관련 상태
   const [completionDialogOpen, setCompletionDialogOpen] = useState(false);
@@ -557,27 +557,10 @@ const MyJobs: React.FC = () => {
             📋 배정된 작업: 모든 진행 중인 작업을 한눈에 확인할 수 있습니다
           </Typography>
         </Box>
-        <Box display="flex" gap={1}>
-          <Button
-            variant={viewMode === 'list' ? "contained" : "outlined"}
-            startIcon={<Assignment />}
-            onClick={() => setViewMode('list')}
-          >
-            목록 보기
-          </Button>
-          <Button
-            variant={viewMode === 'calendar' ? "contained" : "outlined"}
-            startIcon={<CalendarMonth />}
-            onClick={() => setViewMode('calendar')}
-          >
-            스케줄 보기
-          </Button>
-        </Box>
+
       </Box>
 
-      {viewMode === 'calendar' ? (
-        <MyJobsCalendarView myJobs={jobs} />
-      ) : (
+
         <>
           <Card sx={{ mb: 3 }}>
             <CardContent>
@@ -912,7 +895,6 @@ const MyJobs: React.FC = () => {
             </Alert>
           </Snackbar>
         </>
-      )}
     </Box>
   );
 };

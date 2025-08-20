@@ -44,9 +44,17 @@ interface CreateJobDialogProps {
   open: boolean;
   onClose: () => void;
   onJobCreated: () => void;
+  initialScheduledDate?: string;
+  initialScheduledTime?: string;
 }
 
-const CreateJobDialog: React.FC<CreateJobDialogProps> = ({ open, onClose, onJobCreated }) => {
+const CreateJobDialog: React.FC<CreateJobDialogProps> = ({ 
+  open, 
+  onClose, 
+  onJobCreated, 
+  initialScheduledDate, 
+  initialScheduledTime 
+}) => {
   const { user } = useAuth();
   const [formData, setFormData] = useState({
     title: '',
@@ -54,8 +62,8 @@ const CreateJobDialog: React.FC<CreateJobDialogProps> = ({ open, onClose, onJobC
     address: '',
     budgetMin: '',
     budgetMax: '',
-    scheduledDate: '',
-    scheduledTime: '',
+    scheduledDate: initialScheduledDate || '',
+    scheduledTime: initialScheduledTime || '',
     isInternal: false
   });
   
@@ -98,9 +106,20 @@ const CreateJobDialog: React.FC<CreateJobDialogProps> = ({ open, onClose, onJobC
         console.error('저장된 데이터 불러오기 실패:', error);
       }
     };
-
+    
     loadSavedData();
-  }, [open, user?.id]);
+  }, [user?.id, open]);
+
+  // 초기 시공일시 설정
+  React.useEffect(() => {
+    if (open && (initialScheduledDate || initialScheduledTime)) {
+      setFormData(prev => ({
+        ...prev,
+        scheduledDate: initialScheduledDate || prev.scheduledDate,
+        scheduledTime: initialScheduledTime || prev.scheduledTime
+      }));
+    }
+  }, [open, initialScheduledDate, initialScheduledTime]);
   const [items, setItems] = useState<JobItem[]>([]);
   const [newItem, setNewItem] = useState({
     name: '',

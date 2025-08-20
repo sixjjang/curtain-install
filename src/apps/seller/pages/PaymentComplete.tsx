@@ -27,7 +27,6 @@ const PaymentComplete: React.FC = () => {
       try {
         // URL 파라미터에서 결제 정보 확인
         const orderIdParam = searchParams.get('orderId');
-        const pgToken = searchParams.get('pg_token'); // 카카오페이
         const paymentKey = searchParams.get('paymentKey'); // 토스페이먼츠
         const successParam = searchParams.get('success');
         const amountParam = searchParams.get('amount');
@@ -40,18 +39,8 @@ const PaymentComplete: React.FC = () => {
 
         setOrderId(orderIdParam);
 
-        // 카카오페이 결제 완료 처리
-        if (pgToken && successParam === 'true') {
-          const result = await PaymentService.confirmKakaoPay(orderIdParam, pgToken);
-          
-          if (result.success) {
-            setSuccess(true);
-          } else {
-            setError(result.error || '카카오페이 결제 확인에 실패했습니다.');
-          }
-        }
         // 토스페이먼츠 결제 완료 처리
-        else if (paymentKey && amountParam) {
+        if (paymentKey && amountParam) {
           const result = await PaymentService.confirmTossPayments(
             paymentKey, 
             orderIdParam, 

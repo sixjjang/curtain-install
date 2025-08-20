@@ -24,7 +24,6 @@ import {
   Dashboard,
   Work,
   Assignment,
-  CalendarMonth,
   Chat,
   AccountBalance,
   Person,
@@ -52,9 +51,8 @@ const ContractorLayout: React.FC<ContractorLayoutProps> = ({ children }) => {
 
   const menuItems = [
     { text: '대시보드', icon: <Dashboard />, path: '/contractor' },
-    { text: '작업 목록', icon: <Work />, path: '/contractor/jobs' },
+    { text: '시공건 찾기', icon: <Work />, path: '/contractor/jobs' },
     { text: '내 작업', icon: <Assignment />, path: '/contractor/my-jobs' },
-    { text: '캘린더 뷰', icon: <CalendarMonth />, path: '/contractor/calendar' },
     { text: '판매자와 채팅', icon: <Chat />, path: '/contractor/chat' },
     { text: '포인트 관리', icon: <AccountBalance />, path: '/contractor/points' },
     { text: '프로필', icon: <Person />, path: '/contractor/profile' },

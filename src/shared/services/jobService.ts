@@ -150,6 +150,52 @@ export class JobService {
     }
   }
 
+  // 시공자별 작업 가져오기
+  static async getJobsByContractor(contractorId: string): Promise<ConstructionJob[]> {
+    try {
+      const jobsRef = collection(db, 'constructionJobs');
+      const q = query(
+        jobsRef, 
+        where('contractorId', '==', contractorId)
+        // orderBy 제거하여 인덱스 없이도 작동
+      );
+      const querySnapshot = await getDocs(q);
+      
+      const jobs: ConstructionJob[] = [];
+      querySnapshot.forEach((doc) => {
+        const data = doc.data();
+        jobs.push({
+          id: doc.id,
+          ...data,
+          createdAt: this.safeDateConversion(data.createdAt) || new Date(),
+          updatedAt: this.safeDateConversion(data.updatedAt) || new Date(),
+          scheduledDate: this.safeDateConversion(data.scheduledDate),
+          completedDate: this.safeDateConversion(data.completedDate),
+          progressHistory: data.progressHistory?.map((step: any) => ({
+            ...step,
+            timestamp: this.safeDateConversion(step.timestamp) || new Date()
+          })) || []
+        } as unknown as ConstructionJob);
+      });
+      
+      // 클라이언트에서 정렬
+      jobs.sort((a, b) => b.createdAt.getTime() - a.createdAt.getTime());
+      
+      console.log(`🔍 시공자 ${contractorId}의 작업:`, jobs.length, '개');
+      console.log('🔍 시공자 작업 목록:', jobs.map(job => ({
+        id: job.id,
+        title: job.title,
+        status: job.status,
+        createdAt: job.createdAt
+      })));
+      
+      return jobs;
+    } catch (error) {
+      console.error('시공자 작업 목록 가져오기 실패:', error);
+      throw new Error('시공자 작업 목록을 가져올 수 없습니다.');
+    }
+  }
+
   // 상태별 작업 개수 가져오기
   static async getJobCountsByStatus(): Promise<{ [key: string]: number }> {
     try {
@@ -380,19 +426,7 @@ export class JobService {
       
       console.log(`작업 ${jobId}의 상태가 ${status}로 업데이트되었습니다. (시간: ${newProgressStep.timestamp})`);
 
-      // 시공 완료 시 자동으로 만족도 평가 링크 전송
-      if (status === 'completed' && !satisfactionData) {
-        try {
-          const { KakaoBusinessService } = await import('./kakaoBusinessService');
-          const jobData = await this.getJobById(jobId);
-          if (jobData) {
-            await KakaoBusinessService.sendSatisfactionSurveyOnJobCompletion(jobData);
-            console.log('✅ 만족도 평가 링크 전송 완료');
-          }
-        } catch (kakaoError) {
-          console.warn('⚠️ 카카오톡 만족도 평가 링크 전송 실패:', kakaoError);
-        }
-      }
+
 
       // 시공 완료 시 에스크로 타이머 시작 (설정된 시간 후 자동 지급)
       if (status === 'completed') {
