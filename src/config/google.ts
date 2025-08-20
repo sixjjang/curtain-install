@@ -18,6 +18,11 @@ export const GOOGLE_CALENDAR_CONFIG = {
 
 // 구글 OAuth 인증 URL 생성
 export const getGoogleAuthUrl = () => {
+  // 클라이언트 ID가 설정되지 않은 경우 오류 처리
+  if (!GOOGLE_CALENDAR_CONFIG.clientId || GOOGLE_CALENDAR_CONFIG.clientId === 'your_google_client_id_here') {
+    throw new Error('구글 캘린더 연동을 위해 환경 변수 REACT_APP_GOOGLE_CLIENT_ID가 설정되지 않았습니다. .env 파일에 실제 구글 클라이언트 ID를 설정해주세요.');
+  }
+
   const params = new URLSearchParams({
     client_id: GOOGLE_CALENDAR_CONFIG.clientId,
     redirect_uri: GOOGLE_CALENDAR_CONFIG.redirectUri,

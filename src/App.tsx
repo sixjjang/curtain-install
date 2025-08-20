@@ -15,6 +15,7 @@ import SimpleSatisfactionSurvey from './apps/customer/SimpleSatisfactionSurvey';
 import SatisfactionSurvey from './apps/customer/SatisfactionSurvey';
 import KakaoCallback from './shared/components/KakaoCallback';
 import GoogleCallback from './shared/components/GoogleCallback';
+import GoogleCalendarSetupGuide from './shared/components/GoogleCalendarSetupGuide';
 
 // 공통 컴포넌트들
 import LoginPage from './shared/components/LoginPage';
@@ -108,6 +109,9 @@ function App() {
             
             {/* 구글 캘린더 연동 콜백 */}
             <Route path="/google-callback" element={<GoogleCallback />} />
+            
+            {/* 구글 캘린더 설정 가이드 */}
+            <Route path="/google-calendar-setup" element={<GoogleCalendarSetupGuide />} />
             
             {/* Firebase 테스트 페이지 */}
             <Route path="/test" element={<FirebaseTest />} />

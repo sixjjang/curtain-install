@@ -134,7 +134,20 @@ const CalendarView: React.FC = () => {
 
   // 구글 캘린더 연동 시작
   const handleConnectGoogle = () => {
-    GoogleCalendarService.initiateConnection();
+    try {
+      GoogleCalendarService.initiateConnection();
+    } catch (error) {
+      console.error('구글 캘린더 연동 실패:', error);
+      const errorMessage = error instanceof Error ? error.message : '구글 캘린더 연동에 실패했습니다.';
+      setError(errorMessage);
+      
+      // 환경 변수 설정이 안 되어 있는 경우 가이드 페이지로 이동
+      if (errorMessage.includes('REACT_APP_GOOGLE_CLIENT_ID가 설정되지 않았습니다')) {
+        setTimeout(() => {
+          window.open('/google-calendar-setup', '_blank');
+        }, 2000);
+      }
+    }
   };
 
   // 구글 캘린더 연동 해제
