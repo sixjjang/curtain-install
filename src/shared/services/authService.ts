@@ -920,7 +920,8 @@ export class AuthService {
           businessCategory: '',
           businessLicenseImage: '',
           rating: 0,
-          totalSales: 0
+          totalSales: 0,
+          points: 0 // 판매자 포인트 필드 추가
         };
 
         console.log('💾 판매자 데이터 Firestore 저장 중...');

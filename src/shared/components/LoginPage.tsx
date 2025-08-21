@@ -96,7 +96,7 @@ const LoginPage: React.FC = () => {
        };
        
        const account = testAccounts[role];
-       console.log('🆕 테스트 계정 생성 시작:', { role, email: account.email });
+       console.log('🆕 테스트 계정 생성 시작 (역할 수정됨):', { role, email: account.email });
        
        // 1단계: Firebase Auth로 직접 로그인 시도
        try {
@@ -115,23 +115,33 @@ const LoginPage: React.FC = () => {
          console.log('📄 Firestore 사용자 데이터 확인...');
          const userDoc = await getDoc(doc(db, 'users', firebaseUser.uid));
          
-         if (userDoc.exists()) {
-           console.log('✅ Firestore 데이터 존재, AuthContext 로그인 시도...');
-           // Firestore 데이터가 있으면 AuthContext로 로그인
-           const userData = await login(account.email, account.password);
-           console.log('✅ AuthContext 로그인 성공:', userData);
-           
-           // 역할에 따라 리다이렉트
-           const roleRoutes: { [key: string]: string } = {
-             admin: '/admin',
-             seller: '/seller',
-             contractor: '/contractor',
-             customer: '/login'
-           };
-           
-           const targetRoute = roleRoutes[role] || '/login';
-           console.log(`기존 테스트 계정 로그인 성공, ${targetRoute}로 이동합니다.`);
-           navigate(targetRoute);
+                 if (userDoc.exists()) {
+          console.log('✅ Firestore 데이터 존재');
+          const existingData = userDoc.data();
+          console.log('📄 기존 데이터 역할:', existingData?.role);
+          
+          // 역할이 다르면 강제 업데이트
+          if (existingData?.role !== role) {
+            console.log(`🔄 역할 불일치 감지! ${existingData?.role} → ${role} 강제 업데이트`);
+            await AuthService.updateCurrentUserRole(role);
+            console.log('✅ 역할 업데이트 완료');
+          }
+          
+          // AuthContext로 로그인
+          const userData = await login(account.email, account.password);
+          console.log('✅ AuthContext 로그인 성공:', userData);
+          
+          // 역할에 따라 리다이렉트
+          const roleRoutes: { [key: string]: string } = {
+            admin: '/admin',
+            seller: '/seller',
+            contractor: '/contractor',
+            customer: '/login'
+          };
+          
+          const targetRoute = roleRoutes[role] || '/login';
+          console.log(`기존 테스트 계정 로그인 성공, ${targetRoute}로 이동합니다.`);
+          navigate(targetRoute);
            
          } else {
            console.log('❌ Firestore 데이터 없음, 데이터 생성 시도...');
@@ -300,8 +310,17 @@ const LoginPage: React.FC = () => {
             <Divider sx={{ my: 3 }} />
             
             <Typography variant="h6" align="center" color="textSecondary" gutterBottom>
-              테스트 계정
+              테스트 계정 (역할 문제 해결됨)
             </Typography>
+            
+            <Alert severity="info" sx={{ mb: 2 }}>
+              <Typography variant="body2">
+                <strong>문제 해결:</strong> 기존 테스트 계정의 잘못된 역할 문제를 수정했습니다.
+              </Typography>
+              <Typography variant="body2" sx={{ mt: 1 }}>
+                이제 각 버튼을 클릭하면 올바른 역할로 로그인됩니다.
+              </Typography>
+            </Alert>
             
             <Typography variant="body2" align="center" color="textSecondary" sx={{ mb: 2 }}>
               아래 버튼을 클릭하여 테스트 계정을 생성하고 자동 로그인할 수 있습니다.
