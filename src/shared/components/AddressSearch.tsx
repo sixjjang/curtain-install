@@ -1,4 +1,4 @@
-import React, { useEffect, useRef } from 'react';
+import React, { useEffect, useRef, useState } from 'react';
 import { TextField, Button, Box } from '@mui/material';
 import { Search as SearchIcon, LocationOn } from '@mui/icons-material';
 
@@ -22,6 +22,7 @@ const AddressSearch: React.FC<AddressSearchProps> = ({
   label = "주소"
 }) => {
   const addressInputRef = useRef<HTMLInputElement>(null);
+  const [searchKeyword, setSearchKeyword] = useState('');
 
   useEffect(() => {
     // 다음 우편번호 서비스 스크립트 로드
@@ -35,13 +36,15 @@ const AddressSearch: React.FC<AddressSearchProps> = ({
     };
   }, []);
 
-  const handleAddressSearch = () => {
+  const handleAddressSearch = (keyword?: string) => {
     if (!window.daum) {
       alert('주소 검색 서비스를 불러오는 중입니다. 잠시 후 다시 시도해주세요.');
       return;
     }
 
     new window.daum.Postcode({
+      // 검색어가 있으면 자동으로 검색창에 입력
+      keyword: keyword || '',
       oncomplete: function(data: any) {
         // 주소 정보를 해당 필드에 넣는다.
         let addr = '';
@@ -67,8 +70,28 @@ const AddressSearch: React.FC<AddressSearchProps> = ({
         if (addressInputRef.current) {
           addressInputRef.current.focus();
         }
+      },
+      onclose: function(state: any) {
+        // 팝업이 닫힐 때 처리
       }
     }).open();
+  };
+
+  const handleInputChange = (e: React.ChangeEvent<HTMLInputElement>) => {
+    const newValue = e.target.value;
+    setSearchKeyword(newValue);
+    onChange(newValue);
+  };
+
+  const handleKeyPress = (e: React.KeyboardEvent) => {
+    if (e.key === 'Enter') {
+      e.preventDefault();
+      handleAddressSearch(searchKeyword);
+    }
+  };
+
+  const handleSearchClick = () => {
+    handleAddressSearch(searchKeyword);
   };
 
   return (
@@ -78,12 +101,13 @@ const AddressSearch: React.FC<AddressSearchProps> = ({
         fullWidth
         label={label}
         value={value}
-        onChange={(e) => onChange(e.target.value)}
+        onChange={handleInputChange}
+        onKeyPress={handleKeyPress}
         placeholder={placeholder}
         InputProps={{
           endAdornment: (
             <Button
-              onClick={handleAddressSearch}
+              onClick={handleSearchClick}
               startIcon={<SearchIcon />}
               sx={{ minWidth: 'auto', px: 1 }}
             >
