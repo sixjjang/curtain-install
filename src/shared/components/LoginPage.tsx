@@ -203,40 +203,27 @@ const LoginPage: React.FC = () => {
      }
    };
 
-   // 현재 사용자 역할 변경 (디버깅용)
-   const updateCurrentUserRole = async (role: UserRole) => {
-     try {
-       setUpdatingRole(true);
-       setError('');
-       
-       await AuthService.updateCurrentUserRole(role);
-       
-       // 역할 변경 후 다시 로그인하여 업데이트된 정보 가져오기
-       if (user) {
-         // 현재 사용자의 이메일로 다시 로그인 시도
-         // 비밀번호는 알 수 없으므로 현재 세션을 유지하는 방식으로 변경
-         console.log('역할 변경 완료, 현재 세션 유지');
-         
-         // 역할에 따라 리다이렉트
-         const roleRoutes: { [key: string]: string } = {
-           admin: '/admin',
-           seller: '/seller',
-           contractor: '/contractor',
-           customer: '/login'
-         };
-         
-         const targetRoute = roleRoutes[role] || '/login';
-         console.log(`역할 변경 완료, ${targetRoute}로 이동합니다.`);
-         navigate(targetRoute);
-       }
-       
-     } catch (error: any) {
-       console.error('역할 변경 실패:', error);
-       setError(`역할 변경 실패: ${error.message}`);
-     } finally {
-       setUpdatingRole(false);
-     }
-   };
+     // 현재 사용자 역할 변경 (디버깅용)
+  const updateCurrentUserRole = async (role: UserRole) => {
+    try {
+      setUpdatingRole(true);
+      setError('');
+      
+      console.log(`🔄 역할 변경 시작: ${user?.role} → ${role}`);
+      await AuthService.updateCurrentUserRole(role);
+      console.log(`✅ 역할 변경 완료: ${role}`);
+      
+      // 역할 변경 후 페이지 새로고침하여 AuthContext 재초기화
+      console.log('🔄 페이지 새로고침으로 AuthContext 재초기화');
+      window.location.reload();
+      
+    } catch (error: any) {
+      console.error('❌ 역할 변경 실패:', error);
+      setError(`역할 변경 실패: ${error.message}`);
+    } finally {
+      setUpdatingRole(false);
+    }
+  };
 
   return (
     <Container maxWidth="sm">
@@ -399,8 +386,17 @@ const LoginPage: React.FC = () => {
                 <Divider sx={{ my: 3 }} />
                 
                 <Typography variant="h6" align="center" color="textSecondary" gutterBottom>
-                  현재 사용자 역할 변경
+                  🔧 현재 사용자 역할 수정 (문제 해결)
                 </Typography>
+                
+                <Alert severity="warning" sx={{ mb: 2 }}>
+                  <Typography variant="body2">
+                    <strong>현재 문제:</strong> {user.email} 계정이 <strong>{user.role}</strong> 역할로 저장되어 있습니다.
+                  </Typography>
+                  <Typography variant="body2" sx={{ mt: 1 }}>
+                    올바른 역할로 변경하려면 아래 버튼을 클릭하세요.
+                  </Typography>
+                </Alert>
                 
                 <Typography variant="body2" align="center" color="textSecondary" sx={{ mb: 2 }}>
                   현재 로그인된 사용자: {user.email} (역할: {user.role})
