@@ -117,12 +117,51 @@ export class SatisfactionService {
   static async submitSurvey(surveyId: string, responses: SurveyResponse[]): Promise<void> {
     try {
       const surveyRef = doc(db, 'satisfactionSurveys', surveyId);
+      
+      // 만족도 조사 완료 처리
       await updateDoc(surveyRef, {
         responses,
         isCompleted: true,
         completedAt: serverTimestamp(),
         updatedAt: serverTimestamp()
       });
+
+      // 만족도 조사 정보 조회
+      const surveyDoc = await getDoc(surveyRef);
+      if (surveyDoc.exists()) {
+        const surveyData = surveyDoc.data();
+        const jobId = surveyData.jobId;
+        const contractorId = surveyData.contractorId;
+
+        // 전체 만족도 점수 계산
+        const overallRating = responses.find(r => 
+          r.questionId === 'overall' || 
+          r.questionId === 'overall_satisfaction' ||
+          r.questionId === 'general_satisfaction'
+        );
+
+        if (overallRating && typeof overallRating.answer === 'number') {
+          // 작업의 고객 만족도 업데이트
+          try {
+            const { JobService } = await import('./jobService');
+            await JobService.updateCustomerSatisfaction(jobId, overallRating.answer);
+            console.log(`✅ 작업 ${jobId}의 고객 만족도 업데이트: ${overallRating.answer}/5`);
+          } catch (jobError) {
+            console.warn('작업 만족도 업데이트 실패:', jobError);
+          }
+
+          // 시공자 평점 업데이트
+          if (contractorId) {
+            try {
+              const { ContractorService } = await import('./contractorService');
+              await ContractorService.updateContractorRating(contractorId, overallRating.answer);
+              console.log(`✅ 시공자 ${contractorId}의 평점 업데이트: ${overallRating.answer}/5`);
+            } catch (contractorError) {
+              console.warn('시공자 평점 업데이트 실패:', contractorError);
+            }
+          }
+        }
+      }
     } catch (error) {
       console.error('만족도 조사 제출 실패:', error);
       throw new Error('만족도 조사 제출에 실패했습니다.');

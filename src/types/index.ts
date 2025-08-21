@@ -293,6 +293,7 @@ export interface ConstructionJob {
   };
   status: 'pending' | 'assigned' | 'product_preparing' | 'product_ready' | 'pickup_completed' | 'in_progress' | 'completed' | 'cancelled' | 'product_not_ready' | 'customer_absent' | 'schedule_changed';
   sellerId: string;
+  sellerName?: string;
   customerId?: string;
   contractorId?: string;
   contractorName?: string;

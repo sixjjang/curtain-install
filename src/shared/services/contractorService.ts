@@ -333,4 +333,40 @@ export class ContractorService {
       throw new Error('시공자 목록을 불러올 수 없습니다.');
     }
   }
+
+  // 시공자 평점 업데이트 (만족도 조사 결과 반영)
+  static async updateContractorRating(contractorId: string, newRating: number): Promise<void> {
+    try {
+      if (newRating < 1 || newRating > 5) {
+        throw new Error('평점은 1-5 사이여야 합니다.');
+      }
+
+      const contractorRef = doc(db, 'users', contractorId);
+      const contractorDoc = await getDoc(contractorRef);
+      
+      if (!contractorDoc.exists()) {
+        throw new Error('시공자를 찾을 수 없습니다.');
+      }
+
+      const contractorData = contractorDoc.data();
+      const currentRating = contractorData.rating || 0;
+      const totalRatings = contractorData.totalRatings || 0;
+      
+      // 새로운 평균 평점 계산
+      const newTotalRatings = totalRatings + 1;
+      const newAverageRating = ((currentRating * totalRatings) + newRating) / newTotalRatings;
+      
+      // 평점 업데이트
+      await updateDoc(contractorRef, {
+        rating: Math.round(newAverageRating * 10) / 10, // 소수점 첫째 자리까지
+        totalRatings: newTotalRatings,
+        updatedAt: new Date()
+      });
+      
+      console.log(`✅ 시공자 ${contractorId} 평점 업데이트: ${currentRating} → ${Math.round(newAverageRating * 10) / 10} (총 ${newTotalRatings}개 평가)`);
+    } catch (error) {
+      console.error('시공자 평점 업데이트 실패:', error);
+      throw new Error('시공자 평점을 업데이트할 수 없습니다.');
+    }
+  }
 }

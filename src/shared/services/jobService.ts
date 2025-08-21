@@ -454,6 +454,16 @@ export class JobService {
         } catch (escrowError) {
           console.warn('⚠️ 에스크로 타이머 설정 실패:', escrowError);
         }
+
+        // 시공 완료 시 만족도 조사 알림 생성
+        try {
+          const { AdminSatisfactionService } = await import('./adminSatisfactionService');
+          await AdminSatisfactionService.createSatisfactionNotification(jobId);
+          console.log(`✅ 작업 ${jobId} 완료 - 만족도 조사 알림 생성됨`);
+        } catch (satisfactionError) {
+          console.warn('⚠️ 만족도 조사 알림 생성 실패:', satisfactionError);
+          // 만족도 조사 알림 실패해도 작업 완료는 계속 진행
+        }
       }
     } catch (error) {
       console.error('작업 상태 업데이트 실패:', error);
@@ -618,6 +628,11 @@ export class JobService {
       console.error('작업 상세 정보 가져오기 실패:', error);
       throw new Error('작업 상세 정보를 가져올 수 없습니다.');
     }
+  }
+
+  // getJob 별칭 (getJobById와 동일)
+  static async getJob(jobId: string): Promise<ConstructionJob> {
+    return this.getJobById(jobId);
   }
 
   // 작업 삭제
