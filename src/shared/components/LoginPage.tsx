@@ -310,17 +310,8 @@ const LoginPage: React.FC = () => {
             <Divider sx={{ my: 3 }} />
             
             <Typography variant="h6" align="center" color="textSecondary" gutterBottom>
-              테스트 계정 (역할 문제 해결됨)
+              테스트 계정
             </Typography>
-            
-            <Alert severity="info" sx={{ mb: 2 }}>
-              <Typography variant="body2">
-                <strong>문제 해결:</strong> 기존 테스트 계정의 잘못된 역할 문제를 수정했습니다.
-              </Typography>
-              <Typography variant="body2" sx={{ mt: 1 }}>
-                이제 각 버튼을 클릭하면 올바른 역할로 로그인됩니다.
-              </Typography>
-            </Alert>
             
             <Typography variant="body2" align="center" color="textSecondary" sx={{ mb: 2 }}>
               아래 버튼을 클릭하여 테스트 계정을 생성하고 자동 로그인할 수 있습니다.
@@ -404,22 +395,13 @@ const LoginPage: React.FC = () => {
               <>
                 <Divider sx={{ my: 3 }} />
                 
-                <Typography variant="h6" align="center" color="textSecondary" gutterBottom>
-                  🔧 현재 사용자 역할 수정 (문제 해결)
-                </Typography>
-                
-                <Alert severity="warning" sx={{ mb: 2 }}>
-                  <Typography variant="body2">
-                    <strong>현재 문제:</strong> {user.email} 계정이 <strong>{user.role}</strong> 역할로 저장되어 있습니다.
-                  </Typography>
-                  <Typography variant="body2" sx={{ mt: 1 }}>
-                    올바른 역할로 변경하려면 아래 버튼을 클릭하세요.
-                  </Typography>
-                </Alert>
-                
-                <Typography variant="body2" align="center" color="textSecondary" sx={{ mb: 2 }}>
-                  현재 로그인된 사용자: {user.email} (역할: {user.role})
-                </Typography>
+                            <Typography variant="h6" align="center" color="textSecondary" gutterBottom>
+              현재 사용자 역할 수정
+            </Typography>
+            
+            <Typography variant="body2" align="center" color="textSecondary" sx={{ mb: 2 }}>
+              현재 로그인된 사용자: {user.email} (역할: {user.role})
+            </Typography>
 
                  <Grid container spacing={2}>
                    <Grid item xs={4}>
