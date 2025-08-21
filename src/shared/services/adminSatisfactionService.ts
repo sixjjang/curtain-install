@@ -144,15 +144,17 @@ ${surveyLink}
   static async getSatisfactionNotifications(): Promise<SatisfactionNotification[]> {
     try {
       const notificationsRef = collection(db, 'satisfactionNotifications');
-      const q = query(notificationsRef, orderBy('createdAt', 'desc'));
-      const querySnapshot = await getDocs(q);
+      const querySnapshot = await getDocs(notificationsRef);
       
-      return querySnapshot.docs.map(doc => ({
+      const notifications = querySnapshot.docs.map(doc => ({
         id: doc.id,
         ...doc.data(),
         createdAt: doc.data().createdAt?.toDate() || new Date(),
         sentAt: doc.data().sentAt?.toDate()
       })) as SatisfactionNotification[];
+      
+      // 클라이언트에서 생성일 기준 내림차순 정렬
+      return notifications.sort((a, b) => b.createdAt.getTime() - a.createdAt.getTime());
     } catch (error) {
       console.error('만족도 조사 알림 목록 조회 실패:', error);
       throw new Error('만족도 조사 알림 목록을 불러올 수 없습니다.');
