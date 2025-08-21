@@ -17,7 +17,12 @@ import {
   Divider,
   Alert,
   Chip,
-  Checkbox
+  Checkbox,
+  Radio,
+  RadioGroup,
+  FormControlLabel,
+  FormLabel,
+  CircularProgress
 } from '@mui/material';
 import {
   Add as AddIcon,
@@ -27,13 +32,19 @@ import {
   Description as DescriptionIcon,
   AttachFile,
   FileDownload,
-  Delete
+  Delete,
+  Payment,
+  CreditCard,
+  AccountBalanceWallet,
+  CheckCircle,
+  Warning
 } from '@mui/icons-material';
 import { JobService } from '../../../shared/services/jobService';
 import { PricingService, PricingItem } from '../../../shared/services/pricingService';
 import { SellerService } from '../../../shared/services/sellerService';
 import { CustomerService } from '../../../shared/services/customerService';
 import { PointService } from '../../../shared/services/pointService';
+import { PaymentService } from '../../../shared/services/paymentService';
 import { StorageService } from '../../../shared/services/storageService';
 import { useAuth } from '../../../shared/contexts/AuthContext';
 import { JobItem, PricingOption, WorkInstruction } from '../../../types';
@@ -140,6 +151,14 @@ const CreateJobDialog: React.FC<CreateJobDialogProps> = ({
   const [pricingOptions, setPricingOptions] = useState<PricingOption[]>([]);
   const [selectedOptions, setSelectedOptions] = useState<string[]>([]);
   
+  // 포인트 충전 관련 상태
+  const [chargeDialogOpen, setChargeDialogOpen] = useState(false);
+  const [chargeAmount, setChargeAmount] = useState('');
+  const [selectedAmount, setSelectedAmount] = useState<number | null>(null);
+  const [charging, setCharging] = useState(false);
+  const [paymentMethod, setPaymentMethod] = useState('simulation');
+  const [tossPaymentMethod, setTossPaymentMethod] = useState('카드');
+  
   // 작업지시서 파일 상태
   const [workInstructions, setWorkInstructions] = useState<WorkInstruction[]>([]);
   const [uploadingFiles, setUploadingFiles] = useState(false);
@@ -188,6 +207,16 @@ const CreateJobDialog: React.FC<CreateJobDialogProps> = ({
   };
 
   const timeOptions = generateTimeOptions();
+
+  // 충전 금액 옵션
+  const chargeOptions = [
+    { amount: 10000, label: '10,000포인트 (10,000원)' },
+    { amount: 30000, label: '30,000포인트 (30,000원)' },
+    { amount: 50000, label: '50,000포인트 (50,000원)' },
+    { amount: 100000, label: '100,000포인트 (100,000원)' },
+    { amount: 300000, label: '300,000포인트 (300,000원)' },
+    { amount: 500000, label: '500,000포인트 (500,000원)' }
+  ];
 
   const handleInputChange = (field: string, value: string) => {
     setFormData(prev => ({
@@ -746,8 +775,100 @@ const CreateJobDialog: React.FC<CreateJobDialogProps> = ({
     }));
   };
 
+  // 포인트 충전 관련 함수들
+  const handleChargeDialogOpen = () => {
+    setChargeDialogOpen(true);
+    setChargeAmount('');
+    setSelectedAmount(null);
+    setError('');
+  };
+
+  const handleChargeDialogClose = () => {
+    setChargeDialogOpen(false);
+    setChargeAmount('');
+    setSelectedAmount(null);
+    setError('');
+  };
+
+  const handleAmountSelect = (amount: number) => {
+    setSelectedAmount(amount);
+    setChargeAmount(amount.toString());
+  };
+
+  // 포인트 충전 처리
+  const handleCharge = async () => {
+    if (!user || !chargeAmount || parseInt(chargeAmount) <= 0) {
+      setError('올바른 금액을 입력해주세요.');
+      return;
+    }
+
+    const amount = parseInt(chargeAmount);
+    
+    try {
+      setCharging(true);
+      setError('');
+      
+      // 주문 ID 생성
+      const orderId = `ORDER_${Date.now()}_${user.id}`;
+      
+      let paymentResult;
+      
+      // 결제 수단에 따른 처리
+      switch (paymentMethod) {
+        case 'toss_payments':
+          paymentResult = await PaymentService.requestTossPayments({
+            amount,
+            orderId,
+            itemName: `${amount.toLocaleString()}포인트 충전`,
+            userId: user.id,
+            userRole: 'seller'
+          }, tossPaymentMethod);
+          break;
+          
+        default: // simulation
+          paymentResult = await PaymentService.requestPayment({
+            amount,
+            orderId,
+            itemName: `${amount.toLocaleString()}포인트 충전`,
+            userId: user.id,
+            userRole: 'seller'
+          });
+          break;
+      }
+      
+      if (paymentResult.success) {
+        if (paymentResult.redirectUrl) {
+          // 결제 페이지로 리다이렉트 (실제 결제)
+          window.location.href = paymentResult.redirectUrl;
+        } else {
+          // 시뮬레이션 결제 완료
+          // 포인트 잔액 새로고침
+          const newBalance = await PointService.getPointBalance(user.id, 'seller');
+          setPointBalance(newBalance);
+          
+          // 포인트 검증 다시 수행
+          await validatePointBalance();
+          
+          // 충전 다이얼로그 닫기
+          handleChargeDialogClose();
+          
+          setError('');
+          // 성공 메시지는 포인트 검증 결과에서 표시됨
+        }
+      } else {
+        throw new Error(paymentResult.error || '결제 요청에 실패했습니다.');
+      }
+    } catch (error) {
+      console.error('포인트 충전 실패:', error);
+      setError('포인트 충전에 실패했습니다.');
+    } finally {
+      setCharging(false);
+    }
+  };
+
   return (
-    <Dialog open={open} onClose={handleClose} maxWidth="md" fullWidth>
+    <>
+      <Dialog open={open} onClose={handleClose} maxWidth="md" fullWidth>
       <DialogTitle>
         <Box display="flex" justifyContent="space-between" alignItems="center">
           <Typography variant="h6">새 작업 등록</Typography>
@@ -1281,16 +1402,29 @@ const CreateJobDialog: React.FC<CreateJobDialogProps> = ({
                   severity={pointValidation.isValid ? 'success' : 'error'}
                   sx={{ mb: 2 }}
                 >
-                  <Typography variant="body2">
-                    <strong>포인트 잔액 검증:</strong><br />
-                    현재 잔액: {pointValidation.currentBalance.toLocaleString()}포인트<br />
-                    필요 금액: {pointValidation.requiredAmount.toLocaleString()}포인트<br />
+                  <Box display="flex" justifyContent="space-between" alignItems="center">
+                    <Typography variant="body2">
+                      <strong>포인트 잔액 검증:</strong><br />
+                      현재 잔액: {pointValidation.currentBalance.toLocaleString()}포인트<br />
+                      필요 금액: {pointValidation.requiredAmount.toLocaleString()}포인트<br />
+                      {!pointValidation.isValid && (
+                        <span style={{ color: 'red' }}>
+                          부족 금액: {pointValidation.shortage.toLocaleString()}포인트
+                        </span>
+                      )}
+                    </Typography>
                     {!pointValidation.isValid && (
-                      <span style={{ color: 'red' }}>
-                        부족 금액: {pointValidation.shortage.toLocaleString()}포인트
-                      </span>
+                      <Button
+                        variant="contained"
+                        color="primary"
+                        startIcon={<Payment />}
+                        onClick={handleChargeDialogOpen}
+                        size="small"
+                      >
+                        포인트 충전
+                      </Button>
                     )}
-                  </Typography>
+                  </Box>
                 </Alert>
               </Box>
             )}
@@ -1418,6 +1552,119 @@ const CreateJobDialog: React.FC<CreateJobDialogProps> = ({
         </Button>
       </DialogActions>
     </Dialog>
+
+    {/* 포인트 충전 다이얼로그 */}
+    <Dialog open={chargeDialogOpen} onClose={handleChargeDialogClose} maxWidth="sm" fullWidth>
+      <DialogTitle>
+        <Box display="flex" alignItems="center" gap={1}>
+          <Payment color="primary" />
+          포인트 충전
+        </Box>
+      </DialogTitle>
+      <DialogContent>
+        <Typography variant="body2" color="textSecondary" mb={3}>
+          포인트 부족으로 작업을 등록할 수 없습니다. 충전 후 다시 시도해주세요.
+        </Typography>
+        
+        {/* 충전 금액 옵션 */}
+        <Grid container spacing={2} mb={3}>
+          {chargeOptions.map((option) => (
+            <Grid item xs={12} sm={6} key={option.amount}>
+              <Button
+                variant={selectedAmount === option.amount ? "contained" : "outlined"}
+                fullWidth
+                onClick={() => handleAmountSelect(option.amount)}
+                sx={{ py: 2 }}
+              >
+                {option.label}
+              </Button>
+            </Grid>
+          ))}
+        </Grid>
+        
+        {/* 직접 입력 */}
+        <TextField
+          fullWidth
+          label="직접 입력 (원)"
+          type="number"
+          value={chargeAmount}
+          onChange={(e) => {
+            setChargeAmount(e.target.value);
+            setSelectedAmount(null);
+          }}
+          placeholder="충전할 포인트를 입력하세요"
+          InputProps={{
+            endAdornment: <Typography variant="caption">포인트</Typography>
+          }}
+          sx={{ mb: 3 }}
+        />
+
+        {/* 결제 수단 선택 */}
+        <FormControl component="fieldset" sx={{ mb: 3 }}>
+          <Typography variant="subtitle2" gutterBottom>
+            결제 수단
+          </Typography>
+          <RadioGroup
+            row
+            value={paymentMethod}
+            onChange={(e) => setPaymentMethod(e.target.value)}
+          >
+            <FormControlLabel 
+              value="simulation" 
+              control={<Radio />} 
+              label="시뮬레이션 (테스트용)" 
+            />
+            <FormControlLabel 
+              value="toss_payments" 
+              control={<Radio />} 
+              label="토스페이먼츠" 
+            />
+          </RadioGroup>
+        </FormControl>
+
+        {/* 토스페이먼츠 결제 수단 선택 */}
+        {paymentMethod === 'toss_payments' && (
+          <FormControl fullWidth sx={{ mb: 3 }}>
+            <InputLabel>결제 방법</InputLabel>
+            <Select
+              value={tossPaymentMethod}
+              label="결제 방법"
+              onChange={(e) => setTossPaymentMethod(e.target.value)}
+            >
+              <MenuItem value="카드">신용카드</MenuItem>
+              <MenuItem value="가상계좌">가상계좌</MenuItem>
+              <MenuItem value="계좌이체">계좌이체</MenuItem>
+            </Select>
+          </FormControl>
+        )}
+        
+        {chargeAmount && (
+          <Box mt={2} p={2} bgcolor="primary.light" borderRadius={1}>
+            <Typography variant="body2" color="white">
+              충전 예정: {parseInt(chargeAmount) || 0}포인트 ({(parseInt(chargeAmount) || 0).toLocaleString()}원)
+            </Typography>
+          </Box>
+        )}
+        
+        <Alert severity="info" sx={{ mt: 2 }}>
+          충전 완료 후 자동으로 포인트 잔액이 업데이트되며, 작업 등록을 계속 진행할 수 있습니다.
+        </Alert>
+      </DialogContent>
+      <DialogActions>
+        <Button onClick={handleChargeDialogClose}>
+          취소
+        </Button>
+        <Button
+          onClick={handleCharge}
+          variant="contained"
+          disabled={charging || !chargeAmount || parseInt(chargeAmount) <= 0}
+          startIcon={charging ? <CircularProgress size={16} /> : <CheckCircle />}
+        >
+          {charging ? '충전 중...' : '충전하기'}
+        </Button>
+      </DialogActions>
+    </Dialog>
+    </>
   );
 };
 
