@@ -328,8 +328,15 @@ export class PointService {
       });
       
       return transactions;
-    } catch (error) {
+    } catch (error: any) {
       console.error('거래 내역 조회 실패:', error);
+      
+      // Firebase 인덱스 오류인 경우 (거래 내역이 없는 경우)
+      if (error.code === 'failed-precondition' || error.message?.includes('index')) {
+        // 거래 내역이 없는 경우 빈 배열 반환
+        return [];
+      }
+      
       throw new Error('거래 내역을 조회할 수 없습니다.');
     }
   }

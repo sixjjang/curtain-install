@@ -313,7 +313,7 @@ const PointManagement: React.FC = () => {
               
               {transactions.length === 0 ? (
                 <Typography color="textSecondary" textAlign="center" py={4}>
-                  거래 내역이 없습니다.
+                  포인트 잔액이 없습니다.
                 </Typography>
               ) : (
                 <List>
