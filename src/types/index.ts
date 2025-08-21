@@ -20,6 +20,7 @@ export interface User {
   loginMethod?: 'email' | 'kakao' | 'google';
   contractor?: ContractorInfo;
   seller?: SellerInfo;
+  admin?: AdminInfo;
   warningMessage?: string; // 승인 대기 중 경고 메시지
   // 판매자 정보 (직접 저장)
   companyName?: string; // 판매자 상호명
@@ -57,6 +58,19 @@ export interface SellerInfo {
 
 // 판매자 타입 (기존 SellerInfo와 동일하지만 별칭으로 제공)
 export type Seller = SellerInfo;
+
+// 관리자 정보 타입
+export interface AdminInfo {
+  totalUsers: number;
+  totalJobs: number;
+  totalRevenue: number;
+  systemSettings: {
+    maintenanceMode: boolean;
+    registrationEnabled: boolean;
+    maxFileSize: number;
+    allowedFileTypes: string[];
+  };
+}
 
 // 시공자 정보 타입
 export interface ContractorInfo {
@@ -381,6 +395,7 @@ export interface ChatMessage {
   senderId: string;
   senderType: 'contractor' | 'seller' | 'customer';
   senderName: string;
+  senderProfileImage?: string; // 발신자 프로필 이미지 URL
   content: string;
   timestamp: Date;
   isRead: boolean;

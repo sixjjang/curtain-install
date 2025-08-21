@@ -1,5 +1,5 @@
 import { db } from '../../firebase/config';
-import { doc, getDoc, updateDoc, setDoc } from 'firebase/firestore';
+import { doc, getDoc, updateDoc, setDoc, collection, getDocs } from 'firebase/firestore';
 import { SellerPickupInfo } from '../../types';
 
 // 판매자 기본 정보 타입
@@ -142,6 +142,39 @@ export class SellerService {
     } catch (error) {
       console.error('판매자 프로필 업데이트 실패:', error);
       throw new Error('프로필 업데이트에 실패했습니다.');
+    }
+  }
+
+  // 모든 판매자 목록 불러오기
+  static async getAllSellers(): Promise<any[]> {
+    try {
+      const sellersRef = collection(db, 'users');
+      const querySnapshot = await getDocs(sellersRef);
+      const sellers: any[] = [];
+      
+      querySnapshot.forEach((doc) => {
+        const data = doc.data();
+        if (data.role === 'seller') {
+          sellers.push({
+            id: doc.id,
+            name: data.name,
+            email: data.email,
+            phone: data.phone,
+            companyName: data.seller?.companyName || '',
+            businessNumber: data.seller?.businessNumber || '',
+            businessAddress: data.seller?.businessAddress || '',
+            profileImage: data.profileImage,
+            approvalStatus: data.approvalStatus,
+            createdAt: data.createdAt?.toDate() || new Date(),
+            updatedAt: data.updatedAt?.toDate() || new Date()
+          });
+        }
+      });
+      
+      return sellers;
+    } catch (error) {
+      console.error('판매자 목록 불러오기 실패:', error);
+      throw new Error('판매자 목록을 불러올 수 없습니다.');
     }
   }
 }

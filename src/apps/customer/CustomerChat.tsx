@@ -119,7 +119,8 @@ const CustomerChat: React.FC = () => {
         customer.id,
         'customer',
         customer.name,
-        newMessage.trim()
+        newMessage.trim(),
+        undefined // 고객은 프로필 이미지가 없음
       );
       setNewMessage('');
     } catch (error) {
@@ -240,8 +241,9 @@ const CustomerChat: React.FC = () => {
                         height: 24,
                         bgcolor: `${getSenderColor(message.senderType)}.main`
                       }}
+                      src={message.senderProfileImage || undefined}
                     >
-                      {getSenderIcon(message.senderType)}
+                      {message.senderName?.charAt(0) || getSenderIcon(message.senderType)}
                     </Avatar>
                     <Typography variant="caption" color="textSecondary">
                       {message.senderName}

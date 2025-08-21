@@ -19,6 +19,9 @@ import SatisfactionSurvey from './apps/customer/SatisfactionSurvey';
 import LoginPage from './shared/components/LoginPage';
 import RegisterPage from './shared/components/RegisterPage';
 import ProtectedRoute from './shared/components/ProtectedRoute';
+import ApprovalStatusAwareRoute from './shared/components/ApprovalStatusAwareRoute';
+import PendingApprovalPage from './shared/components/PendingApprovalPage';
+import RejectedPage from './shared/components/RejectedPage';
 import InstallPWA from './shared/components/InstallPWA';
 import FirebaseTest from './shared/components/FirebaseTest';
 import TestAccounts from './shared/components/TestAccounts';
@@ -72,18 +75,22 @@ function App() {
             <Route path="/login" element={<LoginPage />} />
             <Route path="/register" element={<RegisterPage />} />
             
+            {/* 승인 상태 관련 페이지들 */}
+            <Route path="/pending-approval" element={<PendingApprovalPage />} />
+            <Route path="/rejected" element={<RejectedPage />} />
+            
             {/* 판매자 앱 */}
             <Route path="/seller/*" element={
-              <ProtectedRoute allowedRoles={['seller']}>
+              <ApprovalStatusAwareRoute allowedRoles={['seller']} allowedApprovalStatuses={['pending', 'approved', 'rejected']}>
                 <SellerApp />
-              </ProtectedRoute>
+              </ApprovalStatusAwareRoute>
             } />
             
             {/* 시공자 앱 */}
             <Route path="/contractor/*" element={
-              <ProtectedRoute allowedRoles={['contractor']}>
+              <ApprovalStatusAwareRoute allowedRoles={['contractor']} allowedApprovalStatuses={['pending', 'approved', 'rejected']}>
                 <ContractorApp />
-              </ProtectedRoute>
+              </ApprovalStatusAwareRoute>
             } />
             
             {/* 관리자 앱 */}

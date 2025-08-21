@@ -640,6 +640,24 @@ const RegisterPage: React.FC = () => {
       </Grid>
       
       <Grid item xs={12}>
+        <Button
+          variant="outlined"
+          startIcon={<Business />}
+          onClick={() => {
+            setFormData(prev => ({
+              ...prev,
+              pickupCompanyName: prev.companyName,
+              pickupPhone: prev.phone,
+              pickupAddress: prev.businessAddress
+            }));
+          }}
+          sx={{ mb: 2 }}
+        >
+          기본정보로 픽업정보 설정
+        </Button>
+      </Grid>
+      
+      <Grid item xs={12}>
         <TextField
           fullWidth
           label="픽업 상호명"

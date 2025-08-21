@@ -16,7 +16,9 @@ import {
   Avatar,
   Menu,
   MenuItem,
-  Divider
+  Divider,
+  Alert,
+  Chip
 } from '@mui/material';
 import {
   Menu as MenuIcon,
@@ -26,7 +28,10 @@ import {
   AccountBalance,
   Person,
   Notifications as NotificationsIcon,
-  Logout
+  Logout,
+  Warning,
+  Block,
+  Chat
 } from '@mui/icons-material';
 import { useNavigate, useLocation } from 'react-router-dom';
 import { useAuth } from '../../../shared/contexts/AuthContext';
@@ -50,9 +55,14 @@ const SellerLayout: React.FC<SellerLayoutProps> = ({ children }) => {
     { text: '대시보드', icon: <Dashboard />, path: '/seller' },
     { text: '시공 작업 관리', icon: <Work />, path: '/seller/jobs' },
     { text: '시공자 목록', icon: <People />, path: '/seller/contractors' },
+    { text: '시공자와 채팅', icon: <Chat />, path: '/seller/contractor-chat' },
     { text: '포인트 충전', icon: <AccountBalance />, path: '/seller/points' },
     { text: '프로필', icon: <Person />, path: '/seller/profile' },
   ];
+
+  // 디버깅용: 현재 경로와 메뉴 클릭 로그
+  console.log('🔍 SellerLayout - 현재 경로:', location.pathname);
+  console.log('🔍 SellerLayout - 메뉴 아이템들:', menuItems);
 
   // 알림 구독
   useEffect(() => {
@@ -86,9 +96,16 @@ const SellerLayout: React.FC<SellerLayoutProps> = ({ children }) => {
   const drawer = (
     <div>
       <Toolbar>
-        <Typography variant="h6" noWrap component="div">
-          판매자 대시보드
-        </Typography>
+        <Box>
+          <Typography variant="h6" noWrap component="div">
+            {user?.seller?.companyName || '판매자 대시보드'}
+          </Typography>
+          {user?.seller?.companyName && (
+            <Typography variant="caption" color="textSecondary" noWrap>
+              판매자 대시보드
+            </Typography>
+          )}
+        </Box>
       </Toolbar>
       <Divider />
       <List>
@@ -97,6 +114,20 @@ const SellerLayout: React.FC<SellerLayoutProps> = ({ children }) => {
             <ListItemButton
               selected={location.pathname === item.path}
               onClick={() => {
+                console.log('🔍 메뉴 클릭:', item.text, '경로:', item.path);
+                console.log('🔍 현재 사용자 승인 상태:', user?.approvalStatus);
+                
+                // 승인 대기 상태에서는 프로필 페이지만 접근 가능
+                if (user?.approvalStatus === 'pending' && item.path !== '/seller/profile') {
+                  alert('승인 대기 중입니다. 승인 완료 후 이용 가능한 기능입니다.');
+                  return;
+                }
+                // 승인 거부 상태에서는 프로필 페이지만 접근 가능
+                if (user?.approvalStatus === 'rejected' && item.path !== '/seller/profile') {
+                  alert('승인이 거부되었습니다. 관리자에게 문의해주세요.');
+                  return;
+                }
+                console.log('🔍 네비게이션 실행:', item.path);
                 navigate(item.path);
                 setMobileOpen(false);
               }}
@@ -137,7 +168,17 @@ const SellerLayout: React.FC<SellerLayoutProps> = ({ children }) => {
           {/* 알림 아이콘 */}
           <IconButton
             color="inherit"
-            onClick={() => navigate('/seller/notifications')}
+            onClick={() => {
+              if (user?.approvalStatus === 'pending') {
+                alert('승인 대기 중입니다. 승인 완료 후 이용 가능한 기능입니다.');
+                return;
+              }
+              if (user?.approvalStatus === 'rejected') {
+                alert('승인이 거부되었습니다. 관리자에게 문의해주세요.');
+                return;
+              }
+              navigate('/seller/notifications');
+            }}
             sx={{ mr: 2 }}
           >
             <Badge badgeContent={unreadCount} color="error">
@@ -150,10 +191,18 @@ const SellerLayout: React.FC<SellerLayoutProps> = ({ children }) => {
             onClick={handleProfileMenuOpen}
             sx={{ p: 0 }}
           >
-            <Avatar sx={{ bgcolor: 'secondary.main' }}>
+            <Avatar 
+              sx={{ 
+                bgcolor: user?.profileImage ? 'transparent' : 'secondary.main',
+                width: 32,
+                height: 32
+              }}
+              src={user?.profileImage || undefined}
+            >
               {user?.name?.charAt(0) || user?.email?.charAt(0) || 'U'}
             </Avatar>
           </IconButton>
+
         </Toolbar>
       </AppBar>
       
@@ -192,6 +241,44 @@ const SellerLayout: React.FC<SellerLayoutProps> = ({ children }) => {
         sx={{ flexGrow: 1, p: 3, width: { sm: `calc(100% - ${drawerWidth}px)` } }}
       >
         <Toolbar />
+        
+        {/* 승인 상태 경고 메시지 */}
+        {user?.approvalStatus === 'pending' && (
+          <Alert 
+            severity="warning" 
+            icon={<Warning />}
+            sx={{ mb: 2 }}
+            action={
+              <Chip 
+                label="승인 대기 중" 
+                size="small" 
+                color="warning" 
+                variant="outlined"
+              />
+            }
+          >
+            관리자 승인을 기다리고 있습니다. 승인 완료 후 모든 기능을 이용할 수 있습니다.
+          </Alert>
+        )}
+        
+        {user?.approvalStatus === 'rejected' && (
+          <Alert 
+            severity="error" 
+            icon={<Block />}
+            sx={{ mb: 2 }}
+            action={
+              <Chip 
+                label="승인 거부됨" 
+                size="small" 
+                color="error" 
+                variant="outlined"
+              />
+            }
+          >
+            승인이 거부되었습니다. 관리자에게 문의하거나 재신청을 진행해주세요.
+          </Alert>
+        )}
+        
         {children}
       </Box>
       

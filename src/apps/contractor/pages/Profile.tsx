@@ -1,4 +1,4 @@
-import React, { useState, useRef } from 'react';
+import React, { useState, useRef, useEffect } from 'react';
 import {
   Box,
   Typography,
@@ -66,11 +66,11 @@ const banks = [
 ];
 
 const Profile: React.FC = () => {
-  const { user } = useAuth();
+  const { user, updateUser } = useAuth();
   const contractor = user?.contractor;
   const fileInputRef = useRef<HTMLInputElement>(null);
   const [isEditing, setIsEditing] = useState(false);
-  const [profileImage, setProfileImage] = useState<string | null>(null);
+  const [profileImage, setProfileImage] = useState<string | null>(user?.profileImage || null);
   const [imageLoading, setImageLoading] = useState(false);
   const [selectedRegions, setSelectedRegions] = useState<string[]>(contractor?.serviceAreas || []);
   const [selectedCity, setSelectedCity] = useState<string>('');
@@ -92,6 +92,24 @@ const Profile: React.FC = () => {
     message: '',
     severity: 'success'
   });
+
+  // 사용자 정보가 변경될 때 로컬 상태 업데이트
+  useEffect(() => {
+    if (user) {
+      // 프로필 이미지 업데이트
+      if (user.profileImage) {
+        setProfileImage(user.profileImage);
+      }
+      
+      // 시공자 정보 업데이트
+      if (user.contractor) {
+        setSelectedRegions(user.contractor.serviceAreas || []);
+        setSelectedBank(user.contractor.bankName || '');
+        setBankAccount(user.contractor.bankAccount || '');
+        setExperience(user.contractor.experience || '');
+      }
+    }
+  }, [user]);
 
   const handleImageChange = async (event: React.ChangeEvent<HTMLInputElement>) => {
     const file = event.target.files?.[0];
@@ -149,6 +167,11 @@ const Profile: React.FC = () => {
             };
             await ContractorService.saveBasicInfo(user.id, basicInfo);
             
+            // AuthContext의 사용자 정보 업데이트
+            console.log('🔄 AuthContext 업데이트 시작:', imageUrl);
+            await updateUser({ profileImage: imageUrl });
+            console.log('✅ AuthContext 업데이트 완료');
+            
             // Firebase Storage에 성공적으로 업로드된 경우
             if (StorageService.isFirebaseStorageURL(imageUrl)) {
               setSnackbar({
@@ -181,6 +204,11 @@ const Profile: React.FC = () => {
               profileImage: optimizedResult.dataUrl
             };
             await ContractorService.saveBasicInfo(user.id, basicInfo);
+            
+            // AuthContext의 사용자 정보 업데이트
+            console.log('🔄 AuthContext 업데이트 시작 (로컬):', optimizedResult.dataUrl);
+            await updateUser({ profileImage: optimizedResult.dataUrl });
+            console.log('✅ AuthContext 업데이트 완료 (로컬)');
             
             setSnackbar({
               open: true,
@@ -330,7 +358,13 @@ const Profile: React.FC = () => {
   }
 
   return (
-    <Box>
+    <Box sx={{ 
+      padding: '20px',
+      minHeight: '500px',
+      backgroundColor: '#f8f9fa',
+      borderRadius: '8px',
+      boxShadow: '0 2px 4px rgba(0,0,0,0.1)'
+    }}>
       <Box display="flex" justifyContent="space-between" alignItems="center" mb={3}>
         <Typography variant="h4">
           프로필
@@ -343,6 +377,8 @@ const Profile: React.FC = () => {
           {isEditing ? '저장' : '편집'}
         </Button>
       </Box>
+      
+
 
       <Grid container spacing={3}>
         <Grid item xs={12} md={4}>

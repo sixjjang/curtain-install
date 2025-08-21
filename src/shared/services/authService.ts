@@ -5,10 +5,10 @@ import {
   updateProfile,
   User as FirebaseUser 
 } from 'firebase/auth';
-import { doc, setDoc, getDoc, deleteDoc, collection, query, where, getDocs } from 'firebase/firestore';
+import { doc, setDoc, getDoc, deleteDoc, collection, query, where, getDocs, updateDoc, serverTimestamp } from 'firebase/firestore';
 import { ref, uploadBytes, getDownloadURL } from 'firebase/storage';
 import { auth, db, storage } from '../../firebase/config';
-import { User, UserRole, ApprovalStatus } from '../../types';
+import { User, UserRole, ApprovalStatus, AdminInfo } from '../../types';
 import { StorageService } from './storageService';
 import { extractPhoneNumbers } from '../utils/phoneFormatter';
 
@@ -186,6 +186,12 @@ export class AuthService {
         console.log('💾 시공자 데이터 Firestore 저장 중...');
         await setDoc(doc(db, 'users', user.uid), contractorData);
         console.log('✅ 시공자 데이터 저장 완료');
+        console.log('📊 저장된 시공자 데이터:', {
+          id: contractorData.id,
+          email: contractorData.email,
+          role: contractorData.role,
+          approvalStatus: contractorData.approvalStatus
+        });
         return contractorData;
       } else if (role === 'seller') {
         console.log('🏪 판매자 데이터 구성 중...');
@@ -212,12 +218,62 @@ export class AuthService {
         console.log('💾 판매자 데이터 Firestore 저장 중...');
         await setDoc(doc(db, 'users', user.uid), sellerData);
         console.log('✅ 판매자 데이터 저장 완료');
+        console.log('📊 저장된 판매자 데이터:', {
+          id: sellerData.id,
+          email: sellerData.email,
+          role: sellerData.role,
+          approvalStatus: sellerData.approvalStatus
+        });
         return sellerData;
+      } else if (role === 'admin') {
+        console.log('👑 관리자 데이터 구성 중...');
+        console.log('📋 기본 사용자 데이터:', userData);
+        
+        try {
+          const adminData = {
+            ...userData,
+            approvalStatus: 'approved' as ApprovalStatus, // 관리자는 자동 승인
+            profileImage: profileImageUrl,
+            admin: {
+              totalUsers: 0,
+              totalJobs: 0,
+              totalRevenue: 0,
+              systemSettings: {
+                maintenanceMode: false,
+                registrationEnabled: true,
+                maxFileSize: 10 * 1024 * 1024, // 10MB
+                allowedFileTypes: ['jpg', 'jpeg', 'png', 'pdf']
+              }
+            }
+          };
+
+          console.log('💾 관리자 데이터 Firestore 저장 중...');
+          console.log('📄 저장할 관리자 데이터:', adminData);
+          await setDoc(doc(db, 'users', user.uid), adminData);
+          console.log('✅ 관리자 데이터 저장 완료');
+          console.log('📊 저장된 관리자 데이터 요약:', {
+            id: adminData.id,
+            email: adminData.email,
+            role: adminData.role,
+            approvalStatus: adminData.approvalStatus,
+            hasAdminData: !!adminData.admin
+          });
+          return adminData;
+        } catch (adminError) {
+          console.error('❌ 관리자 데이터 저장 실패:', adminError);
+          throw adminError;
+        }
       }
 
       console.log('💾 기본 사용자 데이터 Firestore 저장 중...');
       await setDoc(doc(db, 'users', user.uid), userData);
       console.log('✅ 기본 사용자 데이터 저장 완료');
+      console.log('📊 저장된 기본 사용자 데이터:', {
+        id: userData.id,
+        email: userData.email,
+        role: userData.role,
+        approvalStatus: userData.approvalStatus
+      });
       return userData;
     } catch (error: any) {
       console.error('❌ 회원가입 실패:', error);
@@ -244,27 +300,45 @@ export class AuthService {
   // 로그인
   static async login(email: string, password: string): Promise<User> {
     try {
+      console.log('🔐 로그인 시도:', email);
+      
       const userCredential = await signInWithEmailAndPassword(auth, email, password);
       const user = userCredential.user;
+      
+      console.log('✅ Firebase Auth 로그인 성공, 사용자 ID:', user.uid);
 
       // Firestore에서 사용자 정보 가져오기
+      console.log('📄 Firestore에서 사용자 정보 조회 중...');
       const userDoc = await getDoc(doc(db, 'users', user.uid));
       
       if (!userDoc.exists()) {
+        console.error('❌ Firestore에서 사용자 정보를 찾을 수 없음:', user.uid);
         throw new Error('사용자 정보를 찾을 수 없습니다.');
       }
 
+      console.log('✅ Firestore 사용자 정보 조회 성공');
       const userData = userDoc.data() as User;
+      console.log('📄 조회된 사용자 데이터:', userData);
       
       // 승인 상태 확인: pending은 허용, rejected는 차단
       if (userData.approvalStatus === 'rejected') {
+        console.log('❌ 사용자 승인 거부됨');
         throw new Error('회원가입이 거부되었습니다. 관리자에게 문의하세요.');
       }
 
       if (userData.approvalStatus === 'pending') {
+        console.log('⚠️ 사용자 승인 대기 중');
         userData.warningMessage = '관리자 승인 대기 중입니다. 승인 완료 후 모든 기능을 이용할 수 있습니다.';
       }
 
+      console.log('✅ 로그인 완료:', { 
+        id: userData.id, 
+        role: userData.role, 
+        approvalStatus: userData.approvalStatus,
+        hasAdminData: !!userData.admin,
+        hasSellerData: !!userData.seller,
+        hasContractorData: !!userData.contractor
+      });
       return userData;
     } catch (error: any) {
       console.error('❌ 로그인 실패:', error);
@@ -721,6 +795,165 @@ export class AuthService {
     } catch (error) {
       console.error('전화번호 중복 확인 실패:', error);
       return false;
+    }
+  }
+
+  // 사용자 프로필 이미지 업데이트
+  static async updateProfileImage(userId: string, profileImageUrl: string): Promise<void> {
+    try {
+      const userRef = doc(db, 'users', userId);
+      await updateDoc(userRef, {
+        profileImage: profileImageUrl,
+        updatedAt: serverTimestamp()
+      });
+      console.log('프로필 이미지 업데이트 완료:', profileImageUrl);
+    } catch (error) {
+      console.error('프로필 이미지 업데이트 실패:', error);
+      throw error;
+    }
+  }
+
+  // 기존 Firebase Auth 계정으로 Firestore 사용자 데이터 생성
+  static async createUserDataFromAuth(firebaseUser: FirebaseUser, name: string, role: UserRole): Promise<User> {
+    try {
+      console.log('🔧 기존 Auth 계정으로 Firestore 데이터 생성 중...');
+      
+      // 기본 사용자 데이터
+      const userData: User = {
+        id: firebaseUser.uid,
+        email: firebaseUser.email || '',
+        name,
+        phone: '010-1234-5678',
+        phoneNumbers: '01012345678',
+        role,
+        approvalStatus: 'approved' as ApprovalStatus, // 테스트 계정은 자동 승인
+        createdAt: new Date(),
+        updatedAt: new Date()
+      };
+
+      // 역할별 추가 데이터 설정
+      if (role === 'admin') {
+        console.log('👑 관리자 데이터 구성 중...');
+        const adminData = {
+          ...userData,
+          admin: {
+            totalUsers: 0,
+            totalJobs: 0,
+            totalRevenue: 0,
+            systemSettings: {
+              maintenanceMode: false,
+              registrationEnabled: true,
+              maxFileSize: 10 * 1024 * 1024,
+              allowedFileTypes: ['jpg', 'jpeg', 'png', 'pdf']
+            }
+          }
+        };
+
+        console.log('💾 관리자 데이터 Firestore 저장 중...');
+        await setDoc(doc(db, 'users', firebaseUser.uid), adminData);
+        console.log('✅ 관리자 데이터 저장 완료');
+        return adminData;
+      } else if (role === 'contractor') {
+        console.log('🔧 시공자 데이터 구성 중...');
+        const contractorData = {
+          ...userData,
+          businessName: '',
+          businessNumber: '',
+          businessAddress: '',
+          businessType: '',
+          businessCategory: '',
+          businessLicenseImage: '',
+          profileImage: '',
+          idCardImage: '',
+          level: 1,
+          experience: '',
+          totalJobs: 0,
+          completedJobs: 0,
+          totalEarnings: 0,
+          rating: 0,
+          points: 0,
+          skills: [],
+          isAvailable: true,
+          location: {
+            address: '서울시 강남구',
+            coordinates: {
+              lat: 37.5665,
+              lng: 126.9780
+            }
+          },
+          serviceAreas: [],
+          bankAccount: '',
+          bankName: '',
+          accountHolder: name
+        };
+
+        console.log('💾 시공자 데이터 Firestore 저장 중...');
+        await setDoc(doc(db, 'users', firebaseUser.uid), contractorData);
+        console.log('✅ 시공자 데이터 저장 완료');
+        return contractorData;
+      } else if (role === 'seller') {
+        console.log('🏪 판매자 데이터 구성 중...');
+        const sellerData = {
+          ...userData,
+          companyName: '',
+          businessNumber: '',
+          businessAddress: '',
+          businessType: '',
+          businessCategory: '',
+          businessLicenseImage: '',
+          rating: 0,
+          totalSales: 0
+        };
+
+        console.log('💾 판매자 데이터 Firestore 저장 중...');
+        await setDoc(doc(db, 'users', firebaseUser.uid), sellerData);
+        console.log('✅ 판매자 데이터 저장 완료');
+        return sellerData;
+      }
+
+      // 기본 사용자 데이터 저장
+      console.log('💾 기본 사용자 데이터 Firestore 저장 중...');
+      await setDoc(doc(db, 'users', firebaseUser.uid), userData);
+      console.log('✅ 기본 사용자 데이터 저장 완료');
+      return userData;
+    } catch (error) {
+      console.error('❌ Firestore 데이터 생성 실패:', error);
+      throw error;
+    }
+  }
+
+  // 모든 사용자 조회 (관리자용)
+  static async getAllUsers(): Promise<User[]> {
+    try {
+      const usersRef = collection(db, 'users');
+      const querySnapshot = await getDocs(usersRef);
+      
+      const users: User[] = [];
+      querySnapshot.forEach((doc) => {
+        const data = doc.data();
+        users.push({
+          id: doc.id,
+          email: data.email,
+          name: data.name,
+          phone: data.phone,
+          role: data.role,
+          approvalStatus: data.approvalStatus,
+          createdAt: data.createdAt?.toDate() || new Date(),
+          updatedAt: data.updatedAt?.toDate() || new Date(),
+          isActive: data.isActive !== false,
+          profileImage: data.profileImage,
+          companyName: data.companyName,
+          businessName: data.businessName,
+          contractor: data.contractor,
+          seller: data.seller,
+          admin: data.admin
+        });
+      });
+      
+      return users;
+    } catch (error) {
+      console.error('모든 사용자 조회 실패:', error);
+      throw new Error('사용자 목록을 가져올 수 없습니다.');
     }
   }
 }

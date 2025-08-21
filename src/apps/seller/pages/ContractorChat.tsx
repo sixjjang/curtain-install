@@ -1,5 +1,4 @@
-import React, { useState, useEffect } from 'react';
-import { useParams } from 'react-router-dom';
+import React, { useState, useEffect, useRef } from 'react';
 import {
   Box,
   Typography,
@@ -17,26 +16,56 @@ import {
   CircularProgress,
   Avatar
 } from '@mui/material';
-import { Send, Chat as ChatIcon } from '@mui/icons-material';
+import { 
+  Send as SendIcon,
+  Chat as ChatIcon
+} from '@mui/icons-material';
 import { useAuth } from '../../../shared/contexts/AuthContext';
 import { ChatService } from '../../../shared/services/chatService';
 import { JobService } from '../../../shared/services/jobService';
 import { ConstructionJob } from '../../../types';
 
-const Chat: React.FC = () => {
-  const { jobId } = useParams<{ jobId: string }>();
+const ContractorChat: React.FC = () => {
   const { user } = useAuth();
   const [jobs, setJobs] = useState<ConstructionJob[]>([]);
   const [selectedJob, setSelectedJob] = useState<ConstructionJob | null>(null);
   const [messages, setMessages] = useState<any[]>([]);
   const [newMessage, setNewMessage] = useState('');
   const [loading, setLoading] = useState(false);
-  const [error, setError] = useState('');
+  const [error, setError] = useState<string | null>(null);
+  const messagesEndRef = useRef<HTMLDivElement>(null);
 
+  // 시공건 목록 불러오기
   useEffect(() => {
-    loadMyJobs();
+    const loadJobs = async () => {
+      if (!user?.id) return;
+      
+      try {
+        setLoading(true);
+        const allJobs = await JobService.getAllJobs();
+        // 판매자가 등록한 작업들만 필터링
+        const myJobs = allJobs.filter(job => 
+          job.sellerId === user.id && 
+          ['pending', 'assigned', 'product_preparing', 'product_ready', 'pickup_completed', 'in_progress', 'completed'].includes(job.status)
+        );
+        setJobs(myJobs);
+        
+        // 첫 번째 작업을 자동 선택
+        if (myJobs.length > 0 && !selectedJob) {
+          setSelectedJob(myJobs[0]);
+        }
+      } catch (error) {
+        console.error('시공건 목록 불러오기 실패:', error);
+        setError('시공건 목록을 불러올 수 없습니다.');
+      } finally {
+        setLoading(false);
+      }
+    };
+
+    loadJobs();
   }, [user]);
 
+  // 선택된 시공건이 변경될 때 메시지 불러오기
   useEffect(() => {
     if (selectedJob) {
       loadChatMessages(selectedJob.id);
@@ -44,61 +73,46 @@ const Chat: React.FC = () => {
     }
   }, [selectedJob]);
 
-  const loadMyJobs = async () => {
-    if (!user?.id) return;
-    
-    try {
-      setLoading(true);
-      const allJobs = await JobService.getAllJobs();
-      const myJobs = allJobs.filter(job => 
-        job.contractorId === user.id && 
-        ['assigned', 'product_preparing', 'product_ready', 'pickup_completed', 'in_progress', 'completed'].includes(job.status)
-      );
-      setJobs(myJobs);
-      
-      // URL 파라미터로 전달된 jobId가 있으면 해당 작업을 자동 선택
-      if (jobId) {
-        const targetJob = myJobs.find(job => job.id === jobId);
-        if (targetJob) {
-          setSelectedJob(targetJob);
-        }
-      }
-    } catch (error) {
-      console.error('작업 목록 로드 실패:', error);
-      setError('작업 목록을 불러오는데 실패했습니다.');
-    } finally {
-      setLoading(false);
-    }
+  // 메시지 스크롤을 맨 아래로
+  const scrollToBottom = () => {
+    messagesEndRef.current?.scrollIntoView({ behavior: 'smooth' });
   };
 
+  useEffect(() => {
+    scrollToBottom();
+  }, [messages]);
+
+  // 채팅 메시지 불러오기
   const loadChatMessages = async (jobId: string) => {
     try {
       const chatMessages = await ChatService.getMessages(jobId);
       setMessages(chatMessages);
     } catch (error) {
       console.error('채팅 메시지 로드 실패:', error);
-      setError('채팅 메시지를 불러오는데 실패했습니다.');
+      setError('채팅 메시지를 불러올 수 없습니다.');
     }
   };
 
+  // 실시간 채팅 구독
   const subscribeToChat = (jobId: string) => {
     return ChatService.subscribeToMessages(jobId, (newMessages: any[]) => {
       setMessages(newMessages);
     });
   };
 
+  // 메시지 전송
   const handleSendMessage = async () => {
-    if (!selectedJob || !newMessage.trim() || !user) return;
+    if (!selectedJob || !newMessage.trim() || !user?.id) return;
 
     try {
       await ChatService.sendMessage(
         selectedJob.id,
         selectedJob.id,
         user.id,
-        'contractor',
-        user.name || user.email || '시공자',
+        'seller',
+        user.name || '판매자',
         newMessage.trim(),
-        user.profileImage
+        user.profileImage || undefined
       );
       setNewMessage('');
     } catch (error) {
@@ -107,6 +121,7 @@ const Chat: React.FC = () => {
     }
   };
 
+  // Enter 키로 메시지 전송
   const handleKeyPress = (event: React.KeyboardEvent) => {
     if (event.key === 'Enter' && !event.shiftKey) {
       event.preventDefault();
@@ -114,6 +129,7 @@ const Chat: React.FC = () => {
     }
   };
 
+  // 시간 포맷팅
   const formatTime = (date: Date) => {
     return new Date(date).toLocaleTimeString('ko-KR', {
       hour: '2-digit',
@@ -121,6 +137,7 @@ const Chat: React.FC = () => {
     });
   };
 
+  // 상태 텍스트 변환
   const getStatusText = (status: string) => {
     switch (status) {
       case 'pending': return '대기중';
@@ -134,6 +151,7 @@ const Chat: React.FC = () => {
     }
   };
 
+  // 상태 색상 변환
   const getStatusColor = (status: string) => {
     switch (status) {
       case 'pending': return 'default';
@@ -159,7 +177,7 @@ const Chat: React.FC = () => {
     <Box>
       <Typography variant="h4" gutterBottom sx={{ display: 'flex', alignItems: 'center', gap: 1 }}>
         <ChatIcon />
-        판매자와 채팅
+        시공자와 채팅
       </Typography>
 
       {error && (
@@ -169,7 +187,7 @@ const Chat: React.FC = () => {
       )}
 
       <Box display="flex" gap={2} sx={{ height: 'calc(100vh - 200px)' }}>
-        {/* 작업 목록 */}
+        {/* 시공건 목록 */}
         <Card sx={{ width: 300, flexShrink: 0 }}>
           <CardContent>
             <Typography variant="h6" gutterBottom>
@@ -179,8 +197,8 @@ const Chat: React.FC = () => {
               {jobs.length === 0 ? (
                 <ListItem>
                   <ListItemText 
-                    primary="배정된 작업이 없습니다." 
-                    secondary="판매자로부터 작업을 배정받으면 채팅할 수 있습니다."
+                    primary="등록된 작업이 없습니다." 
+                    secondary="새로운 시공 작업을 등록하면 시공자와 채팅할 수 있습니다."
                   />
                 </ListItem>
               ) : (
@@ -252,7 +270,7 @@ const Chat: React.FC = () => {
                         아직 메시지가 없습니다.
                       </Typography>
                       <Typography variant="body2" color="textSecondary">
-                        판매자와 첫 메시지를 시작해보세요!
+                        시공자와 첫 메시지를 시작해보세요!
                       </Typography>
                     </Box>
                   ) : (
@@ -281,7 +299,8 @@ const Chat: React.FC = () => {
                             p: 1.5,
                             maxWidth: '70%',
                             backgroundColor: message.senderId === user?.id ? 'primary.main' : 'grey.100',
-                            color: message.senderId === user?.id ? 'white' : 'text.primary'
+                            color: message.senderId === user?.id ? 'white' : 'text.primary',
+                            borderRadius: 2
                           }}
                         >
                           <Typography variant="body2" sx={{ wordBreak: 'break-word' }}>
@@ -295,7 +314,7 @@ const Chat: React.FC = () => {
                               opacity: 0.7
                             }}
                           >
-                            {formatTime(message.createdAt)}
+                            {formatTime(message.timestamp || message.createdAt)}
                           </Typography>
                         </Paper>
                         
@@ -310,6 +329,7 @@ const Chat: React.FC = () => {
                       </Box>
                     ))
                   )}
+                  <div ref={messagesEndRef} />
                 </Box>
 
                 {/* 메시지 입력 */}
@@ -319,7 +339,7 @@ const Chat: React.FC = () => {
                       fullWidth
                       multiline
                       maxRows={3}
-                      placeholder="판매자에게 메시지를 보내세요..."
+                      placeholder="시공자에게 메시지를 보내세요..."
                       value={newMessage}
                       onChange={(e) => setNewMessage(e.target.value)}
                       onKeyPress={handleKeyPress}
@@ -331,7 +351,7 @@ const Chat: React.FC = () => {
                       disabled={!newMessage.trim()}
                       sx={{ minWidth: 'auto', px: 2 }}
                     >
-                      <Send />
+                      <SendIcon />
                     </Button>
                   </Box>
                 </Box>
@@ -346,10 +366,10 @@ const Chat: React.FC = () => {
                 <Box textAlign="center">
                   <ChatIcon sx={{ fontSize: 64, color: 'text.secondary', mb: 2 }} />
                   <Typography variant="h6" color="textSecondary" gutterBottom>
-                    채팅할 작업을 선택하세요
+                    채팅할 시공건을 선택하세요
                   </Typography>
                   <Typography variant="body2" color="textSecondary">
-                    왼쪽에서 판매자와 채팅할 작업을 선택하세요.
+                    왼쪽에서 시공자와 채팅할 시공건을 선택하세요.
                   </Typography>
                 </Box>
               </Box>
@@ -361,4 +381,4 @@ const Chat: React.FC = () => {
   );
 };
 
-export default Chat;
+export default ContractorChat;

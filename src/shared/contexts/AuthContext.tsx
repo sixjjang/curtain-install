@@ -41,6 +41,7 @@ interface AuthContextType {
     pickupAddress?: string
   ) => Promise<User>;
   logout: () => Promise<void>;
+  updateUser: (userData: Partial<User>) => Promise<void>;
 }
 
 const AuthContext = createContext<AuthContextType | undefined>(undefined);
@@ -175,12 +176,39 @@ export const AuthProvider: React.FC<AuthProviderProps> = ({ children }) => {
     }
   };
 
+  const updateUser = async (userData: Partial<User>) => {
+    try {
+      if (!user?.id) {
+        throw new Error('사용자 정보가 없습니다.');
+      }
+      
+      // 사용자 정보 업데이트
+      if (userData.profileImage) {
+        await AuthService.updateProfileImage(user.id, userData.profileImage);
+      }
+      
+      // Firestore에서 최신 사용자 정보를 다시 불러와서 로컬 상태 업데이트
+      const updatedUserData = await AuthService.getCurrentUser();
+      if (updatedUserData) {
+        setUser(updatedUserData);
+        console.log('사용자 정보 업데이트 완료:', updatedUserData);
+      } else {
+        // 최신 정보를 불러올 수 없는 경우 로컬 상태만 업데이트
+        setUser(prev => prev ? { ...prev, ...userData } : null);
+      }
+    } catch (error) {
+      console.error('사용자 정보 업데이트 실패:', error);
+      throw error;
+    }
+  };
+
   const value = {
     user,
     loading,
     login,
     register,
     logout,
+    updateUser,
   };
 
   return (

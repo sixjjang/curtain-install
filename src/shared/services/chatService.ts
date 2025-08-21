@@ -50,6 +50,44 @@ export class ChatService {
     }
   }
 
+  // 메시지 전송 (jobId 없이 직접 채팅)
+  static async sendDirectMessage(
+    chatRoomId: string,
+    senderId: string,
+    senderName: string,
+    content: string,
+    senderProfileImage?: string
+  ): Promise<void> {
+    try {
+      const messagesRef = collection(db, 'messages');
+      const newMessage = {
+        chatRoomId,
+        senderId,
+        senderName,
+        senderProfileImage,
+        content,
+        timestamp: serverTimestamp(),
+        isRead: false
+      };
+      
+      await addDoc(messagesRef, newMessage);
+      
+      // 채팅방 업데이트
+      const chatRoomRef = doc(db, 'chatRooms', chatRoomId);
+      await updateDoc(chatRoomRef, {
+        lastMessage: {
+          content,
+          timestamp: serverTimestamp(),
+          senderName
+        },
+        updatedAt: serverTimestamp()
+      });
+    } catch (error) {
+      console.error('직접 메시지 전송 실패:', error);
+      throw error;
+    }
+  }
+
   // 메시지 전송
   static async sendMessage(
     chatRoomId: string,
@@ -57,7 +95,8 @@ export class ChatService {
     senderId: string,
     senderType: 'contractor' | 'seller' | 'customer',
     senderName: string,
-    content: string
+    content: string,
+    senderProfileImage?: string
   ): Promise<void> {
     try {
       const messagesRef = collection(db, 'messages');
@@ -67,6 +106,7 @@ export class ChatService {
         senderId,
         senderType,
         senderName,
+        senderProfileImage,
         content,
         timestamp: serverTimestamp(),
         isRead: false
@@ -132,6 +172,7 @@ export class ChatService {
           senderId: data.senderId,
           senderType: data.senderType,
           senderName: data.senderName,
+          senderProfileImage: data.senderProfileImage,
           content: data.content,
           timestamp: data.timestamp?.toDate() || new Date(),
           isRead: data.isRead
@@ -167,6 +208,7 @@ export class ChatService {
           senderId: data.senderId,
           senderType: data.senderType,
           senderName: data.senderName,
+          senderProfileImage: data.senderProfileImage,
           content: data.content,
           timestamp: data.timestamp?.toDate() || new Date(),
           isRead: data.isRead

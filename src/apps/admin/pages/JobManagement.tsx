@@ -66,7 +66,7 @@ const JobManagement: React.FC = () => {
   const statusConfig = {
     pending: { label: '대기중', color: 'warning' as const, description: '시공자 배정 대기' },
     assigned: { label: '배정됨', color: 'info' as const, description: '시공자 배정 완료' },
-    in_progress: { label: '진행중', color: 'primary' as const, description: '시공 진행 중' },
+    in_progress: { label: '진행중', color: 'default' as const, description: '시공 진행 중' },
     completed: { label: '완료', color: 'success' as const, description: '시공 완료' },
     cancelled: { label: '취소', color: 'error' as const, description: '작업 취소' }
   };
@@ -335,6 +335,13 @@ const JobManagement: React.FC = () => {
                   label={config.description} 
                   color={config.color} 
                   size="small"
+                  sx={status === 'in_progress' ? {
+                    backgroundColor: '#8B4513',
+                    color: 'white',
+                    '&:hover': {
+                      backgroundColor: '#A0522D'
+                    }
+                  } : {}}
                 />
               </CardContent>
             </Card>

@@ -14,7 +14,9 @@ import {
   Avatar,
   Menu,
   MenuItem,
-  IconButton
+  IconButton,
+  Divider,
+  Chip
 } from '@mui/material';
 import {
   Dashboard as DashboardIcon,
@@ -26,7 +28,8 @@ import {
   AttachMoney as PricingIcon,
   Star as LevelIcon,
   RateReview as SurveyIcon,
-  Settings as SettingsIcon
+  Settings as SettingsIcon,
+  Menu as MenuIcon
 } from '@mui/icons-material';
 import { useAuth } from '../../../shared/contexts/AuthContext';
 
@@ -75,26 +78,44 @@ const AdminLayout: React.FC<AdminLayoutProps> = ({ children }) => {
     }
   };
 
+  const getCurrentPageTitle = () => {
+    const currentItem = menuItems.find(item => item.path === location.pathname);
+    return currentItem ? currentItem.text : '관리자 대시보드';
+  };
+
   const drawer = (
     <Box>
       <Box sx={{ p: 2, textAlign: 'center' }}>
-        <Typography variant="h6" color="primary">
+        <Typography variant="h6" color="primary" sx={{ fontWeight: 'bold' }}>
           관리자 대시보드
         </Typography>
         {user && (
           <Box sx={{ mt: 2 }}>
-            <Avatar sx={{ width: 56, height: 56, mx: 'auto', mb: 1 }}>
+            <Avatar sx={{ width: 56, height: 56, mx: 'auto', mb: 1, bgcolor: 'primary.main' }}>
               <AdminIcon />
             </Avatar>
-            <Typography variant="subtitle1">{user.name}</Typography>
+            <Typography variant="subtitle1" sx={{ fontWeight: 'medium' }}>
+              {user.name}
+            </Typography>
+            <Chip 
+              label="관리자" 
+              size="small" 
+              color="primary" 
+              variant="outlined"
+              sx={{ mt: 1 }}
+            />
           </Box>
         )}
       </Box>
+      <Divider />
       <List>
         {menuItems.map((item) => (
           <ListItem key={item.text} disablePadding>
             <ListItemButton
-              onClick={() => navigate(item.path)}
+              onClick={() => {
+                navigate(item.path);
+                setMobileOpen(false); // 모바일에서 메뉴 클릭 시 드로어 닫기
+              }}
               selected={location.pathname === item.path}
               sx={{
                 '&.Mui-selected': {
@@ -103,10 +124,25 @@ const AdminLayout: React.FC<AdminLayoutProps> = ({ children }) => {
                     backgroundColor: 'primary.light',
                   },
                 },
+                '&:hover': {
+                  backgroundColor: 'action.hover',
+                },
               }}
             >
-              <ListItemIcon>{item.icon}</ListItemIcon>
-              <ListItemText primary={item.text} />
+              <ListItemIcon sx={{ 
+                color: location.pathname === item.path ? 'primary.main' : 'inherit',
+                minWidth: 40
+              }}>
+                {item.icon}
+              </ListItemIcon>
+              <ListItemText 
+                primary={item.text} 
+                sx={{ 
+                  '& .MuiTypography-root': {
+                    fontWeight: location.pathname === item.path ? 'medium' : 'normal'
+                  }
+                }}
+              />
             </ListItemButton>
           </ListItem>
         ))}
@@ -121,21 +157,37 @@ const AdminLayout: React.FC<AdminLayoutProps> = ({ children }) => {
         sx={{
           width: { sm: `calc(100% - ${drawerWidth}px)` },
           ml: { sm: `${drawerWidth}px` },
+          zIndex: (theme) => theme.zIndex.drawer + 1,
         }}
       >
         <Toolbar>
+          <IconButton
+            color="inherit"
+            aria-label="open drawer"
+            edge="start"
+            onClick={handleDrawerToggle}
+            sx={{ mr: 2, display: { sm: 'none' } }}
+          >
+            <MenuIcon />
+          </IconButton>
+          
           <Typography variant="h6" noWrap component="div" sx={{ flexGrow: 1 }}>
-            전문가의 손길 - 관리자
+            {getCurrentPageTitle()}
           </Typography>
           
-          <IconButton
-            onClick={handleProfileMenuOpen}
-            sx={{ p: 0 }}
-          >
-            <Avatar sx={{ width: 32, height: 32 }}>
-              <AdminIcon />
-            </Avatar>
-          </IconButton>
+          <Box sx={{ display: 'flex', alignItems: 'center', gap: 1 }}>
+            <Typography variant="body2" color="inherit" sx={{ display: { xs: 'none', sm: 'block' } }}>
+              {user?.email}
+            </Typography>
+            <IconButton
+              onClick={handleProfileMenuOpen}
+              sx={{ p: 0 }}
+            >
+              <Avatar sx={{ width: 32, height: 32, bgcolor: 'primary.main' }}>
+                <AdminIcon />
+              </Avatar>
+            </IconButton>
+          </Box>
         </Toolbar>
       </AppBar>
 
@@ -152,7 +204,11 @@ const AdminLayout: React.FC<AdminLayoutProps> = ({ children }) => {
           }}
           sx={{
             display: { xs: 'block', sm: 'none' },
-            '& .MuiDrawer-paper': { boxSizing: 'border-box', width: drawerWidth },
+            '& .MuiDrawer-paper': { 
+              boxSizing: 'border-box', 
+              width: drawerWidth,
+              borderRight: '1px solid rgba(0, 0, 0, 0.12)'
+            },
           }}
         >
           {drawer}
@@ -161,7 +217,11 @@ const AdminLayout: React.FC<AdminLayoutProps> = ({ children }) => {
           variant="permanent"
           sx={{
             display: { xs: 'none', sm: 'block' },
-            '& .MuiDrawer-paper': { boxSizing: 'border-box', width: drawerWidth },
+            '& .MuiDrawer-paper': { 
+              boxSizing: 'border-box', 
+              width: drawerWidth,
+              borderRight: '1px solid rgba(0, 0, 0, 0.12)'
+            },
           }}
           open
         >
@@ -173,6 +233,7 @@ const AdminLayout: React.FC<AdminLayoutProps> = ({ children }) => {
         anchorEl={anchorEl}
         open={Boolean(anchorEl)}
         onClose={handleProfileMenuClose}
+        onClick={handleProfileMenuClose}
       >
         <MenuItem onClick={handleLogout}>
           <ListItemIcon>
@@ -189,6 +250,8 @@ const AdminLayout: React.FC<AdminLayoutProps> = ({ children }) => {
           p: 3,
           width: { sm: `calc(100% - ${drawerWidth}px)` },
           mt: 8,
+          minHeight: '100vh',
+          backgroundColor: '#f5f5f5'
         }}
       >
         {children}

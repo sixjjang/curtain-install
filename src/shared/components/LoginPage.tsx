@@ -66,78 +66,139 @@ const LoginPage: React.FC = () => {
 
 
 
-  const createTestAccount = async (role: 'admin' | 'seller' | 'contractor') => {
-    try {
-      setCreatingTestAccount(true);
-      setError('');
-      
-      const testAccounts = {
-        admin: { email: 'admin@test.com', password: 'admin123', name: '관리자' },
-        seller: { email: 'seller@test.com', password: 'seller123', name: '판매자' },
-        contractor: { email: 'contractor@test.com', password: 'contractor123', name: '시공자' }
-      };
-      
-      const account = testAccounts[role];
-      
-             try {
-         // 먼저 로그인 시도 (계정이 이미 존재하는 경우)
-         const userData = await login(account.email, account.password);
+     // 디버깅용: 현재 Firebase Auth 상태 확인
+   const checkAuthState = async () => {
+     try {
+       const { auth } = await import('../../firebase/config');
+       const currentUser = auth.currentUser;
+       console.log('🔍 현재 Firebase Auth 상태:', {
+         isLoggedIn: !!currentUser,
+         currentUser: currentUser ? {
+           uid: currentUser.uid,
+           email: currentUser.email,
+           displayName: currentUser.displayName
+         } : null
+       });
+     } catch (error) {
+       console.error('Auth 상태 확인 실패:', error);
+     }
+   };
+
+            const createTestAccount = async (role: 'admin' | 'seller' | 'contractor') => {
+     try {
+       setCreatingTestAccount(true);
+       setError('');
+       
+       const testAccounts = {
+         admin: { email: 'admin@test.com', password: 'admin123', name: '관리자' },
+         seller: { email: 'seller@test.com', password: 'seller123', name: '판매자' },
+         contractor: { email: 'contractor@test.com', password: 'contractor123', name: '시공자' }
+       };
+       
+       const account = testAccounts[role];
+       console.log('🆕 테스트 계정 생성 시작:', { role, email: account.email });
+       
+       // 1단계: Firebase Auth로 직접 로그인 시도
+       try {
+         const { auth } = await import('../../firebase/config');
+         const { signInWithEmailAndPassword } = await import('firebase/auth');
          
-         // 로그인 성공 후 역할 설정
-         await AuthService.setTestAccountRole(account.email, role);
+         console.log('🔍 Firebase Auth 로그인 시도...');
+         const userCredential = await signInWithEmailAndPassword(auth, account.email, account.password);
+         const firebaseUser = userCredential.user;
+         console.log('✅ Firebase Auth 로그인 성공:', firebaseUser.uid);
          
-         // 역할 설정 후 다시 로그인하여 업데이트된 사용자 정보 가져오기
-         const updatedUserData = await login(account.email, account.password);
-         console.log('역할 설정 후 다시 로그인:', updatedUserData);
+         // 2단계: Firestore에서 사용자 데이터 확인
+         const { doc, getDoc } = await import('firebase/firestore');
+         const { db } = await import('../../firebase/config');
          
-         // 역할에 따라 리다이렉트
-         const roleRoutes: { [key: string]: string } = {
-           admin: '/admin',
-           seller: '/seller',
-           contractor: '/contractor',
-           customer: '/login'
-         };
+         console.log('📄 Firestore 사용자 데이터 확인...');
+         const userDoc = await getDoc(doc(db, 'users', firebaseUser.uid));
          
-         const targetRoute = roleRoutes[role] || '/login';
-         console.log(`판매자 로그인 성공, ${targetRoute}로 이동합니다.`);
-         navigate(targetRoute);
-        
-      } catch (loginError: any) {
-        // 로그인 실패 시 회원가입 시도
-        if (loginError.message.includes('사용자 계정이 없습니다') || 
-            loginError.message.includes('잘못된 비밀번호')) {
-          
-          // 회원가입
-          const userData = await AuthService.register(
-            account.email,
-            account.password,
-            account.name,
-            '010-1234-5678',
-            role
-          );
-          
-          // 자동 로그인
-          await login(account.email, account.password);
-          
-          // 역할에 따라 리다이렉트
-          const roleRoutes: { [key: string]: string } = {
-            admin: '/admin',
-            seller: '/seller',
-            contractor: '/contractor',
-            customer: '/login'
-          };
-          
-          const targetRoute = roleRoutes[role] || '/login';
-          console.log(`판매자 회원가입 후 로그인 성공, ${targetRoute}로 이동합니다.`);
-          navigate(targetRoute);
-        } else {
-          throw loginError;
-        }
-      }
-      
-    } catch (error: any) {
-      setError(`테스트 계정 생성 실패: ${error.message}`);
-         } finally {
+         if (userDoc.exists()) {
+           console.log('✅ Firestore 데이터 존재, AuthContext 로그인 시도...');
+           // Firestore 데이터가 있으면 AuthContext로 로그인
+           const userData = await login(account.email, account.password);
+           console.log('✅ AuthContext 로그인 성공:', userData);
+           
+           // 역할에 따라 리다이렉트
+           const roleRoutes: { [key: string]: string } = {
+             admin: '/admin',
+             seller: '/seller',
+             contractor: '/contractor',
+             customer: '/login'
+           };
+           
+           const targetRoute = roleRoutes[role] || '/login';
+           console.log(`기존 테스트 계정 로그인 성공, ${targetRoute}로 이동합니다.`);
+           navigate(targetRoute);
+           
+         } else {
+           console.log('❌ Firestore 데이터 없음, 데이터 생성 시도...');
+           // Firestore 데이터가 없으면 생성
+           const userData = await AuthService.createUserDataFromAuth(firebaseUser, account.name, role);
+           console.log('✅ Firestore 데이터 생성 완료:', userData);
+           
+           // AuthContext 업데이트
+           const loginResult = await login(account.email, account.password);
+           console.log('✅ 데이터 생성 후 로그인 성공:', loginResult);
+           
+           // 역할에 따라 리다이렉트
+           const roleRoutes: { [key: string]: string } = {
+             admin: '/admin',
+             seller: '/seller',
+             contractor: '/contractor',
+             customer: '/login'
+           };
+           
+           const targetRoute = roleRoutes[role] || '/login';
+           console.log(`데이터 생성 완료, ${targetRoute}로 이동합니다.`);
+           navigate(targetRoute);
+         }
+         
+       } catch (authError: any) {
+         console.log('❌ Firebase Auth 로그인 실패:', authError.message);
+         
+         // Firebase Auth 로그인 실패 시 새 계정 생성
+         console.log('🆕 새 계정 생성 시도...');
+         
+         try {
+           const userData = await AuthService.register(
+             account.email,
+             account.password,
+             account.name,
+             '010-1234-5678',
+             role
+           );
+           
+           console.log('✅ 회원가입 완료:', userData);
+           
+           // 자동 로그인
+           const loginResult = await login(account.email, account.password);
+           console.log('✅ 회원가입 후 로그인 성공:', loginResult);
+           
+           // 역할에 따라 리다이렉트
+           const roleRoutes: { [key: string]: string } = {
+             admin: '/admin',
+             seller: '/seller',
+             contractor: '/contractor',
+             customer: '/login'
+           };
+           
+           const targetRoute = roleRoutes[role] || '/login';
+           console.log(`새 테스트 계정 생성 및 로그인 성공, ${targetRoute}로 이동합니다.`);
+           navigate(targetRoute);
+           
+         } catch (registerError: any) {
+           console.error('❌ 회원가입 실패:', registerError);
+           throw new Error(`회원가입 실패: ${registerError.message}`);
+         }
+       }
+       
+     } catch (error: any) {
+       console.error('테스트 계정 생성 실패:', error);
+       setError(`테스트 계정 생성 실패: ${error.message}`);
+     } finally {
        setCreatingTestAccount(false);
      }
    };
@@ -152,8 +213,9 @@ const LoginPage: React.FC = () => {
        
        // 역할 변경 후 다시 로그인하여 업데이트된 정보 가져오기
        if (user) {
-         const updatedUserData = await login(user.email, 'seller123'); // 임시로 비밀번호 사용
-         console.log('역할 변경 후 다시 로그인:', updatedUserData);
+         // 현재 사용자의 이메일로 다시 로그인 시도
+         // 비밀번호는 알 수 없으므로 현재 세션을 유지하는 방식으로 변경
+         console.log('역할 변경 완료, 현재 세션 유지');
          
          // 역할에 따라 리다이렉트
          const roleRoutes: { [key: string]: string } = {
@@ -169,6 +231,7 @@ const LoginPage: React.FC = () => {
        }
        
      } catch (error: any) {
+       console.error('역할 변경 실패:', error);
        setError(`역할 변경 실패: ${error.message}`);
      } finally {
        setUpdatingRole(false);

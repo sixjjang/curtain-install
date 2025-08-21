@@ -3,6 +3,31 @@ import { AuthService } from './authService';
 import { ConstructionJob, User } from '../../types';
 
 export interface AnalyticsData {
+  // 사용자 통계
+  userStats: {
+    totalUsers: number;
+    pendingApprovals: number;
+    activeContractors: number;
+    totalSellers: number;
+    totalCustomers: number;
+  };
+  
+  // 작업 통계
+  jobStats: {
+    totalJobs: number;
+    completedJobs: number;
+    inProgressJobs: number;
+    pendingJobs: number;
+    cancelledJobs: number;
+  };
+  
+  // 평점 분석
+  ratingAnalysis: {
+    averageRating: number;
+    totalRatings: number;
+    ratingDistribution: { rating: number; count: number }[];
+  };
+  
   // 시공금액 분석
   revenueAnalysis: {
     totalRevenue: number;
@@ -47,16 +72,81 @@ export class AnalyticsService {
       const allJobs = await JobService.getAllJobs();
       const filteredJobs = this.filterJobsByPeriod(allJobs, period);
       
-      return {
-        revenueAnalysis: await this.getRevenueAnalysis(filteredJobs),
-        contractorAnalysis: await this.getContractorAnalysis(filteredJobs),
-        locationAnalysis: await this.getLocationAnalysis(filteredJobs),
-        sellerAnalysis: await this.getSellerAnalysis(filteredJobs),
-        timeAnalysis: await this.getTimeAnalysis(filteredJobs)
+      console.log('🔍 AnalyticsService - 전체 작업 수:', allJobs.length);
+      console.log('🔍 AnalyticsService - 필터된 작업 수:', filteredJobs.length);
+      
+      const userStats = await this.getUserStats();
+      const jobStats = await this.getJobStats(allJobs);
+      const ratingAnalysis = await this.getRatingAnalysis(allJobs);
+      const revenueAnalysis = await this.getRevenueAnalysis(filteredJobs);
+      const contractorAnalysis = await this.getContractorAnalysis(filteredJobs);
+      const locationAnalysis = await this.getLocationAnalysis(filteredJobs);
+      const sellerAnalysis = await this.getSellerAnalysis(filteredJobs);
+      const timeAnalysis = await this.getTimeAnalysis(filteredJobs);
+      
+      const result = {
+        userStats,
+        jobStats,
+        ratingAnalysis,
+        revenueAnalysis,
+        contractorAnalysis,
+        locationAnalysis,
+        sellerAnalysis,
+        timeAnalysis
       };
+      
+      console.log('📊 AnalyticsService - 반환 데이터:', result);
+      return result;
     } catch (error) {
       console.error('분석 데이터 가져오기 실패:', error);
-      throw new Error('분석 데이터를 가져올 수 없습니다.');
+      // 에러 발생 시 기본값 반환
+      return {
+        userStats: {
+          totalUsers: 0,
+          pendingApprovals: 0,
+          activeContractors: 0,
+          totalSellers: 0,
+          totalCustomers: 0
+        },
+        jobStats: {
+          totalJobs: 0,
+          completedJobs: 0,
+          inProgressJobs: 0,
+          pendingJobs: 0,
+          cancelledJobs: 0
+        },
+        ratingAnalysis: {
+          averageRating: 0,
+          totalRatings: 0,
+          ratingDistribution: []
+        },
+        revenueAnalysis: {
+          totalRevenue: 0,
+          averageRevenue: 0,
+          monthlyRevenue: [],
+          revenueByStatus: []
+        },
+        contractorAnalysis: {
+          topContractors: [],
+          contractorPerformance: [],
+          contractorDistribution: []
+        },
+        locationAnalysis: {
+          topLocations: [],
+          locationDistribution: []
+        },
+        sellerAnalysis: {
+          topSellers: [],
+          sellerPerformance: []
+        },
+        timeAnalysis: {
+          averageCompletionTime: 0,
+          timeByStatus: [],
+          monthlyCompletionTime: [],
+          timeDistribution: [],
+          timeOfDayDistribution: []
+        }
+      };
     }
   }
 
@@ -90,6 +180,79 @@ export class AnalyticsService {
     });
     
     return filteredJobs;
+  }
+
+  // 사용자 통계
+  private static async getUserStats() {
+    try {
+      const allUsers = await AuthService.getAllUsers();
+      
+      const totalUsers = allUsers.length;
+      const pendingApprovals = allUsers.filter(user => user.approvalStatus === 'pending').length;
+      const activeContractors = allUsers.filter(user => 
+        user.role === 'contractor' && user.approvalStatus === 'approved' && user.isActive !== false
+      ).length;
+      const totalSellers = allUsers.filter(user => user.role === 'seller').length;
+      const totalCustomers = allUsers.filter(user => user.role === 'customer').length;
+      
+      return {
+        totalUsers,
+        pendingApprovals,
+        activeContractors,
+        totalSellers,
+        totalCustomers
+      };
+    } catch (error) {
+      console.error('사용자 통계 계산 실패:', error);
+      return {
+        totalUsers: 0,
+        pendingApprovals: 0,
+        activeContractors: 0,
+        totalSellers: 0,
+        totalCustomers: 0
+      };
+    }
+  }
+
+  // 작업 통계
+  private static async getJobStats(jobs: ConstructionJob[]) {
+    const totalJobs = jobs.length;
+    const completedJobs = jobs.filter(job => job.status === 'completed').length;
+    const inProgressJobs = jobs.filter(job => 
+      job.status === 'assigned' || job.status === 'in_progress' || job.status === 'product_preparing'
+    ).length;
+    const pendingJobs = jobs.filter(job => job.status === 'pending').length;
+    const cancelledJobs = jobs.filter(job => job.status === 'cancelled').length;
+    
+    return {
+      totalJobs,
+      completedJobs,
+      inProgressJobs,
+      pendingJobs,
+      cancelledJobs
+    };
+  }
+
+  // 평점 분석
+  private static async getRatingAnalysis(jobs: ConstructionJob[]) {
+    const jobsWithRatings = jobs.filter(job => job.customerSatisfaction && job.customerSatisfaction > 0);
+    const totalRatings = jobsWithRatings.length;
+    
+    const averageRating = totalRatings > 0 
+      ? jobsWithRatings.reduce((sum, job) => sum + (job.customerSatisfaction || 0), 0) / totalRatings
+      : 0;
+    
+    // 평점 분포 계산
+    const ratingDistribution = [1, 2, 3, 4, 5].map(rating => ({
+      rating,
+      count: jobsWithRatings.filter(job => job.customerSatisfaction === rating).length
+    }));
+    
+    return {
+      averageRating,
+      totalRatings,
+      ratingDistribution
+    };
   }
 
   // 시공금액 분석

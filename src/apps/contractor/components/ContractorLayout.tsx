@@ -17,7 +17,8 @@ import {
   IconButton,
   Badge,
   Chip,
-  Divider
+  Divider,
+  Alert
 } from '@mui/material';
 import {
   Menu as MenuIcon,
@@ -28,7 +29,9 @@ import {
   AccountBalance,
   Person,
   Notifications as NotificationsIcon,
-  Logout
+  Logout,
+  Warning,
+  Block
 } from '@mui/icons-material';
 import { useAuth } from '../../../shared/contexts/AuthContext';
 import { ContractorInfo } from '../../../types';
@@ -53,7 +56,7 @@ const ContractorLayout: React.FC<ContractorLayoutProps> = ({ children }) => {
     { text: '대시보드', icon: <Dashboard />, path: '/contractor' },
     { text: '시공건 찾기', icon: <Work />, path: '/contractor/jobs' },
     { text: '내 작업', icon: <Assignment />, path: '/contractor/my-jobs' },
-    { text: '판매자와 채팅', icon: <Chat />, path: '/contractor/chat' },
+    { text: '판매자와 채팅', icon: <Chat />, path: '/contractor/seller-chat' },
     { text: '포인트 관리', icon: <AccountBalance />, path: '/contractor/points' },
     { text: '프로필', icon: <Person />, path: '/contractor/profile' },
   ];
@@ -83,8 +86,13 @@ const ContractorLayout: React.FC<ContractorLayoutProps> = ({ children }) => {
     <Box>
       <Box sx={{ p: 2, textAlign: 'center' }}>
         <Typography variant="h6" color="primary">
-          시공자 대시보드
+          {contractor?.businessName || contractor?.name || '시공자 대시보드'}
         </Typography>
+        {contractor?.businessName && (
+          <Typography variant="caption" color="textSecondary">
+            시공자 대시보드
+          </Typography>
+        )}
         {contractor && (
           <Box sx={{ mt: 2 }}>
             <Avatar sx={{ width: 56, height: 56, mx: 'auto', mb: 1 }}>
@@ -104,7 +112,19 @@ const ContractorLayout: React.FC<ContractorLayoutProps> = ({ children }) => {
         {menuItems.map((item) => (
           <ListItem key={item.text} disablePadding>
             <ListItemButton
-              onClick={() => navigate(item.path)}
+              onClick={() => {
+                // 승인 대기 상태에서는 프로필 페이지만 접근 가능
+                if (user?.approvalStatus === 'pending' && item.path !== '/contractor/profile') {
+                  alert('승인 대기 중입니다. 승인 완료 후 이용 가능한 기능입니다.');
+                  return;
+                }
+                // 승인 거부 상태에서는 프로필 페이지만 접근 가능
+                if (user?.approvalStatus === 'rejected' && item.path !== '/contractor/profile') {
+                  alert('승인이 거부되었습니다. 관리자에게 문의해주세요.');
+                  return;
+                }
+                navigate(item.path);
+              }}
               selected={location.pathname === item.path}
               sx={{
                 '&.Mui-selected': {
@@ -150,7 +170,17 @@ const ContractorLayout: React.FC<ContractorLayoutProps> = ({ children }) => {
           <Box sx={{ display: 'flex', alignItems: 'center', gap: 2 }}>
             <IconButton
               color="inherit"
-              onClick={() => navigate('/contractor/notifications')}
+              onClick={() => {
+                if (user?.approvalStatus === 'pending') {
+                  alert('승인 대기 중입니다. 승인 완료 후 이용 가능한 기능입니다.');
+                  return;
+                }
+                if (user?.approvalStatus === 'rejected') {
+                  alert('승인이 거부되었습니다. 관리자에게 문의해주세요.');
+                  return;
+                }
+                navigate('/contractor/notifications');
+              }}
             >
               <Badge badgeContent={3} color="error">
                 <NotificationsIcon />
@@ -161,10 +191,18 @@ const ContractorLayout: React.FC<ContractorLayoutProps> = ({ children }) => {
               onClick={handleProfileMenuOpen}
               sx={{ p: 0 }}
             >
-              <Avatar sx={{ width: 32, height: 32 }}>
-                {contractor?.name.charAt(0)}
+              <Avatar 
+                sx={{ 
+                  width: 32, 
+                  height: 32,
+                  bgcolor: user?.profileImage ? 'transparent' : 'primary.main'
+                }}
+                src={user?.profileImage || undefined}
+              >
+                {contractor?.name?.charAt(0) || user?.name?.charAt(0) || 'U'}
               </Avatar>
             </IconButton>
+
           </Box>
         </Toolbar>
       </AppBar>
@@ -227,6 +265,43 @@ const ContractorLayout: React.FC<ContractorLayoutProps> = ({ children }) => {
           mt: 8,
         }}
       >
+        {/* 승인 상태 경고 메시지 */}
+        {user?.approvalStatus === 'pending' && (
+          <Alert 
+            severity="warning" 
+            icon={<Warning />}
+            sx={{ mb: 2 }}
+            action={
+              <Chip 
+                label="승인 대기 중" 
+                size="small" 
+                color="warning" 
+                variant="outlined"
+              />
+            }
+          >
+            관리자 승인을 기다리고 있습니다. 승인 완료 후 모든 기능을 이용할 수 있습니다.
+          </Alert>
+        )}
+        
+        {user?.approvalStatus === 'rejected' && (
+          <Alert 
+            severity="error" 
+            icon={<Block />}
+            sx={{ mb: 2 }}
+            action={
+              <Chip 
+                label="승인 거부됨" 
+                size="small" 
+                color="error" 
+                variant="outlined"
+              />
+            }
+          >
+            승인이 거부되었습니다. 관리자에게 문의하거나 재신청을 진행해주세요.
+          </Alert>
+        )}
+        
         {children}
       </Box>
     </Box>

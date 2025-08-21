@@ -296,4 +296,41 @@ export class ContractorService {
       throw new Error('선호 지역 업데이트에 실패했습니다.');
     }
   }
+
+  // 모든 시공자 목록 불러오기
+  static async getAllContractors(): Promise<any[]> {
+    try {
+      const contractorsRef = collection(db, 'users');
+      const querySnapshot = await getDocs(contractorsRef);
+      const contractors: any[] = [];
+      
+      querySnapshot.forEach((doc) => {
+        const data = doc.data();
+        if (data.role === 'contractor') {
+          contractors.push({
+            id: doc.id,
+            name: data.name,
+            email: data.email,
+            phone: data.phone,
+            businessName: data.contractor?.businessName || '',
+            experience: data.experience || '',
+            level: data.level || 1,
+            rating: data.rating || 0,
+            totalJobs: data.totalJobs || 0,
+            completedJobs: data.completedJobs || 0,
+            profileImage: data.profileImage,
+            approvalStatus: data.approvalStatus,
+            location: data.location,
+            createdAt: data.createdAt?.toDate() || new Date(),
+            updatedAt: data.updatedAt?.toDate() || new Date()
+          });
+        }
+      });
+      
+      return contractors;
+    } catch (error) {
+      console.error('시공자 목록 불러오기 실패:', error);
+      throw new Error('시공자 목록을 불러올 수 없습니다.');
+    }
+  }
 }

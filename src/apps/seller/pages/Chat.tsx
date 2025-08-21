@@ -126,8 +126,9 @@ const Chat: React.FC = () => {
         job.id,
         user?.id || 'seller',
         'seller',
-        '판매자',
-        newMessage.trim()
+        user?.name || '판매자',
+        newMessage.trim(),
+        user?.profileImage
       );
       setNewMessage('');
     } catch (error) {
@@ -271,8 +272,9 @@ const Chat: React.FC = () => {
                               height: 32,
                               bgcolor: `${getSenderColor(message.senderType)}.main`
                             }}
+                            src={message.senderProfileImage || undefined}
                           >
-                            {getSenderIcon(message.senderType)}
+                            {message.senderName?.charAt(0) || getSenderIcon(message.senderType)}
                           </Avatar>
                         )}
                         
@@ -317,8 +319,9 @@ const Chat: React.FC = () => {
                               height: 32,
                               bgcolor: `${getSenderColor(message.senderType)}.main`
                             }}
+                            src={user?.profileImage || undefined}
                           >
-                            {getSenderIcon(message.senderType)}
+                            {user?.name?.charAt(0) || getSenderIcon(message.senderType)}
                           </Avatar>
                         )}
                       </Box>

@@ -36,21 +36,25 @@ import {
 } from '../../../shared/utils/imageOptimizer';
 
 const Profile: React.FC = () => {
-  const { user } = useAuth();
+  const { user, updateUser } = useAuth();
   const fileInputRef = useRef<HTMLInputElement>(null);
+  
+  console.log('🔍 Profile 컴포넌트 렌더링 시작');
+  console.log('🔍 Profile - 현재 사용자:', user);
   
   // 기본 정보 상태
   const [basicInfo, setBasicInfo] = useState<SellerBasicInfo>({
-    name: '김판매',
-    companyName: '커튼 전문점',
-    businessNumber: '123-45-67890',
-    address: '서울시 강남구',
-    phone: '010-1234-5678',
-    email: 'seller@example.com'
+    name: user?.name || '',
+    companyName: user?.seller?.companyName || '',
+    businessNumber: user?.seller?.businessNumber || '',
+    address: user?.seller?.businessAddress || '',
+    phone: user?.phone || '',
+    email: user?.email || '',
+    profileImage: user?.profileImage || ''
   });
   
   // 프로필 사진 상태
-  const [profileImage, setProfileImage] = useState<string | null>(null);
+  const [profileImage, setProfileImage] = useState<string | null>(user?.profileImage || null);
   const [imageLoading, setImageLoading] = useState(false);
   const [optimizationDialog, setOptimizationDialog] = useState(false);
   const [optimizationInfo, setOptimizationInfo] = useState<{
@@ -94,6 +98,27 @@ const Profile: React.FC = () => {
       [field]: value
     }));
   };
+
+  // 사용자 정보가 변경될 때 로컬 상태 업데이트
+  useEffect(() => {
+    if (user) {
+      // 기본 정보 업데이트
+      setBasicInfo({
+        name: user.name || '',
+        companyName: user.seller?.companyName || '',
+        businessNumber: user.seller?.businessNumber || '',
+        address: user.seller?.businessAddress || '',
+        phone: user.phone || '',
+        email: user.email || '',
+        profileImage: user.profileImage || ''
+      });
+      
+      // 프로필 이미지 업데이트
+      if (user.profileImage) {
+        setProfileImage(user.profileImage);
+      }
+    }
+  }, [user]);
 
   // 프로필 사진 업로드 핸들러
   const handleImageUpload = async (event: React.ChangeEvent<HTMLInputElement>) => {
@@ -145,6 +170,11 @@ const Profile: React.FC = () => {
             };
             await SellerService.saveBasicInfo(user.id, basicInfoWithImage);
             
+            // AuthContext의 사용자 정보 업데이트
+            console.log('🔄 AuthContext 업데이트 시작:', imageUrl);
+            await updateUser({ profileImage: imageUrl });
+            console.log('✅ AuthContext 업데이트 완료');
+            
             // Firebase Storage에 성공적으로 업로드된 경우
             if (StorageService.isFirebaseStorageURL(imageUrl)) {
               setSnackbar({
@@ -170,6 +200,11 @@ const Profile: React.FC = () => {
               profileImage: optimizedResult.dataUrl
             };
             await SellerService.saveBasicInfo(user.id, basicInfoWithImage);
+            
+            // AuthContext의 사용자 정보 업데이트
+            console.log('🔄 AuthContext 업데이트 시작 (로컬):', optimizedResult.dataUrl);
+            await updateUser({ profileImage: optimizedResult.dataUrl });
+            console.log('✅ AuthContext 업데이트 완료 (로컬)');
             
             setSnackbar({
               open: true,
@@ -356,11 +391,22 @@ const Profile: React.FC = () => {
     }
   };
 
+  console.log('🔍 Profile 컴포넌트 - return 시작');
+  
   return (
-    <Box>
+    <Box sx={{ 
+      padding: '20px',
+      minHeight: '500px',
+      backgroundColor: '#f8f9fa',
+      borderRadius: '8px',
+      boxShadow: '0 2px 4px rgba(0,0,0,0.1)'
+    }}>
       <Typography variant="h4" gutterBottom>
         판매자 프로필
       </Typography>
+      {(() => { console.log('🔍 Profile 컴포넌트 - 판매자 프로필 제목 렌더링'); return null; })()}
+      
+
 
       <Grid container spacing={3}>
         <Grid item xs={12} md={4}>
