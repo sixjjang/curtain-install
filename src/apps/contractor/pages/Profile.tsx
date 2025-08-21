@@ -67,7 +67,39 @@ const banks = [
 
 const Profile: React.FC = () => {
   const { user, updateUser } = useAuth();
-  const contractor = user?.contractor;
+  
+  // 시공자 데이터를 올바른 구조로 가져오기
+  const contractor = user?.contractor || {
+    name: user?.name || '',
+    phone: user?.phone || '',
+    email: user?.email || '',
+    businessName: user?.businessName || '',
+    businessNumber: user?.businessNumber || '',
+    businessAddress: user?.businessAddress || '',
+    businessType: user?.businessType || '',
+    businessCategory: user?.businessCategory || '',
+    businessLicenseImage: user?.businessLicenseImage || '',
+    location: {
+      address: '서울시 강남구',
+      coordinates: {
+        lat: 37.5665,
+        lng: 126.9780
+      }
+    },
+    serviceAreas: [],
+    experience: '',
+    bankAccount: '',
+    bankName: '',
+    accountHolder: user?.name || '',
+    idCardImage: '',
+    rating: 0,
+    completedJobs: 0,
+    totalJobs: 0,
+    totalEarnings: 0,
+    level: 1,
+    points: 0
+  };
+  
   const fileInputRef = useRef<HTMLInputElement>(null);
   const [isEditing, setIsEditing] = useState(false);
   const [profileImage, setProfileImage] = useState<string | null>(user?.profileImage || null);
@@ -96,18 +128,27 @@ const Profile: React.FC = () => {
   // 사용자 정보가 변경될 때 로컬 상태 업데이트
   useEffect(() => {
     if (user) {
+      console.log('🔄 시공자 프로필 - 사용자 정보 업데이트:', user);
+      
       // 프로필 이미지 업데이트
       if (user.profileImage) {
         setProfileImage(user.profileImage);
       }
       
-      // 시공자 정보 업데이트
-      if (user.contractor) {
-        setSelectedRegions(user.contractor.serviceAreas || []);
-        setSelectedBank(user.contractor.bankName || '');
-        setBankAccount(user.contractor.bankAccount || '');
-        setExperience(user.contractor.experience || '');
-      }
+      // 시공자 정보 업데이트 (contractor 필드 또는 직접 필드에서)
+      const contractorData = user.contractor || {
+        serviceAreas: [],
+        bankName: '',
+        bankAccount: '',
+        experience: ''
+      };
+      
+      setSelectedRegions(contractorData.serviceAreas || []);
+      setSelectedBank(contractorData.bankName || '');
+      setBankAccount(contractorData.bankAccount || '');
+      setExperience(contractorData.experience || '');
+      
+      console.log('✅ 시공자 프로필 - 상태 업데이트 완료');
     }
   }, [user]);
 
@@ -275,36 +316,39 @@ const Profile: React.FC = () => {
           }
         } else {
           console.log('⚠️ 저장된 시공자 정보 없음, users 컬렉션에서 확인');
-          // users 컬렉션에서 시공자 정보 확인
-          if (user.contractor) {
-            console.log('✅ users 컬렉션의 시공자 정보:', user.contractor);
-            setExperience(user.contractor.experience || '');
-            setSelectedRegions(user.contractor.serviceAreas || []);
-            setSelectedBank(user.contractor.bankName || '');
-            setBankAccount(user.contractor.bankAccount || '');
-            if (user.profileImage) {
-              setProfileImage(user.profileImage);
-            }
-          } else {
-            console.log('⚠️ users 컬렉션에도 시공자 정보 없음');
-            // 기본 사용자 정보로 초기화
-            setExperience('');
-            setSelectedRegions([]);
-            setSelectedBank('');
-            setBankAccount('');
+          // users 컬렉션에서 시공자 정보 확인 (contractor 필드 또는 직접 필드)
+          const contractorData = user.contractor || {
+            experience: '',
+            serviceAreas: [],
+            bankName: '',
+            bankAccount: ''
+          };
+          
+          console.log('✅ users 컬렉션의 시공자 정보:', contractorData);
+          setExperience(contractorData.experience || '');
+          setSelectedRegions(contractorData.serviceAreas || []);
+          setSelectedBank(contractorData.bankName || '');
+          setBankAccount(contractorData.bankAccount || '');
+          if (user.profileImage) {
+            setProfileImage(user.profileImage);
           }
         }
       } catch (error) {
         console.error('❌ 저장된 정보 불러오기 실패:', error);
         // 오류 발생 시 사용자 정보로 초기화
-        if (user.contractor) {
-          setExperience(user.contractor.experience || '');
-          setSelectedRegions(user.contractor.serviceAreas || []);
-          setSelectedBank(user.contractor.bankName || '');
-          setBankAccount(user.contractor.bankAccount || '');
-          if (user.profileImage) {
-            setProfileImage(user.profileImage);
-          }
+        const contractorData = user.contractor || {
+          experience: '',
+          serviceAreas: [],
+          bankName: '',
+          bankAccount: ''
+        };
+        
+        setExperience(contractorData.experience || '');
+        setSelectedRegions(contractorData.serviceAreas || []);
+        setSelectedBank(contractorData.bankName || '');
+        setBankAccount(contractorData.bankAccount || '');
+        if (user.profileImage) {
+          setProfileImage(user.profileImage);
         }
       }
     };
@@ -353,8 +397,18 @@ const Profile: React.FC = () => {
     }
   };
 
-  if (!contractor) {
-    return <Typography>로딩 중...</Typography>;
+  if (!user) {
+    return (
+      <Box sx={{ 
+        display: 'flex', 
+        justifyContent: 'center', 
+        alignItems: 'center', 
+        minHeight: '400px' 
+      }}>
+        <CircularProgress />
+        <Typography sx={{ ml: 2 }}>사용자 정보를 불러오는 중...</Typography>
+      </Box>
+    );
   }
 
   return (
