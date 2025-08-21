@@ -45,9 +45,9 @@ const Profile: React.FC = () => {
   // 기본 정보 상태
   const [basicInfo, setBasicInfo] = useState<SellerBasicInfo>({
     name: user?.name || '',
-    companyName: user?.seller?.companyName || '',
-    businessNumber: user?.seller?.businessNumber || '',
-    address: user?.seller?.businessAddress || '',
+    companyName: user?.companyName || '',
+    businessNumber: user?.businessNumber || '',
+    address: user?.businessAddress || '',
     phone: user?.phone || '',
     email: user?.email || '',
     profileImage: user?.profileImage || ''
@@ -102,12 +102,14 @@ const Profile: React.FC = () => {
   // 사용자 정보가 변경될 때 로컬 상태 업데이트
   useEffect(() => {
     if (user) {
-      // 기본 정보 업데이트
+      console.log('🔄 판매자 프로필 - 사용자 정보 업데이트:', user);
+      
+      // 기본 정보 업데이트 (User 객체의 직접 필드에서)
       setBasicInfo({
         name: user.name || '',
-        companyName: user.seller?.companyName || '',
-        businessNumber: user.seller?.businessNumber || '',
-        address: user.seller?.businessAddress || '',
+        companyName: user.companyName || '',
+        businessNumber: user.businessNumber || '',
+        address: user.businessAddress || '',
         phone: user.phone || '',
         email: user.email || '',
         profileImage: user.profileImage || ''
@@ -117,6 +119,8 @@ const Profile: React.FC = () => {
       if (user.profileImage) {
         setProfileImage(user.profileImage);
       }
+      
+      console.log('✅ 판매자 프로필 - 상태 업데이트 완료');
     }
   }, [user]);
 
@@ -264,31 +268,21 @@ const Profile: React.FC = () => {
           }
         } else {
           console.log('⚠️ 저장된 판매자 정보 없음 (sellers 컬렉션), users 컬렉션에서 확인');
-          // users 컬렉션에서 판매자 정보 확인
-          if (user.seller) {
-            console.log('✅ users 컬렉션의 판매자 정보:', user.seller);
-            setBasicInfo({
-              name: user.name || '',
-              companyName: user.seller.companyName || '',
-              businessNumber: user.seller.businessNumber || '',
-              address: user.seller.businessAddress || '',
-              phone: user.phone || '',
-              email: user.email || '',
-              profileImage: user.profileImage || ''
-            });
-          } else {
-            console.log('⚠️ users 컬렉션에도 판매자 정보 없음');
-            // 기본 사용자 정보로 초기화
-            setBasicInfo({
-              name: user.name || '',
-              companyName: '',
-              businessNumber: '',
-              address: '',
-              phone: user.phone || '',
-              email: user.email || '',
-              profileImage: user.profileImage || ''
-            });
-          }
+          // users 컬렉션에서 판매자 정보 확인 (User 객체의 직접 필드에서)
+          console.log('✅ users 컬렉션의 판매자 정보 (직접 필드):', {
+            companyName: user.companyName,
+            businessNumber: user.businessNumber,
+            businessAddress: user.businessAddress
+          });
+          setBasicInfo({
+            name: user.name || '',
+            companyName: user.companyName || '',
+            businessNumber: user.businessNumber || '',
+            address: user.businessAddress || '',
+            phone: user.phone || '',
+            email: user.email || '',
+            profileImage: user.profileImage || ''
+          });
         }
         
         // 픽업 정보 불러오기
@@ -297,21 +291,22 @@ const Profile: React.FC = () => {
           console.log('✅ 저장된 픽업 정보:', savedPickupInfo);
           setPickupInfo(savedPickupInfo);
         } else {
-          console.log('⚠️ 저장된 픽업 정보 없음, users 컬렉션에서 확인');
-          // users 컬렉션에서 픽업 정보 확인
-          if (user.seller?.pickupInfo) {
-            console.log('✅ users 컬렉션의 픽업 정보:', user.seller.pickupInfo);
-            setPickupInfo(user.seller.pickupInfo);
-          }
+          console.log('⚠️ 저장된 픽업 정보 없음, 기본값으로 초기화');
+          // 기본 픽업 정보로 초기화 (기본 정보와 동일하게 설정)
+          setPickupInfo({
+            companyName: user.companyName || '',
+            phone: user.phone || '',
+            address: user.businessAddress || ''
+          });
         }
       } catch (error) {
         console.error('❌ 저장된 정보 불러오기 실패:', error);
         // 오류 발생 시 사용자 정보로 초기화
         setBasicInfo({
           name: user.name || '',
-          companyName: user.seller?.companyName || '',
-          businessNumber: user.seller?.businessNumber || '',
-          address: user.seller?.businessAddress || '',
+          companyName: user.companyName || '',
+          businessNumber: user.businessNumber || '',
+          address: user.businessAddress || '',
           phone: user.phone || '',
           email: user.email || '',
           profileImage: user.profileImage || ''
