@@ -1344,22 +1344,11 @@ const CreateJobDialog: React.FC<CreateJobDialogProps> = ({
                     />
                   </Grid>
                   <Grid item xs={12}>
-                    <TextField
-                      fullWidth
-                      label="픽업 주소"
+                    <AddressSearch
                       value={pickupInfo.address}
-                      onChange={(e) => handlePickupInfoChange('address', e.target.value)}
+                      onChange={(address) => handlePickupInfoChange('address', address)}
                       placeholder="픽업할 장소의 주소를 입력하세요"
-                      InputProps={{
-                        startAdornment: pickupInfo.address && (
-                          <Chip 
-                            label="자동입력" 
-                            size="small" 
-                            color="info" 
-                            sx={{ mr: 1, fontSize: '0.7rem' }}
-                          />
-                        )
-                      }}
+                      label="픽업 주소"
                     />
                   </Grid>
                   <Grid item xs={12} sm={6}>
