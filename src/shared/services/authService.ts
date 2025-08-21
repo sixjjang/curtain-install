@@ -377,14 +377,32 @@ export class AuthService {
   static async getCurrentUser(): Promise<User | null> {
     try {
       const user = auth.currentUser;
-      if (!user) return null;
+      console.log('🔍 getCurrentUser - Firebase Auth 사용자:', user?.email, user?.uid);
+      
+      if (!user) {
+        console.log('❌ getCurrentUser - Firebase Auth 사용자 없음');
+        return null;
+      }
 
+      console.log('📄 getCurrentUser - Firestore 문서 조회 중:', user.uid);
       const userDoc = await getDoc(doc(db, 'users', user.uid));
-      if (!userDoc.exists()) return null;
+      
+      if (!userDoc.exists()) {
+        console.log('❌ getCurrentUser - Firestore 문서 없음:', user.uid);
+        return null;
+      }
 
-      return userDoc.data() as User;
+      const userData = userDoc.data() as User;
+      console.log('✅ getCurrentUser - Firestore 데이터 조회 성공');
+      console.log('👤 getCurrentUser - 문서 ID:', userData.id);
+      console.log('📧 getCurrentUser - 이메일:', userData.email);
+      console.log('👨‍💼 getCurrentUser - 역할:', userData.role);
+      console.log('✅ getCurrentUser - 승인 상태:', userData.approvalStatus);
+      console.log('📋 getCurrentUser - 원본 Firestore 데이터:', userDoc.data());
+      
+      return userData;
     } catch (error) {
-      console.error('현재 사용자 정보 가져오기 실패:', error);
+      console.error('❌ getCurrentUser - 현재 사용자 정보 가져오기 실패:', error);
       return null;
     }
   }

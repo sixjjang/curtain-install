@@ -64,19 +64,26 @@ export const AuthProvider: React.FC<AuthProviderProps> = ({ children }) => {
 
   useEffect(() => {
     const unsubscribe = onAuthStateChanged(auth, async (firebaseUser) => {
-      console.log('AuthContext - Firebase 인증 상태 변경:', firebaseUser?.email);
+      console.log('🔍 AuthContext - Firebase 인증 상태 변경:', firebaseUser?.email);
       
       if (firebaseUser) {
         try {
+          console.log('📄 AuthContext - Firestore에서 사용자 정보 조회 중...');
           const userData = await AuthService.getCurrentUser();
-          console.log('AuthContext - 사용자 정보 가져오기 성공:', userData);
+          console.log('✅ AuthContext - 사용자 정보 가져오기 성공');
+          console.log('👤 AuthContext - 사용자 ID:', userData?.id);
+          console.log('📧 AuthContext - 사용자 이메일:', userData?.email);
+          console.log('👨‍💼 AuthContext - 사용자 역할:', userData?.role);
+          console.log('✅ AuthContext - 승인 상태:', userData?.approvalStatus);
+          console.log('📋 AuthContext - 전체 사용자 데이터:', JSON.stringify(userData, null, 2));
+          
           setUser(userData);
         } catch (error) {
-          console.error('AuthContext - 사용자 정보 가져오기 실패:', error);
+          console.error('❌ AuthContext - 사용자 정보 가져오기 실패:', error);
           setUser(null);
         }
       } else {
-        console.log('AuthContext - Firebase 사용자 없음');
+        console.log('❌ AuthContext - Firebase 사용자 없음');
         setUser(null);
       }
       setLoading(false);

@@ -365,17 +365,46 @@ const LoginPage: React.FC = () => {
              )}
 
              {/* 현재 사용자 역할 변경 (디버깅용) */}
-             {user && (
-               <>
-                 <Divider sx={{ my: 3 }} />
-                 
-                 <Typography variant="h6" align="center" color="textSecondary" gutterBottom>
-                   현재 사용자 역할 변경
-                 </Typography>
-                 
-                 <Typography variant="body2" align="center" color="textSecondary" sx={{ mb: 2 }}>
-                   현재 로그인된 사용자: {user.email} (역할: {user.role})
-                 </Typography>
+                         {/* 캐시 클리어 버튼 추가 */}
+            <Divider sx={{ my: 3 }} />
+            
+            <Typography variant="h6" align="center" color="textSecondary" gutterBottom>
+              문제 해결
+            </Typography>
+            
+            <Button
+              fullWidth
+              variant="outlined"
+              color="warning"
+              onClick={() => {
+                // 브라우저 캐시와 로컬 스토리지 클리어
+                localStorage.clear();
+                sessionStorage.clear();
+                
+                // IndexedDB 클리어 (Firebase 캐시)
+                if ('indexedDB' in window) {
+                  indexedDB.deleteDatabase('firebaseLocalStorageDb');
+                }
+                
+                // 페이지 새로고침
+                window.location.reload();
+              }}
+              sx={{ mb: 2 }}
+            >
+              브라우저 캐시 클리어 및 새로고침
+            </Button>
+
+            {user && (
+              <>
+                <Divider sx={{ my: 3 }} />
+                
+                <Typography variant="h6" align="center" color="textSecondary" gutterBottom>
+                  현재 사용자 역할 변경
+                </Typography>
+                
+                <Typography variant="body2" align="center" color="textSecondary" sx={{ mb: 2 }}>
+                  현재 로그인된 사용자: {user.email} (역할: {user.role})
+                </Typography>
 
                  <Grid container spacing={2}>
                    <Grid item xs={4}>
