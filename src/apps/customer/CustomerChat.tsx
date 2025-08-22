@@ -120,7 +120,7 @@ const CustomerChat: React.FC = () => {
         'customer',
         customer.name,
         newMessage.trim(),
-        undefined // 고객은 프로필 이미지가 없음
+'' // 고객은 프로필 이미지가 없음
       );
       setNewMessage('');
     } catch (error) {

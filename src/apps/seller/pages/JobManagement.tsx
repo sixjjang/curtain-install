@@ -36,11 +36,17 @@ import {
   Star,
   Engineering,
   Chat,
-  Phone
+  Phone,
+  Cancel,
+  Delete,
+  Edit,
+  Event,
+  AttachFile
 } from '@mui/icons-material';
 import { useAuth } from '../../../shared/contexts/AuthContext';
 import { JobService } from '../../../shared/services/jobService';
 import { CustomerService } from '../../../shared/services/customerService';
+import { SellerService } from '../../../shared/services/sellerService';
 import { ConstructionJob } from '../../../types';
 import CreateJobDialog from '../components/CreateJobDialog';
 import ExcelJobUpload from './ExcelJobUpload';
@@ -80,6 +86,8 @@ const JobManagement: React.FC = () => {
   const [createDialogOpen, setCreateDialogOpen] = useState(false);
   const [detailDialogOpen, setDetailDialogOpen] = useState(false);
   const [selectedJob, setSelectedJob] = useState<ConstructionJob | null>(null);
+  const [editDialogOpen, setEditDialogOpen] = useState(false);
+  const [jobToEdit, setJobToEdit] = useState<ConstructionJob | null>(null);
   const [customerInfo, setCustomerInfo] = useState<any>(null);
   const [contractorInfo, setContractorInfo] = useState<any>(null);
   const [jobs, setJobs] = useState<ConstructionJob[]>([]);
@@ -90,6 +98,15 @@ const JobManagement: React.FC = () => {
 
   const [chatNotifications, setChatNotifications] = useState<{[jobId: string]: number}>({});
   const [pointBalance, setPointBalance] = useState(0);
+  const [pickupInfoAutoFilled, setPickupInfoAutoFilled] = useState(false);
+
+  // 총 예산 계산 함수
+  const calculateTotalBudget = (job: ConstructionJob): number => {
+    if (job.items && job.items.length > 0) {
+      return job.items.reduce((sum, item) => sum + item.totalPrice, 0);
+    }
+    return 0;
+  };
 
   // 포인트 잔액 가져오기
   const fetchPointBalance = async () => {
@@ -202,7 +219,42 @@ const JobManagement: React.FC = () => {
 
   // 상세보기 다이얼로그 열기
   const handleDetailClick = async (job: ConstructionJob) => {
-    setSelectedJob(job);
+    console.log('작업상세정보 모달 - 전체 작업 데이터:', job);
+    console.log('작업상세정보 모달 - 시공일시:', job.scheduledDate);
+    console.log('작업상세정보 모달 - 픽업정보:', job.pickupInfo);
+    
+    // 판매자의 픽업정보 가져오기
+    let sellerPickupInfo = null;
+    try {
+      if (user?.id) {
+        sellerPickupInfo = await SellerService.getPickupInfo(user.id);
+        console.log('판매자 픽업정보:', sellerPickupInfo);
+      }
+    } catch (error) {
+      console.error('판매자 픽업정보 가져오기 실패:', error);
+    }
+    
+    // 픽업정보가 비어있고 판매자 픽업정보가 있으면 자동으로 채우기
+    let updatedJob = { ...job };
+    let wasAutoFilled = false;
+    if (sellerPickupInfo && (!job.pickupInfo || 
+        (!job.pickupInfo.companyName && !job.pickupInfo.phone && !job.pickupInfo.address))) {
+      updatedJob = {
+        ...job,
+        pickupInfo: {
+          companyName: sellerPickupInfo.companyName || '',
+          phone: sellerPickupInfo.phone || '',
+          address: sellerPickupInfo.address || '',
+          scheduledDateTime: job.pickupInfo?.scheduledDateTime || ''
+        }
+      };
+      wasAutoFilled = true;
+      console.log('픽업정보 자동 채움:', updatedJob.pickupInfo);
+    }
+    
+    setPickupInfoAutoFilled(wasAutoFilled);
+    
+    setSelectedJob(updatedJob);
     setDetailDialogOpen(true);
     
     // 고객 정보 가져오기
@@ -237,6 +289,60 @@ const JobManagement: React.FC = () => {
     setSelectedJob(null);
     setCustomerInfo(null);
     setContractorInfo(null);
+    setPickupInfoAutoFilled(false);
+  };
+
+  // 픽업정보 업데이트
+  const handleUpdatePickupInfo = async () => {
+    if (!selectedJob) return;
+    
+    try {
+      setLoading(true);
+      await JobService.updateJob(selectedJob.id, {
+        pickupInfo: selectedJob.pickupInfo
+      });
+      
+      // 작업 목록도 업데이트
+      setJobs(prevJobs => 
+        prevJobs.map(job => 
+          job.id === selectedJob.id 
+            ? { ...job, pickupInfo: selectedJob.pickupInfo }
+            : job
+        )
+      );
+      
+      setPickupInfoAutoFilled(false);
+      alert('픽업정보가 업데이트되었습니다.');
+    } catch (error) {
+      console.error('픽업정보 업데이트 실패:', error);
+      alert('픽업정보 업데이트에 실패했습니다.');
+    } finally {
+      setLoading(false);
+    }
+  };
+
+  // 작업 취소
+  const handleCancelJob = async (job: ConstructionJob) => {
+    if (job.status !== 'pending') {
+      setError('대기중 상태의 작업만 취소할 수 있습니다.');
+      return;
+    }
+
+    if (!window.confirm('작업을 취소하시겠습니까? 취소된 작업은 복구할 수 없습니다.')) {
+      return;
+    }
+
+    try {
+      setLoading(true);
+      await JobService.cancelJob(job.id);
+      alert('작업이 취소되었습니다.');
+      fetchJobs(); // 목록 새로고침
+    } catch (error) {
+      console.error('작업 취소 실패:', error);
+      setError('작업 취소에 실패했습니다. 다시 시도해주세요.');
+    } finally {
+      setLoading(false);
+    }
   };
 
   // 상태 텍스트 변환
@@ -266,6 +372,81 @@ const JobManagement: React.FC = () => {
       case 'completed': return 'success';
       case 'cancelled': return 'error';
       default: return 'default';
+    }
+  };
+
+  // 품목 삭제
+  const handleDeleteItem = async (jobId: string, itemIndex: number) => {
+    if (!selectedJob || !selectedJob.items) {
+      return;
+    }
+
+    if (!window.confirm('이 품목을 삭제하시겠습니까?')) {
+      return;
+    }
+
+    try {
+      setLoading(true);
+      
+      // 해당 인덱스의 품목을 제외한 새로운 품목 배열 생성
+      const updatedItems = selectedJob.items.filter((_, index) => index !== itemIndex);
+      
+      // JobService를 통해 품목 업데이트
+      await JobService.updateJobItems(jobId, updatedItems);
+      
+      // 로컬 상태 업데이트
+      setSelectedJob({
+        ...selectedJob,
+        items: updatedItems
+      });
+      
+      // 작업 목록도 업데이트
+      setJobs(prevJobs => 
+        prevJobs.map(job => 
+          job.id === jobId 
+            ? { ...job, items: updatedItems }
+            : job
+        )
+      );
+      
+      alert('품목이 삭제되었습니다.');
+    } catch (error) {
+      console.error('품목 삭제 실패:', error);
+      alert('품목 삭제에 실패했습니다. 다시 시도해주세요.');
+    } finally {
+      setLoading(false);
+    }
+  };
+
+  // 작업 수정 다이얼로그 열기
+  const handleEditJob = (job: ConstructionJob) => {
+    setJobToEdit(job);
+    setEditDialogOpen(true);
+  };
+
+  // 작업 수정 완료
+  const handleJobEdited = () => {
+    setEditDialogOpen(false);
+    setJobToEdit(null);
+    fetchJobs(); // 작업 목록 새로고침
+  };
+
+  // 작업 삭제
+  const handleDeleteJob = async (job: ConstructionJob) => {
+    if (!window.confirm('이 작업을 완전히 삭제하시겠습니까? 삭제된 작업은 복구할 수 없습니다.')) {
+      return;
+    }
+
+    try {
+      setLoading(true);
+      await JobService.deleteJob(job.id);
+      alert('작업이 삭제되었습니다.');
+      fetchJobs(); // 작업 목록 새로고침
+    } catch (error) {
+      console.error('작업 삭제 실패:', error);
+      alert('작업 삭제에 실패했습니다. 다시 시도해주세요.');
+    } finally {
+      setLoading(false);
     }
   };
 
@@ -402,6 +583,16 @@ const JobManagement: React.FC = () => {
                                label={getStatusText(job.status)} 
                                color={getStatusColor(job.status)} 
                                size="small"
+                               sx={{
+                                 ...(job.status === 'cancelled' && {
+                                   backgroundColor: '#f44336',
+                                   color: 'white',
+                                   fontWeight: 'bold',
+                                   '&:hover': {
+                                     backgroundColor: '#d32f2f'
+                                   }
+                                 })
+                               }}
                              />
                              <Chip 
                                label={job.isInternal ? "자사시공" : "시공의뢰"} 
@@ -412,12 +603,7 @@ const JobManagement: React.FC = () => {
                            </Box>
                          </Box>
                         
-                        <Box display="flex" alignItems="center" gap={1} mb={1}>
-                          <LocationOn fontSize="small" color="action" />
-                          <Typography variant="body2" color="textSecondary">
-                            {job.address}
-                          </Typography>
-                        </Box>
+
 
                         <Box display="flex" alignItems="center" gap={1} mb={1}>
                           <Schedule fontSize="small" color="action" />
@@ -434,7 +620,9 @@ const JobManagement: React.FC = () => {
                           <Typography variant="body2" color="textSecondary">
                             {job.finalAmount 
                               ? `${job.finalAmount.toLocaleString()}원` 
-                              : `${job.budget?.min?.toLocaleString() || 0}원 ~ ${job.budget?.max?.toLocaleString() || 0}원`
+                              : calculateTotalBudget(job) > 0 
+                                ? `${calculateTotalBudget(job).toLocaleString()}원`
+                                : '예산 미정'
                             }
                           </Typography>
                         </Box>
@@ -600,6 +788,44 @@ const JobManagement: React.FC = () => {
                           >
                             상세보기
                           </Button>
+                          {job.status === 'pending' && (
+                            <Button 
+                              variant="outlined" 
+                              size="small"
+                              color="error"
+                              startIcon={<Cancel />}
+                              onClick={() => handleCancelJob(job)}
+                              sx={{ ml: 1 }}
+                            >
+                              취소
+                            </Button>
+                          )}
+                          
+                          {/* 취소된 작업에 대한 수정/삭제 버튼 */}
+                          {job.status === 'cancelled' && (
+                            <>
+                              <Button 
+                                variant="outlined" 
+                                size="small"
+                                color="primary"
+                                startIcon={<Edit />}
+                                onClick={() => handleEditJob(job)}
+                                sx={{ ml: 1 }}
+                              >
+                                수정
+                              </Button>
+                              <Button 
+                                variant="outlined" 
+                                size="small"
+                                color="error"
+                                startIcon={<Delete />}
+                                onClick={() => handleDeleteJob(job)}
+                                sx={{ ml: 1 }}
+                              >
+                                삭제
+                              </Button>
+                            </>
+                          )}
                         </Box>
                       </CardContent>
                     </Card>
@@ -624,12 +850,41 @@ const JobManagement: React.FC = () => {
         onJobCreated={handleJobCreated}
       />
 
+      {/* 작업 수정 다이얼로그 */}
+      {jobToEdit && (
+        <CreateJobDialog
+          open={editDialogOpen}
+          onClose={() => {
+            setEditDialogOpen(false);
+            setJobToEdit(null);
+          }}
+          onJobCreated={handleJobEdited}
+          initialJobData={jobToEdit}
+        />
+      )}
+
       {/* 상세보기 다이얼로그 */}
       <Dialog 
         open={detailDialogOpen} 
         onClose={handleDetailClose} 
         maxWidth="md" 
         fullWidth
+        disableEnforceFocus
+        disableAutoFocus
+        disableRestoreFocus
+        disablePortal
+        keepMounted={false}
+        container={() => document.body}
+        sx={{
+          '& .MuiBackdrop-root': {
+            pointerEvents: 'none'
+          }
+        }}
+        slotProps={{
+          backdrop: {
+            inert: true
+          }
+        }}
       >
         {selectedJob && (
           <>
@@ -664,40 +919,118 @@ const JobManagement: React.FC = () => {
                 </Grid>
 
                 {/* 시공일시 */}
-                {selectedJob.scheduledDate && (
-                  <Grid item xs={12}>
-                    <Box display="flex" alignItems="center" gap={1} mb={1}>
-                      <Schedule color="action" />
-                      <Typography variant="subtitle1" fontWeight="bold">
-                        시공일시
-                      </Typography>
-                    </Box>
-                    <Typography variant="body1" sx={{ ml: 3 }}>
-                      {selectedJob.scheduledDate.toLocaleDateString('ko-KR', {
-                        year: 'numeric',
-                        month: 'long',
-                        day: 'numeric',
-                        weekday: 'long'
-                      })} {selectedJob.scheduledDate.toLocaleTimeString('ko-KR', {
-                        hour: '2-digit',
-                        minute: '2-digit'
-                      })}
-                    </Typography>
-                  </Grid>
-                )}
-
-                {/* 주소 정보 */}
                 <Grid item xs={12}>
                   <Box display="flex" alignItems="center" gap={1} mb={1}>
-                    <LocationOn color="action" />
+                    <Schedule color="action" />
                     <Typography variant="subtitle1" fontWeight="bold">
-                      주소
+                      시공일시
                     </Typography>
                   </Box>
                   <Typography variant="body1" sx={{ ml: 3 }}>
-                    {selectedJob.address}
+                    {(() => {
+                      console.log('시공일시 디버깅:', {
+                        scheduledDate: selectedJob.scheduledDate,
+                        scheduledDateType: typeof selectedJob.scheduledDate,
+                        scheduledDateValue: selectedJob.scheduledDate
+                      });
+                      
+                      if (selectedJob.scheduledDate) {
+                        try {
+                          const date = new Date(selectedJob.scheduledDate);
+                          if (!isNaN(date.getTime())) {
+                            return `${date.toLocaleDateString('ko-KR', {
+                              year: 'numeric',
+                              month: 'long',
+                              day: 'numeric',
+                              weekday: 'long'
+                            })} ${date.toLocaleTimeString('ko-KR', {
+                              hour: '2-digit',
+                              minute: '2-digit'
+                            })}`;
+                          }
+                        } catch (error) {
+                          console.error('시공일시 파싱 에러:', error);
+                        }
+                      }
+                      return '시공일시가 설정되지 않았습니다.';
+                    })()}
                   </Typography>
                 </Grid>
+
+                {/* 준비일시 */}
+                <Grid item xs={12}>
+                  <Box display="flex" alignItems="center" gap={1} mb={1}>
+                    <Event color="action" />
+                    <Typography variant="subtitle1" fontWeight="bold">
+                      준비일시
+                    </Typography>
+                  </Box>
+                  <Typography variant="body1" sx={{ ml: 3 }}>
+                    {(() => {
+                      console.log('준비일시 디버깅:', {
+                        pickupInfo: selectedJob.pickupInfo,
+                        scheduledDateTime: selectedJob.pickupInfo?.scheduledDateTime,
+                        scheduledDateTimeType: typeof selectedJob.pickupInfo?.scheduledDateTime
+                      });
+                      
+                      if (selectedJob.pickupInfo?.scheduledDateTime) {
+                        try {
+                          const date = new Date(selectedJob.pickupInfo.scheduledDateTime);
+                          if (!isNaN(date.getTime())) {
+                            return `${date.toLocaleDateString('ko-KR', {
+                              year: 'numeric',
+                              month: 'long',
+                              day: 'numeric',
+                              weekday: 'long'
+                            })} ${date.toLocaleTimeString('ko-KR', {
+                              hour: '2-digit',
+                              minute: '2-digit'
+                            })}`;
+                          }
+                        } catch (error) {
+                          console.error('준비일시 파싱 에러:', error);
+                        }
+                      }
+                      return '준비일시가 설정되지 않았습니다.';
+                    })()}
+                  </Typography>
+                </Grid>
+
+                {/* 작업지시서 파일첨부 */}
+                {selectedJob.workInstructions && selectedJob.workInstructions.length > 0 && (
+                  <Grid item xs={12}>
+                    <Box display="flex" alignItems="center" gap={1} mb={1}>
+                      <AttachFile color="action" />
+                      <Typography variant="subtitle1" fontWeight="bold">
+                        작업지시서 파일첨부
+                      </Typography>
+                    </Box>
+                    <Box sx={{ ml: 3 }}>
+                      {selectedJob.workInstructions.map((file, index) => (
+                        <Box key={index} sx={{ mb: 1, p: 1, bgcolor: 'grey.50', borderRadius: 1 }}>
+                          <Typography variant="body2" sx={{ fontWeight: 'bold' }}>
+                            {file.fileName}
+                          </Typography>
+                          <Typography variant="caption" color="textSecondary">
+                            파일 크기: {file.fileSize} | 업로드: {new Date(file.uploadedAt).toLocaleDateString('ko-KR')}
+                          </Typography>
+                          <Box sx={{ mt: 1 }}>
+                            <Button
+                              variant="outlined"
+                              size="small"
+                              startIcon={<AttachFile />}
+                              onClick={() => window.open(file.fileUrl, '_blank')}
+                            >
+                              파일 보기
+                            </Button>
+                          </Box>
+                        </Box>
+                      ))}
+                    </Box>
+                  </Grid>
+                )}
+
+
 
 
 
@@ -716,16 +1049,16 @@ const JobManagement: React.FC = () => {
                   </Grid>
                 )}
 
-                {/* 예산 정보 */}
+                {/* 주소 정보 */}
                 <Grid item xs={12}>
                   <Box display="flex" alignItems="center" gap={1} mb={1}>
-                    <AttachMoney color="action" />
+                    <LocationOn color="action" />
                     <Typography variant="subtitle1" fontWeight="bold">
-                      예산
+                      주소
                     </Typography>
                   </Box>
                   <Typography variant="body1" sx={{ ml: 3 }}>
-                    {selectedJob.budget?.min?.toLocaleString() || 0}원 ~ {selectedJob.budget?.max?.toLocaleString() || 0}원
+                    {selectedJob.address}
                   </Typography>
                 </Grid>
 
@@ -767,6 +1100,11 @@ const JobManagement: React.FC = () => {
 
                 {/* 픽업 정보 */}
                 {selectedJob.pickupInfo && (
+                  selectedJob.pickupInfo.companyName || 
+                  selectedJob.pickupInfo.address || 
+                  selectedJob.pickupInfo.phone || 
+                  selectedJob.pickupInfo.scheduledDateTime
+                ) ? (
                   <Grid item xs={12}>
                     <Box display="flex" alignItems="center" gap={1} mb={1}>
                       <Person color="action" />
@@ -775,20 +1113,90 @@ const JobManagement: React.FC = () => {
                       </Typography>
                     </Box>
                     <Box sx={{ ml: 3, p: 2, bgcolor: 'grey.50', borderRadius: 1 }}>
-                      <Typography variant="body2" sx={{ mb: 1 }}>
-                        <strong>회사명:</strong> {selectedJob.pickupInfo.companyName}
-                      </Typography>
-                      <Typography variant="body2" sx={{ mb: 1 }}>
-                        <strong>주소:</strong> {selectedJob.pickupInfo.address}
-                      </Typography>
-                      <Typography variant="body2" sx={{ mb: 1 }}>
-                        <strong>연락처:</strong> {selectedJob.pickupInfo.phone}
-                      </Typography>
-                      {selectedJob.pickupInfo.scheduledDateTime && (
-                        <Typography variant="body2">
-                          <strong>픽업 일시:</strong> {selectedJob.pickupInfo.scheduledDateTime}
+                      {selectedJob.pickupInfo.companyName && (
+                        <Typography variant="body2" sx={{ mb: 1 }}>
+                          <strong>회사명:</strong> {selectedJob.pickupInfo.companyName}
                         </Typography>
                       )}
+                      {selectedJob.pickupInfo.address && (
+                        <Typography variant="body2" sx={{ mb: 1 }}>
+                          <strong>주소:</strong> {selectedJob.pickupInfo.address}
+                        </Typography>
+                      )}
+                      {selectedJob.pickupInfo.phone && (
+                        <Typography variant="body2" sx={{ mb: 1 }}>
+                          <strong>연락처:</strong> {selectedJob.pickupInfo.phone}
+                        </Typography>
+                      )}
+                      {selectedJob.pickupInfo.scheduledDateTime && (
+                        <Typography variant="body2">
+                          <strong>픽업 일시:</strong> {(() => {
+                            try {
+                              const date = new Date(selectedJob.pickupInfo.scheduledDateTime);
+                              if (!isNaN(date.getTime())) {
+                                return `${date.toLocaleDateString('ko-KR', {
+                                  year: 'numeric',
+                                  month: 'long',
+                                  day: 'numeric',
+                                  weekday: 'long'
+                                })} ${date.toLocaleTimeString('ko-KR', {
+                                  hour: '2-digit',
+                                  minute: '2-digit'
+                                })}`;
+                              }
+                            } catch (error) {
+                              console.error('픽업 일시 파싱 에러:', error);
+                            }
+                            return selectedJob.pickupInfo.scheduledDateTime;
+                          })()}
+                        </Typography>
+                      )}
+                    </Box>
+                    {pickupInfoAutoFilled && (
+                      <Box sx={{ mt: 2, textAlign: 'center' }}>
+                        <Button
+                          variant="contained"
+                          color="primary"
+                          size="small"
+                          onClick={handleUpdatePickupInfo}
+                          disabled={loading}
+                        >
+                          {loading ? '업데이트 중...' : '픽업정보 저장'}
+                        </Button>
+                        <Typography variant="caption" color="textSecondary" display="block" sx={{ mt: 1 }}>
+                          프로필 정보로 자동 채워진 픽업정보를 저장합니다.
+                        </Typography>
+                      </Box>
+                    )}
+                  </Grid>
+                ) : (
+                  <Grid item xs={12}>
+                    <Box display="flex" alignItems="center" gap={1} mb={1}>
+                      <Person color="action" />
+                      <Typography variant="subtitle1" fontWeight="bold">
+                        픽업 정보
+                      </Typography>
+                    </Box>
+                    <Box sx={{ ml: 3, p: 2, bgcolor: 'orange.50', borderRadius: 1, border: '1px solid #ff9800' }}>
+                      <Typography variant="body2" color="warning.main" sx={{ fontWeight: 'bold', mb: 1 }}>
+                        ⚠️ 픽업 정보가 설정되지 않았습니다
+                      </Typography>
+                      <Typography variant="body2" color="textSecondary">
+                        프로필 설정에서 픽업 정보(상호, 연락처, 픽업주소)를 입력하시면 
+                        새 작업 등록 시 자동으로 입력됩니다.
+                      </Typography>
+                      <Button
+                        variant="outlined"
+                        size="small"
+                        color="warning"
+                        sx={{ mt: 1 }}
+                        onClick={() => {
+                          handleDetailClose();
+                          navigate('/seller/profile');
+                        }}
+                      >
+                        프로필 설정으로 이동
+                      </Button>
                     </Box>
                   </Grid>
                 )}
@@ -890,41 +1298,35 @@ const JobManagement: React.FC = () => {
                     <List dense sx={{ ml: 3 }}>
                       {selectedJob.progressHistory.map((step, index) => (
                         <ListItem key={index} sx={{ py: 0.5 }}>
-                          <ListItemText
-                            primary={
-                              <Box display="flex" justifyContent="space-between" alignItems="center">
-                                <Box display="flex" alignItems="center" gap={1}>
-                                  <Chip 
-                                    label={getStatusText(step.status)} 
-                                    color={getStatusColor(step.status)} 
-                                    size="small"
-                                  />
-                                  {step.contractorId && (
-                                    <Typography variant="caption" color="primary" sx={{ fontWeight: 'bold' }}>
-                                      👷 {contractorInfo?.name || '시공기사'}
-                                    </Typography>
-                                  )}
-                                </Box>
-                                <Typography variant="caption" color="textSecondary">
-                                  {formatDateTime(step.timestamp)}
-                                </Typography>
-                              </Box>
-                            }
-                            secondary={
-                              <Box>
-                                {step.note && (
-                                  <Typography variant="caption" color="textSecondary">
-                                    메모: {step.note}
-                                  </Typography>
-                                )}
-                                {step.contractorId && contractorInfo && (
-                                  <Typography variant="caption" color="textSecondary" sx={{ display: 'block', mt: 0.5 }}>
-                                    📞 {contractorInfo.phone}
+                          <Box sx={{ width: '100%' }}>
+                            <Box display="flex" justifyContent="space-between" alignItems="center" mb={1}>
+                              <Box display="flex" alignItems="center" gap={1}>
+                                <Chip 
+                                  label={getStatusText(step.status)} 
+                                  color={getStatusColor(step.status)} 
+                                  size="small"
+                                />
+                                {step.contractorId && (
+                                  <Typography variant="caption" color="primary" sx={{ fontWeight: 'bold' }}>
+                                    👷 {contractorInfo?.name || '시공기사'}
                                   </Typography>
                                 )}
                               </Box>
-                            }
-                          />
+                              <Typography variant="caption" color="textSecondary">
+                                {formatDateTime(step.timestamp)}
+                              </Typography>
+                            </Box>
+                            {step.note && (
+                              <Typography variant="caption" color="textSecondary" display="block">
+                                메모: {step.note}
+                              </Typography>
+                            )}
+                            {step.contractorId && contractorInfo && (
+                              <Typography variant="caption" color="textSecondary" display="block" sx={{ mt: 0.5 }}>
+                                📞 {contractorInfo.phone}
+                              </Typography>
+                            )}
+                          </Box>
                         </ListItem>
                       ))}
                     </List>
@@ -945,17 +1347,32 @@ const JobManagement: React.FC = () => {
                         <ListItem key={index} sx={{ py: 0.5 }}>
                           <ListItemText
                             primary={
-                              <Box display="flex" justifyContent="space-between" alignItems="center">
-                                <Typography variant="body2">
+                              <>
+                                <Typography variant="body2" component="span">
                                   {item.name} × {item.quantity}
                                 </Typography>
-                                <Typography variant="body2" fontWeight="bold">
+                                <Typography variant="body2" fontWeight="bold" component="span" sx={{ float: 'right' }}>
                                   {item.totalPrice.toLocaleString()}원
                                 </Typography>
-                              </Box>
+                              </>
                             }
-                            secondary={`단가: ${item.unitPrice.toLocaleString()}원`}
+                            secondary={
+                              <Typography variant="caption" color="textSecondary" component="span">
+                                단가: {item.unitPrice.toLocaleString()}원
+                              </Typography>
+                            }
                           />
+                          <ListItemSecondaryAction>
+                            <IconButton
+                              edge="end"
+                              color="error"
+                              onClick={() => handleDeleteItem(selectedJob.id, index)}
+                              disabled={loading}
+                              size="small"
+                            >
+                              <Delete />
+                            </IconButton>
+                          </ListItemSecondaryAction>
                         </ListItem>
                       ))}
                     </List>

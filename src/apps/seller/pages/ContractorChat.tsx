@@ -14,15 +14,31 @@ import {
   Chip,
   Alert,
   CircularProgress,
-  Avatar
+  Avatar,
+  Dialog,
+  DialogTitle,
+  DialogContent,
+  DialogActions,
+  Grid
 } from '@mui/material';
 import { 
   Send as SendIcon,
-  Chat as ChatIcon
+  Chat as ChatIcon,
+  Schedule,
+  LocationOn,
+  Person,
+  AccountBalance,
+  ListAlt,
+  LocalShipping,
+  Description,
+  Visibility,
+  Info,
+  CheckCircle
 } from '@mui/icons-material';
 import { useAuth } from '../../../shared/contexts/AuthContext';
 import { ChatService } from '../../../shared/services/chatService';
 import { JobService } from '../../../shared/services/jobService';
+import { CustomerService, CustomerInfo } from '../../../shared/services/customerService';
 import { ConstructionJob } from '../../../types';
 
 const ContractorChat: React.FC = () => {
@@ -34,6 +50,73 @@ const ContractorChat: React.FC = () => {
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const messagesEndRef = useRef<HTMLDivElement>(null);
+
+  // 상세보기 다이얼로그 관련 상태
+  const [detailDialogOpen, setDetailDialogOpen] = useState(false);
+  const [detailJob, setDetailJob] = useState<ConstructionJob | null>(null);
+  const [customerInfo, setCustomerInfo] = useState<CustomerInfo | null>(null);
+  const [contractorInfo, setContractorInfo] = useState<any>(null);
+
+  // 총 예산 계산 함수
+  const calculateTotalBudget = (job: ConstructionJob): number => {
+    if (job.items && job.items.length > 0) {
+      return job.items.reduce((sum, item) => sum + item.totalPrice, 0);
+    }
+    return 0;
+  };
+
+  // 시공일시-주소 포맷팅 함수
+  const formatJobTitle = (job: ConstructionJob): string => {
+    if (job.scheduledDate) {
+      const date = new Date(job.scheduledDate);
+      const month = date.getMonth() + 1;
+      const day = date.getDate();
+      const hours = date.getHours();
+      const minutes = date.getMinutes();
+      const timeStr = `${hours.toString().padStart(2, '0')}:${minutes.toString().padStart(2, '0')}`;
+      
+      // 주소에서 시/도 부분만 추출 (예: "경기도 시흥시 소래포구" -> "경기도 시흥시")
+      const addressParts = job.address.split(' ');
+      const cityPart = addressParts.slice(0, 2).join(' '); // 시/도 부분
+      
+      return `${month}/${day} ${timeStr}-${cityPart}`;
+    }
+    return job.title;
+  };
+
+  // 채팅 헤더용 제목 포맷팅 (금액 제거)
+  const formatChatHeaderTitle = (job: ConstructionJob): string => {
+    if (job.scheduledDate) {
+      const date = new Date(job.scheduledDate);
+      const month = date.getMonth() + 1;
+      const day = date.getDate();
+      const hours = date.getHours();
+      const minutes = date.getMinutes();
+      const timeStr = `${hours.toString().padStart(2, '0')}:${minutes.toString().padStart(2, '0')}`;
+      
+      // 주소에서 시/도 부분만 추출
+      const addressParts = job.address.split(' ');
+      const cityPart = addressParts.slice(0, 2).join(' ');
+      
+      // 작업 내용 추가 (아이템 정보가 있다면)
+      let jobDetails = '';
+      if (job.items && job.items.length > 0) {
+        const itemDescriptions = job.items.map(item => {
+          // name 속성을 기반으로 작업 내용 판단
+          if (item.name.toLowerCase().includes('블라인드')) {
+            return `블라인드 ${item.quantity}창`;
+          } else if (item.name.toLowerCase().includes('커튼')) {
+            return `커튼 ${item.quantity}조`;
+          }
+          return `${item.name} ${item.quantity}개`;
+        });
+        jobDetails = `-${itemDescriptions.join(', ')}`;
+      }
+      
+      return `${month}/${day} ${timeStr}-${cityPart}${jobDetails}`;
+    }
+    return job.title;
+  };
 
   // 시공건 목록 불러오기
   useEffect(() => {
@@ -48,11 +131,23 @@ const ContractorChat: React.FC = () => {
           job.sellerId === user.id && 
           ['pending', 'assigned', 'product_preparing', 'product_ready', 'pickup_completed', 'in_progress', 'completed'].includes(job.status)
         );
-        setJobs(myJobs);
+        
+        // 가장 가까운 일시 순으로 정렬
+        const sortedJobs = myJobs.sort((a, b) => {
+          if (!a.scheduledDate && !b.scheduledDate) return 0;
+          if (!a.scheduledDate) return 1;
+          if (!b.scheduledDate) return -1;
+          
+          const dateA = new Date(a.scheduledDate).getTime();
+          const dateB = new Date(b.scheduledDate).getTime();
+          return dateA - dateB; // 오름차순 정렬 (가장 가까운 일시가 먼저)
+        });
+        
+        setJobs(sortedJobs);
         
         // 첫 번째 작업을 자동 선택
-        if (myJobs.length > 0 && !selectedJob) {
-          setSelectedJob(myJobs[0]);
+        if (sortedJobs.length > 0 && !selectedJob) {
+          setSelectedJob(sortedJobs[0]);
         }
       } catch (error) {
         console.error('시공건 목록 불러오기 실패:', error);
@@ -70,8 +165,86 @@ const ContractorChat: React.FC = () => {
     if (selectedJob) {
       loadChatMessages(selectedJob.id);
       subscribeToChat(selectedJob.id);
+      loadJobDetails(selectedJob.id);
     }
   }, [selectedJob]);
+
+  // 작업 상세 정보 로드
+  const loadJobDetails = async (jobId: string) => {
+    const job = jobs.find(j => j.id === jobId);
+    if (job) {
+      // 고객 정보 가져오기
+      if (job.customerId) {
+        try {
+          const customer = await CustomerService.getCustomerInfo(job.customerId);
+          setCustomerInfo(customer);
+        } catch (error) {
+          console.error('고객 정보 조회 실패:', error);
+          setCustomerInfo(null);
+        }
+      } else {
+        setCustomerInfo(null);
+      }
+
+      // 시공자 정보 가져오기
+      if (job.contractorId) {
+        try {
+          const { AuthService } = await import('../../../shared/services/authService');
+          const contractor = await AuthService.getUserById(job.contractorId);
+          setContractorInfo(contractor);
+        } catch (error) {
+          console.error('시공자 정보 조회 실패:', error);
+          setContractorInfo(null);
+        }
+      } else {
+        setContractorInfo(null);
+      }
+    }
+  };
+
+  // 상세보기 처리
+  const handleJobDetail = async (jobId: string) => {
+    const job = jobs.find(j => j.id === jobId);
+    if (job) {
+      setDetailJob(job);
+      setDetailDialogOpen(true);
+      
+      // 고객 정보 가져오기
+      if (job.customerId) {
+        try {
+          const customer = await CustomerService.getCustomerInfo(job.customerId);
+          setCustomerInfo(customer);
+        } catch (error) {
+          console.error('고객 정보 조회 실패:', error);
+          setCustomerInfo(null);
+        }
+      } else {
+        setCustomerInfo(null);
+      }
+
+      // 시공자 정보 가져오기
+      if (job.contractorId) {
+        try {
+          const { AuthService } = await import('../../../shared/services/authService');
+          const contractor = await AuthService.getUserById(job.contractorId);
+          setContractorInfo(contractor);
+        } catch (error) {
+          console.error('시공자 정보 조회 실패:', error);
+          setContractorInfo(null);
+        }
+      } else {
+        setContractorInfo(null);
+      }
+    }
+  };
+
+  // 상세보기 다이얼로그 닫기
+  const handleDetailClose = () => {
+    setDetailDialogOpen(false);
+    setDetailJob(null);
+    setCustomerInfo(null);
+    setContractorInfo(null);
+  };
 
   // 메시지 스크롤을 맨 아래로
   const scrollToBottom = () => {
@@ -112,7 +285,7 @@ const ContractorChat: React.FC = () => {
         'seller',
         user.name || '판매자',
         newMessage.trim(),
-        user.profileImage || undefined
+user.profileImage || ''
       );
       setNewMessage('');
     } catch (error) {
@@ -134,6 +307,17 @@ const ContractorChat: React.FC = () => {
     return new Date(date).toLocaleTimeString('ko-KR', {
       hour: '2-digit',
       minute: '2-digit'
+    });
+  };
+
+  // 날짜 및 시간 포맷팅
+  const formatDateTime = (date: Date) => {
+    return new Date(date).toLocaleDateString('ko-KR', {
+      year: 'numeric',
+      month: 'numeric',
+      day: 'numeric',
+      hour: 'numeric',
+      minute: 'numeric'
     });
   };
 
@@ -212,26 +396,32 @@ const ContractorChat: React.FC = () => {
                   >
                     <ListItemText
                       primary={
-                        <Box display="flex" justifyContent="space-between" alignItems="center">
-                          <Typography variant="subtitle2" noWrap>
-                            {job.title}
+                        <>
+                          <Typography variant="subtitle2" noWrap component="span">
+                            {formatJobTitle(job)}
                           </Typography>
                           <Chip 
                             label={getStatusText(job.status)} 
                             color={getStatusColor(job.status)} 
                             size="small"
+                            sx={{ float: 'right' }}
                           />
-                        </Box>
+                        </>
                       }
                       secondary={
-                        <Box>
-                          <Typography variant="body2" color="textSecondary" noWrap>
+                        <>
+                          <Typography variant="body2" color="textSecondary" noWrap component="span">
                             {job.address}
                           </Typography>
-                          <Typography variant="caption" color="textSecondary">
-                            예산: {job.budget?.min?.toLocaleString()}~{job.budget?.max?.toLocaleString()}원
+                          <Typography variant="caption" color="textSecondary" component="span" display="block">
+                            총금액: {job.finalAmount 
+                              ? `${job.finalAmount.toLocaleString()}원` 
+                              : calculateTotalBudget(job) > 0 
+                                ? `${calculateTotalBudget(job).toLocaleString()}원`
+                                : '예산 미정'
+                            }
                           </Typography>
-                        </Box>
+                        </>
                       }
                     />
                   </ListItem>
@@ -246,21 +436,38 @@ const ContractorChat: React.FC = () => {
           <CardContent sx={{ flexGrow: 1, display: 'flex', flexDirection: 'column', p: 0 }}>
             {selectedJob ? (
               <>
-                {/* 채팅 헤더 */}
-                <Box sx={{ p: 2, borderBottom: 1, borderColor: 'divider' }}>
-                  <Typography variant="h6">
-                    {selectedJob.title}
-                  </Typography>
-                  <Typography variant="body2" color="textSecondary">
-                    {selectedJob.address}
-                  </Typography>
-                  <Chip 
-                    label={getStatusText(selectedJob.status)} 
-                    color={getStatusColor(selectedJob.status)} 
-                    size="small"
-                    sx={{ mt: 1 }}
-                  />
-                </Box>
+                                 {/* 채팅 헤더 */}
+                 <Box sx={{ p: 2, borderBottom: 1, borderColor: 'divider' }}>
+                   <Box display="flex" justifyContent="space-between" alignItems="flex-start">
+                     <Box>
+                       <Typography variant="h6">
+                         {formatChatHeaderTitle(selectedJob)}
+                       </Typography>
+                       <Typography variant="body2" color="textSecondary">
+                         {selectedJob.address}
+                         {customerInfo && `(${customerInfo.phone})`}
+                       </Typography>
+                       {contractorInfo && (
+                         <Typography variant="body2" color="textSecondary">
+                           시공자({contractorInfo.name || contractorInfo.email}, {contractorInfo.phone || '연락처 없음'})
+                         </Typography>
+                       )}
+                       <Chip 
+                         label={getStatusText(selectedJob.status)} 
+                         color={getStatusColor(selectedJob.status)} 
+                         size="small"
+                         sx={{ mt: 1 }}
+                       />
+                     </Box>
+                     <Button 
+                       variant="outlined" 
+                       size="small"
+                       onClick={() => handleJobDetail(selectedJob.id)}
+                     >
+                       상세보기
+                     </Button>
+                   </Box>
+                 </Box>
 
                 {/* 메시지 목록 */}
                 <Box sx={{ flexGrow: 1, p: 2, overflow: 'auto', maxHeight: 'calc(100vh - 400px)' }}>
@@ -377,6 +584,167 @@ const ContractorChat: React.FC = () => {
           </CardContent>
         </Card>
       </Box>
+
+      {/* 상세보기 다이얼로그 */}
+      <Dialog 
+        open={detailDialogOpen} 
+        onClose={handleDetailClose}
+        maxWidth="md"
+        fullWidth
+      >
+        <DialogTitle>
+          작업 상세 정보
+        </DialogTitle>
+        <DialogContent>
+          {detailJob && (
+            <Box>
+              {/* 기본 정보 */}
+              <Typography variant="h6" gutterBottom>
+                {detailJob.title}
+              </Typography>
+              <Typography variant="body1" paragraph>
+                {detailJob.description}
+              </Typography>
+
+              <Grid container spacing={2} mb={3}>
+                <Grid item xs={12} sm={6}>
+                  <Box display="flex" alignItems="center" mb={1}>
+                    <LocationOn color="action" sx={{ mr: 1 }} />
+                    <Typography variant="body2">{detailJob.address}</Typography>
+                  </Box>
+                </Grid>
+                {detailJob.scheduledDate && (
+                  <Grid item xs={12} sm={6}>
+                    <Box display="flex" alignItems="center" mb={1}>
+                      <Schedule color="action" sx={{ mr: 1 }} />
+                      <Typography variant="body2">{formatDateTime(detailJob.scheduledDate)}</Typography>
+                    </Box>
+                  </Grid>
+                )}
+                <Grid item xs={12} sm={6}>
+                  <Box display="flex" alignItems="center" mb={1}>
+                    <AccountBalance color="action" sx={{ mr: 1 }} />
+                    <Typography variant="body2">총 금액: {calculateTotalBudget(detailJob).toLocaleString()}원</Typography>
+                  </Box>
+                </Grid>
+                <Grid item xs={12} sm={6}>
+                  <Box display="flex" alignItems="center" mb={1}>
+                    <CheckCircle color="action" sx={{ mr: 1 }} />
+                    <Typography variant="body2">상태: {getStatusText(detailJob.status)}</Typography>
+                  </Box>
+                </Grid>
+              </Grid>
+
+              <Divider sx={{ my: 2 }} />
+
+              {/* 고객 정보 */}
+              {customerInfo && (
+                <Box sx={{ mb: 3 }}>
+                  <Typography variant="h6" gutterBottom sx={{ display: 'flex', alignItems: 'center', gap: 1 }}>
+                    <Person color="action" />
+                    고객 정보
+                  </Typography>
+                  <Box sx={{ ml: 3, p: 2, bgcolor: 'grey.50', borderRadius: 1 }}>
+                    <Typography variant="body2">
+                      이름: {customerInfo.name}
+                    </Typography>
+                    <Typography variant="body2">
+                      연락처: {customerInfo.phone}
+                    </Typography>
+                    {customerInfo.email && (
+                      <Typography variant="body2">
+                        이메일: {customerInfo.email}
+                      </Typography>
+                    )}
+                  </Box>
+                </Box>
+              )}
+
+              {/* 시공자 정보 */}
+              {contractorInfo && (
+                <Box sx={{ mb: 3 }}>
+                  <Typography variant="h6" gutterBottom sx={{ display: 'flex', alignItems: 'center', gap: 1 }}>
+                    <Person color="action" />
+                    시공자 정보
+                  </Typography>
+                  <Box sx={{ ml: 3, p: 2, bgcolor: 'grey.50', borderRadius: 1 }}>
+                    <Typography variant="body2">
+                      이름: {contractorInfo.name || contractorInfo.email}
+                    </Typography>
+                    <Typography variant="body2">
+                      연락처: {contractorInfo.phone || '연락처 없음'}
+                    </Typography>
+                    {contractorInfo.email && (
+                      <Typography variant="body2">
+                        이메일: {contractorInfo.email}
+                      </Typography>
+                    )}
+                  </Box>
+                </Box>
+              )}
+
+              {/* 품목 및 단가 */}
+              {detailJob.items && detailJob.items.length > 0 && (
+                <Box sx={{ mb: 3 }}>
+                  <Typography variant="h6" gutterBottom sx={{ display: 'flex', alignItems: 'center', gap: 1 }}>
+                    <ListAlt color="action" />
+                    품목 및 단가
+                  </Typography>
+                  <Box sx={{ ml: 3 }}>
+                    {detailJob.items.map((item, index) => (
+                      <Box key={index} sx={{ p: 2, bgcolor: 'grey.50', borderRadius: 1, mb: 1 }}>
+                        <Typography variant="body2" fontWeight="bold">
+                          {item.name}
+                        </Typography>
+                        <Typography variant="body2" color="textSecondary">
+                          수량: {item.quantity}개
+                        </Typography>
+                        <Typography variant="body2" color="textSecondary">
+                          단가: {item.unitPrice?.toLocaleString()}원
+                        </Typography>
+                        <Typography variant="body2" color="primary" fontWeight="bold">
+                          소계: {item.totalPrice?.toLocaleString()}원
+                        </Typography>
+                      </Box>
+                    ))}
+                  </Box>
+                </Box>
+              )}
+
+              {/* 준비일시 */}
+              {detailJob.pickupInfo && detailJob.pickupInfo.scheduledDateTime && (
+                <Box sx={{ mb: 3 }}>
+                  <Typography variant="h6" gutterBottom sx={{ display: 'flex', alignItems: 'center', gap: 1 }}>
+                    <LocalShipping color="action" />
+                    준비일시
+                  </Typography>
+                  <Box sx={{ ml: 3, p: 2, bgcolor: 'grey.50', borderRadius: 1 }}>
+                    <Typography variant="body2">
+                      {formatDateTime(new Date(detailJob.pickupInfo.scheduledDateTime))}
+                    </Typography>
+                  </Box>
+                </Box>
+              )}
+
+              {/* 총 금액 */}
+              <Box sx={{ mb: 3 }}>
+                <Typography variant="h6" gutterBottom sx={{ display: 'flex', alignItems: 'center', gap: 1 }}>
+                  <AccountBalance color="action" />
+                  총 금액
+                </Typography>
+                <Box sx={{ ml: 3, p: 2, bgcolor: 'grey.50', borderRadius: 1 }}>
+                  <Typography variant="h6" color="primary" fontWeight="bold">
+                    {calculateTotalBudget(detailJob).toLocaleString()}원
+                  </Typography>
+                </Box>
+              </Box>
+            </Box>
+          )}
+        </DialogContent>
+        <DialogActions>
+          <Button onClick={handleDetailClose}>닫기</Button>
+        </DialogActions>
+      </Dialog>
     </Box>
   );
 };

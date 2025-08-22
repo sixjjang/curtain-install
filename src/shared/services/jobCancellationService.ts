@@ -139,7 +139,7 @@ export class JobCancellationService {
         throw new Error(canCancelResult.reason || '작업을 취소할 수 없습니다.');
       }
       
-      // 2. 작업 상태 업데이트
+      // 2. 작업 상태 업데이트 (포인트 환불은 updateJobStatus에서 자동 처리)
       const { JobService } = await import('./jobService');
       await JobService.updateJobStatus(jobId, 'cancelled', contractorId, reason);
       

@@ -8,8 +8,7 @@ import {
   getDocs, 
   query, 
   where, 
-  serverTimestamp,
-  orderBy
+  serverTimestamp
 } from 'firebase/firestore';
 import { SatisfactionSurvey } from '../../types';
 
@@ -33,13 +32,16 @@ export class SatisfactionService {
   static async getSurveyQuestions(): Promise<SurveyQuestion[]> {
     try {
       const questionsRef = collection(db, 'surveyQuestions');
-      const q = query(questionsRef, where('isActive', '==', true), orderBy('order', 'asc'));
+      const q = query(questionsRef, where('isActive', '==', true));
       const querySnapshot = await getDocs(q);
       
-      return querySnapshot.docs.map(doc => ({
+      const questions = querySnapshot.docs.map(doc => ({
         id: doc.id,
         ...doc.data()
       })) as SurveyQuestion[];
+      
+      // 클라이언트에서 order 기준 오름차순 정렬
+      return questions.sort((a, b) => (a.order || 0) - (b.order || 0));
     } catch (error) {
       console.error('만족도 조사 문항 조회 실패:', error);
       throw new Error('만족도 조사 문항을 불러올 수 없습니다.');
@@ -170,8 +172,17 @@ export class SatisfactionService {
 
   // 만족도 조사 링크 생성
   static generateSurveyLink(surveyId: string): string {
-    const baseUrl = window.location.origin;
-    return `${baseUrl}/survey/${surveyId}`;
+    // Firebase 호스팅 URL 사용 (프로덕션 환경)
+    const isProduction = window.location.hostname !== 'localhost' && window.location.hostname !== '127.0.0.1';
+    
+    if (isProduction) {
+      // Firebase 호스팅 URL (실제 배포된 도메인)
+      return `https://curtain-install.web.app/survey/${surveyId}`;
+    } else {
+      // 개발 환경에서는 현재 도메인 사용
+      const baseUrl = window.location.origin;
+      return `${baseUrl}/survey/${surveyId}`;
+    }
   }
 
   // 카카오톡 링크 생성

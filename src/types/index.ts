@@ -247,15 +247,14 @@ export interface ExcelJobData {
   id: string;
   title: string;
   description: string;
-  address: string;
   scheduledDate?: string;
   scheduledTime?: string;
   customerName: string;
   customerPhone: string;
   customerAddress?: string;
-  budgetMin?: number;
-  budgetMax?: number;
-  isInternal: boolean;
+  travelFee?: number;
+  blindsQuantity?: number;
+  curtainsQuantity?: number;
   pickupCompanyName?: string;
   pickupPhone?: string;
   pickupAddress?: string;

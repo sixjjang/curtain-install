@@ -235,9 +235,9 @@ const MyJobsCalendarView: React.FC<MyJobsCalendarViewProps> = ({ myJobs }) => {
                         fontWeight: job.status === 'completed' ? 'normal' : 'bold'
                       }}
                     >
-                      <Typography variant="caption" sx={{ fontWeight: 'bold' }}>
-                        {formatTime(job.scheduledDate)} {job.title}
-                      </Typography>
+                                             <Typography variant="caption" sx={{ fontWeight: 'bold' }}>
+                         {formatTime(job.scheduledDate)} {job.title.replace(/-\d{1,3}(,\d{3})*원$/, '')}
+                       </Typography>
                     </Box>
                   ))}
                 </Box>
@@ -299,9 +299,9 @@ const MyJobsCalendarView: React.FC<MyJobsCalendarViewProps> = ({ myJobs }) => {
                             backgroundColor: job.status === 'completed' ? '#e8f5e8' : '#e3f2fd'
                           }}>
                             <Box display="flex" justifyContent="space-between" alignItems="flex-start" mb={1}>
-                              <Typography variant="h6" sx={{ color: job.status === 'completed' ? '#2e7d32' : '#0d47a1' }}>
-                                {job.title} - {calculateTotalPrice(job).toLocaleString()}원
-                              </Typography>
+                                                             <Typography variant="h6" sx={{ color: job.status === 'completed' ? '#2e7d32' : '#0d47a1' }}>
+                                 {job.title.replace(/-\d{1,3}(,\d{3})*원$/, '')}
+                               </Typography>
                               <Chip 
                                 label={getStatusText(job.status)} 
                                 sx={{ 

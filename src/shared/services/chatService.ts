@@ -3,6 +3,7 @@ import {
   doc, 
   addDoc, 
   updateDoc, 
+  setDoc,
   getDocs, 
   getDoc,
   query, 
@@ -64,7 +65,7 @@ export class ChatService {
         chatRoomId,
         senderId,
         senderName,
-        senderProfileImage,
+        ...(senderProfileImage && { senderProfileImage }),
         content,
         timestamp: serverTimestamp(),
         isRead: false
@@ -72,16 +73,39 @@ export class ChatService {
       
       await addDoc(messagesRef, newMessage);
       
-      // 채팅방 업데이트
+      // 채팅방 업데이트 (존재하지 않으면 생성)
       const chatRoomRef = doc(db, 'chatRooms', chatRoomId);
-      await updateDoc(chatRoomRef, {
-        lastMessage: {
-          content,
-          timestamp: serverTimestamp(),
-          senderName
-        },
-        updatedAt: serverTimestamp()
-      });
+      try {
+        const chatRoomDoc = await getDoc(chatRoomRef);
+        if (chatRoomDoc.exists()) {
+          // 채팅방이 존재하면 업데이트
+          await updateDoc(chatRoomRef, {
+            lastMessage: {
+              content,
+              timestamp: serverTimestamp(),
+              senderName
+            },
+            updatedAt: serverTimestamp()
+          });
+        } else {
+          // 채팅방이 존재하지 않으면 생성
+          await setDoc(chatRoomRef, {
+            participants: [
+              { id: senderId, name: senderName }
+            ],
+            lastMessage: {
+              content,
+              timestamp: serverTimestamp(),
+              senderName
+            },
+            createdAt: serverTimestamp(),
+            updatedAt: serverTimestamp()
+          });
+        }
+      } catch (chatRoomError) {
+        console.warn('채팅방 업데이트/생성 실패:', chatRoomError);
+        // 채팅방 오류는 메시지 전송을 막지 않음
+      }
     } catch (error) {
       console.error('직접 메시지 전송 실패:', error);
       throw error;
@@ -93,7 +117,7 @@ export class ChatService {
     chatRoomId: string,
     jobId: string,
     senderId: string,
-    senderType: 'contractor' | 'seller' | 'customer',
+    senderType: 'contractor' | 'seller' | 'customer' | 'admin',
     senderName: string,
     content: string,
     senderProfileImage?: string
@@ -106,7 +130,7 @@ export class ChatService {
         senderId,
         senderType,
         senderName,
-        senderProfileImage,
+        ...(senderProfileImage && { senderProfileImage }),
         content,
         timestamp: serverTimestamp(),
         isRead: false
@@ -114,16 +138,40 @@ export class ChatService {
       
       await addDoc(messagesRef, newMessage);
       
-      // 채팅방 업데이트
+      // 채팅방 업데이트 (존재하지 않으면 생성)
       const chatRoomRef = doc(db, 'chatRooms', chatRoomId);
-      await updateDoc(chatRoomRef, {
-        lastMessage: {
-          content,
-          timestamp: serverTimestamp(),
-          senderName
-        },
-        updatedAt: serverTimestamp()
-      });
+      try {
+        const chatRoomDoc = await getDoc(chatRoomRef);
+        if (chatRoomDoc.exists()) {
+          // 채팅방이 존재하면 업데이트
+          await updateDoc(chatRoomRef, {
+            lastMessage: {
+              content,
+              timestamp: serverTimestamp(),
+              senderName
+            },
+            updatedAt: serverTimestamp()
+          });
+        } else {
+          // 채팅방이 존재하지 않으면 생성
+          await setDoc(chatRoomRef, {
+            jobId,
+            participants: [
+              { id: senderId, name: senderName, type: senderType }
+            ],
+            lastMessage: {
+              content,
+              timestamp: serverTimestamp(),
+              senderName
+            },
+            createdAt: serverTimestamp(),
+            updatedAt: serverTimestamp()
+          });
+        }
+      } catch (chatRoomError) {
+        console.warn('채팅방 업데이트/생성 실패:', chatRoomError);
+        // 채팅방 오류는 메시지 전송을 막지 않음
+      }
 
       // 채팅방 참가자들에게 알림 전송 (본인 제외)
       try {
@@ -338,6 +386,159 @@ export class ChatService {
     } catch (error) {
       console.error('작업 ID로 고객 정보 가져오기 실패:', error);
       throw error;
+    }
+  }
+
+  // 만족도 조사 링크 생성
+  static generateSatisfactionSurveyLink(jobId: string, contractorId: string): string {
+    // Firebase 호스팅 URL 사용 (프로덕션 환경)
+    const isProduction = window.location.hostname !== 'localhost' && window.location.hostname !== '127.0.0.1';
+    
+    if (isProduction) {
+      // Firebase 호스팅 URL (실제 배포된 도메인)
+      return `https://curtain-install.web.app/customer/survey?jobId=${jobId}&contractorId=${contractorId}`;
+    } else {
+      // 개발 환경에서는 현재 도메인 사용
+      const baseUrl = window.location.origin;
+      return `${baseUrl}/customer/survey?jobId=${jobId}&contractorId=${contractorId}`;
+    }
+  }
+
+  // 자동 메시지 전송 (시스템 메시지)
+  static async sendAutoMessage(
+    jobId: string,
+    senderId: string,
+    senderType: 'contractor' | 'seller' | 'admin',
+    senderName: string,
+    messageType: 'product_preparing' | 'product_ready' | 'pickup_completed' | 'in_progress' | 'completed' | 'admin_completed',
+    senderProfileImage?: string,
+    jobData?: any
+  ): Promise<void> {
+    try {
+      // 메시지 템플릿 정의
+      let content = '';
+      
+      switch (messageType) {
+        case 'product_preparing':
+          content = "안녕하세요! 곧 제품이 준비 될 예정입니다. 준비가 완료되면 다시 안내해드릴게요";
+          break;
+        case 'product_ready':
+          content = "제품 준비가 완료되었습니다. 시공 일정에 맞춰 픽업 부탁드립니다.";
+          break;
+        case 'pickup_completed':
+          content = "제품 픽업을 완료하였습니다. 시공지로 이동하겠습니다.";
+          break;
+        case 'in_progress':
+          content = "시공지에 도착하였고, 깔끔하게 시공을 진행하겠습니다.";
+          break;
+        case 'completed':
+          content = "시공이 완료되었습니다.";
+          break;
+        case 'admin_completed':
+          // 만족도 조사 링크 생성
+          const surveyLink = jobData?.contractorId 
+            ? this.generateSatisfactionSurveyLink(jobId, jobData.contractorId)
+            : `${window.location.origin}/customer/survey?jobId=${jobId}`;
+          
+          content = `만족도 조사 링크를 고객분께 보내 드려주세요~ 만족도 조사는 시공자의 시공품질 및 서비스를 높이는데 도움이 됩니다.
+
+📋 만족도 조사 링크:
+${surveyLink}
+
+위 링크를 복사하여 고객님께 문자나 카카오톡으로 전달해주세요.`;
+          break;
+        default:
+          throw new Error('알 수 없는 메시지 타입입니다.');
+      }
+
+      // 메시지 전송
+      await this.sendMessage(
+        jobId,
+        jobId,
+        senderId,
+        senderType,
+        senderName,
+        content,
+        senderProfileImage
+      );
+
+      console.log(`자동 메시지 전송 완료: ${messageType} - ${jobId}`);
+    } catch (error) {
+      console.error('자동 메시지 전송 실패:', error);
+      throw error;
+    }
+  }
+
+  // 작업 상태 변경에 따른 자동 메시지 전송
+  static async sendStatusChangeAutoMessage(
+    jobId: string,
+    newStatus: string,
+    jobData: any
+  ): Promise<void> {
+    try {
+      // 상태별 자동 메시지 설정
+      const statusMessages = {
+        product_preparing: {
+          senderId: jobData.sellerId,
+          senderType: 'seller' as const,
+          senderName: '판매자',
+          messageType: 'product_preparing' as const
+        },
+        product_ready: {
+          senderId: jobData.sellerId,
+          senderType: 'seller' as const,
+          senderName: '판매자',
+          messageType: 'product_ready' as const
+        },
+        pickup_completed: {
+          senderId: jobData.contractorId,
+          senderType: 'contractor' as const,
+          senderName: '시공자',
+          messageType: 'pickup_completed' as const
+        },
+        in_progress: {
+          senderId: jobData.contractorId,
+          senderType: 'contractor' as const,
+          senderName: '시공자',
+          messageType: 'in_progress' as const
+        },
+        completed: {
+          senderId: jobData.contractorId,
+          senderType: 'contractor' as const,
+          senderName: '시공자',
+          messageType: 'completed' as const
+        }
+      };
+
+      const messageConfig = statusMessages[newStatus as keyof typeof statusMessages];
+      if (messageConfig) {
+        await this.sendAutoMessage(
+          jobId,
+          messageConfig.senderId,
+          messageConfig.senderType,
+          messageConfig.senderName,
+          messageConfig.messageType,
+          '' // senderProfileImage - 자동 메시지는 프로필 이미지가 없으므로 빈 문자열 전달
+        );
+      }
+
+      // 시공 완료 시 관리자 메시지도 전송
+      if (newStatus === 'completed') {
+        // 관리자 ID는 시스템에서 가져오거나 기본값 사용
+        const adminId = 'admin-system';
+        await this.sendAutoMessage(
+          jobId,
+          adminId,
+          'admin',
+          '관리자',
+          'admin_completed',
+          '', // senderProfileImage
+          jobData // jobData 전달하여 만족도 조사 링크 생성
+        );
+      }
+    } catch (error) {
+      console.error('상태 변경 자동 메시지 전송 실패:', error);
+      // 자동 메시지 실패는 작업 상태 변경을 막지 않도록 에러를 던지지 않음
     }
   }
 }

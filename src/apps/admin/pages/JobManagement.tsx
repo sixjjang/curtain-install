@@ -127,10 +127,12 @@ const JobManagement: React.FC = () => {
         selectedPeriod
       );
       setJobs(statusJobs);
+      console.log('불러온 작업 목록:', statusJobs);
       
       // 사용자 정보 가져오기
       const userIds = new Set<string>();
       statusJobs.forEach(job => {
+        console.log(`작업 ${job.id} - 판매자ID: ${job.sellerId}, 고객ID: ${job.customerId}, 시공자ID: ${job.contractorId}`);
         userIds.add(job.sellerId);
         if (job.customerId) {
           userIds.add(job.customerId);
@@ -141,12 +143,19 @@ const JobManagement: React.FC = () => {
       });
       
       const userInfoMap: { [key: string]: User } = {};
+      console.log('로딩할 사용자 ID 목록:', Array.from(userIds));
+      
       for (const userId of Array.from(userIds)) {
+        console.log(`사용자 ID ${userId}에 대한 정보 조회 시작...`);
         const user = await AuthService.getUserById(userId);
+        console.log(`사용자 ID ${userId} 조회 결과:`, user);
         if (user) {
           userInfoMap[userId] = user;
+        } else {
+          console.warn(`사용자 ID ${userId}에 대한 정보를 찾을 수 없습니다.`);
         }
       }
+      console.log('최종 사용자 정보 맵:', userInfoMap);
       setUserInfo(userInfoMap);
       
       setDialogOpen(true);
@@ -168,10 +177,12 @@ const JobManagement: React.FC = () => {
           newPeriod
         );
         setJobs(statusJobs);
+        console.log('기간 필터 변경 - 불러온 작업 목록:', statusJobs);
         
         // 사용자 정보 가져오기
         const userIds = new Set<string>();
         statusJobs.forEach(job => {
+          console.log(`기간 필터 - 작업 ${job.id} - 판매자ID: ${job.sellerId}, 고객ID: ${job.customerId}, 시공자ID: ${job.contractorId}`);
           userIds.add(job.sellerId);
           if (job.customerId) {
             userIds.add(job.customerId);
@@ -182,12 +193,19 @@ const JobManagement: React.FC = () => {
         });
         
         const userInfoMap: { [key: string]: User } = {};
+        console.log('기간 필터 - 로딩할 사용자 ID 목록:', Array.from(userIds));
+        
         for (const userId of Array.from(userIds)) {
+          console.log(`기간 필터 - 사용자 ID ${userId}에 대한 정보 조회 시작...`);
           const user = await AuthService.getUserById(userId);
+          console.log(`기간 필터 - 사용자 ID ${userId} 조회 결과:`, user);
           if (user) {
             userInfoMap[userId] = user;
+          } else {
+            console.warn(`기간 필터 - 사용자 ID ${userId}에 대한 정보를 찾을 수 없습니다.`);
           }
         }
+        console.log('기간 필터 - 최종 사용자 정보 맵:', userInfoMap);
         setUserInfo(userInfoMap);
       } catch (error) {
         setError('작업 목록을 불러올 수 없습니다.');

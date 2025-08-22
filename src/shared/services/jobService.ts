@@ -426,7 +426,14 @@ export class JobService {
       
       console.log(`작업 ${jobId}의 상태가 ${status}로 업데이트되었습니다. (시간: ${newProgressStep.timestamp})`);
 
-
+      // 자동 채팅 메시지 전송
+      try {
+        const { ChatService } = await import('./chatService');
+        await ChatService.sendStatusChangeAutoMessage(jobId, status, currentData);
+      } catch (error) {
+        console.error('자동 메시지 전송 실패:', error);
+        // 자동 메시지 실패는 작업 상태 변경을 막지 않음
+      }
 
       // 시공 완료 시 에스크로 타이머 시작 (설정된 시간 후 자동 지급)
       if (status === 'completed') {
@@ -465,6 +472,21 @@ export class JobService {
           // 만족도 조사 알림 실패해도 작업 완료는 계속 진행
         }
       }
+
+      // 작업 취소 시 에스크로 포인트 환불 (판매자에게)
+      if (status === 'cancelled') {
+        try {
+          const jobData = await this.getJobById(jobId);
+          if (jobData && jobData.sellerId && jobData.budget?.max) {
+            const PointService = await import('./pointService').then(module => module.PointService);
+            await PointService.refundEscrowToSeller(jobId, `작업 취소 - ${note || '판매자 요청'}`);
+            console.log(`✅ 작업 취소로 인한 포인트 환불 완료: ${jobData.budget.max}포인트`);
+          }
+        } catch (refundError) {
+          console.error('❌ 포인트 환불 실패:', refundError);
+          // 포인트 환불 실패 시에도 작업 취소는 진행
+        }
+      }
     } catch (error) {
       console.error('작업 상태 업데이트 실패:', error);
       throw new Error('작업 상태를 업데이트할 수 없습니다.');
@@ -500,10 +522,42 @@ export class JobService {
         updatedAt: new Date()
       });
       
-      console.log(`작업 ${jobId}의 고객 만족도가 ${satisfaction}/5로 업데이트되었습니다.`);
+      console.log(`작업 ${jobId}의 고객 만족도가 ${satisfaction}점으로 업데이트되었습니다.`);
     } catch (error) {
       console.error('고객 만족도 업데이트 실패:', error);
       throw new Error('고객 만족도를 업데이트할 수 없습니다.');
+    }
+  }
+
+  // 작업 품목 업데이트 (품목 삭제 포함)
+  static async updateJobItems(jobId: string, items: any[]): Promise<void> {
+    try {
+      const jobRef = doc(db, 'constructionJobs', jobId);
+      await updateDoc(jobRef, {
+        items,
+        updatedAt: new Date()
+      });
+      
+      console.log(`작업 ${jobId}의 품목이 업데이트되었습니다. (품목 수: ${items.length})`);
+    } catch (error) {
+      console.error('작업 품목 업데이트 실패:', error);
+      throw new Error('작업 품목을 업데이트할 수 없습니다.');
+    }
+  }
+
+  // 작업 전체 업데이트 (수정용)
+  static async updateJob(jobId: string, jobData: Partial<ConstructionJob>): Promise<void> {
+    try {
+      const jobRef = doc(db, 'constructionJobs', jobId);
+      await updateDoc(jobRef, {
+        ...jobData,
+        updatedAt: new Date()
+      });
+      
+      console.log(`작업 ${jobId}가 업데이트되었습니다.`);
+    } catch (error) {
+      console.error('작업 업데이트 실패:', error);
+      throw new Error('작업을 업데이트할 수 없습니다.');
     }
   }
 
@@ -530,6 +584,9 @@ export class JobService {
         if (obj === null || obj === undefined) return null;
         if (typeof obj !== 'object') return obj;
         
+        // Date 객체는 그대로 반환
+        if (obj instanceof Date) return obj;
+        
         if (Array.isArray(obj)) {
           return obj.map(cleanObject).filter(item => item !== null && item !== undefined);
         }
@@ -552,6 +609,8 @@ export class JobService {
       };
       
       console.log('저장할 작업 데이터:', jobDocument);
+      console.log('저장할 작업 데이터 - scheduledDate:', jobDocument.scheduledDate);
+      console.log('저장할 작업 데이터 - scheduledDate 타입:', typeof jobDocument.scheduledDate);
       
       // undefined 값이 있는지 확인
       const checkForUndefined = (obj: any, path: string = ''): void => {
@@ -578,7 +637,8 @@ export class JobService {
       // 시공의뢰 시 에스크로 포인트 차감
       if (jobData.sellerId && jobData.budget?.max) {
         try {
-          const { PointService } = await import('./pointService');
+          // PointService를 정적으로 import
+          const PointService = await import('./pointService').then(module => module.PointService);
           await PointService.escrowPoints(jobId, jobData.sellerId, jobData.budget.max);
           console.log(`✅ 에스크로 포인트 차감 완료: ${jobData.budget.max}포인트`);
         } catch (escrowError) {
@@ -610,12 +670,19 @@ export class JobService {
       }
       
       const data = jobDoc.data();
+      console.log('Firestore에서 가져온 원본 데이터:', data);
+      console.log('Firestore에서 가져온 scheduledDate:', data.scheduledDate);
+      console.log('Firestore에서 가져온 scheduledDate 타입:', typeof data.scheduledDate);
+      
+      const convertedScheduledDate = this.safeDateConversion(data.scheduledDate);
+      console.log('변환된 scheduledDate:', convertedScheduledDate);
+      
       return {
         id: jobDoc.id,
         ...data,
         createdAt: this.safeDateConversion(data.createdAt) || new Date(),
         updatedAt: this.safeDateConversion(data.updatedAt) || new Date(),
-        scheduledDate: this.safeDateConversion(data.scheduledDate),
+        scheduledDate: convertedScheduledDate,
         completedDate: this.safeDateConversion(data.completedDate),
         acceptedAt: this.safeDateConversion(data.acceptedAt),
         cancelledAt: this.safeDateConversion(data.cancelledAt),
@@ -638,8 +705,31 @@ export class JobService {
   // 작업 삭제
   static async deleteJob(jobId: string): Promise<void> {
     try {
+      // 1. 작업 정보 조회 (포인트 환불을 위해)
+      const job = await this.getJobById(jobId);
+      
+      if (!job) {
+        throw new Error('작업을 찾을 수 없습니다.');
+      }
+      
+      // 2. 에스크로 포인트 환불 (판매자에게)
+      if (job.sellerId && job.budget?.max) {
+        try {
+          const PointService = await import('./pointService').then(module => module.PointService);
+          await PointService.refundEscrowToSeller(jobId, '작업 삭제');
+          console.log(`✅ 작업 삭제로 인한 포인트 환불 완료: ${job.budget.max}포인트`);
+        } catch (refundError) {
+          console.error('❌ 포인트 환불 실패:', refundError);
+          // 포인트 환불 실패 시에도 작업 삭제는 진행
+        }
+      }
+      
+      // 3. 작업 삭제
       const jobRef = doc(db, 'constructionJobs', jobId);
       await deleteDoc(jobRef);
+      
+      console.log(`✅ 작업 삭제 완료: ${jobId}`);
+      
     } catch (error) {
       console.error('작업 삭제 실패:', error);
       throw new Error('작업을 삭제할 수 없습니다.');
@@ -906,6 +996,43 @@ export class JobService {
     } catch (error) {
       console.error('테스트 작업 데이터 생성 실패:', error);
       throw new Error('테스트 작업 데이터를 생성할 수 없습니다.');
+    }
+  }
+
+  // 작업 취소
+  static async cancelJob(jobId: string): Promise<void> {
+    try {
+      const jobRef = doc(db, 'constructionJobs', jobId);
+      const jobDoc = await getDoc(jobRef);
+      
+      if (!jobDoc.exists()) {
+        throw new Error('작업을 찾을 수 없습니다.');
+      }
+
+      const jobData = jobDoc.data();
+      
+      // 대기중 상태에서만 취소 가능
+      if (jobData.status !== 'pending') {
+        throw new Error('대기중 상태의 작업만 취소할 수 있습니다.');
+      }
+
+      // 진행 이력에 취소 기록 추가
+      const cancelStep = {
+        status: 'cancelled',
+        timestamp: new Date(),
+        note: '작업이 취소되었습니다.'
+      };
+
+      await updateDoc(jobRef, {
+        status: 'cancelled',
+        updatedAt: new Date(),
+        progressHistory: [...(jobData.progressHistory || []), cancelStep]
+      });
+
+      console.log(`작업 ${jobId}가 취소되었습니다.`);
+    } catch (error) {
+      console.error('작업 취소 실패:', error);
+      throw error;
     }
   }
 }

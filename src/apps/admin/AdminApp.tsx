@@ -8,6 +8,7 @@ import JobManagement from './pages/JobManagement';
 import PricingManagement from './pages/PricingManagement';
 import LevelManagement from './pages/LevelManagement';
 import SatisfactionSurveyManagement from './pages/SatisfactionSurveyManagement';
+import TemplateManagement from './pages/TemplateManagement';
 import Analytics from './pages/Analytics';
 import SystemSettings from './pages/SystemSettings';
 
@@ -22,6 +23,7 @@ const AdminApp: React.FC = () => {
           <Route path="/pricing" element={<PricingManagement />} />
           <Route path="/levels" element={<LevelManagement />} />
           <Route path="/surveys" element={<SatisfactionSurveyManagement />} />
+          <Route path="/templates" element={<TemplateManagement />} />
           <Route path="/analytics" element={<Analytics />} />
           <Route path="/settings" element={<SystemSettings />} />
         </Routes>

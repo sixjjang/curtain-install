@@ -25,7 +25,9 @@ import {
   Tabs,
   Tab,
   Alert,
-  Snackbar
+  Snackbar,
+  Switch,
+  FormControlLabel
 } from '@mui/material';
 import {
   Add as AddIcon,
@@ -95,6 +97,19 @@ const TemplateManagement: React.FC = () => {
     isActive: true
   });
 
+  // 만족도 조사 항목 관련 상태
+  const [surveyItems, setSurveyItems] = useState<any[]>([]);
+  const [surveyItemDialogOpen, setSurveyItemDialogOpen] = useState(false);
+  const [editingSurveyItem, setEditingSurveyItem] = useState<any | null>(null);
+  const [surveyItemForm, setSurveyItemForm] = useState({
+    question: '',
+    type: 'rating' as 'rating' | 'text' | 'choice',
+    options: [''],
+    isRequired: true,
+    order: 1,
+    isActive: true
+  });
+
   // 데이터 로드
   useEffect(() => {
     loadData();
@@ -103,12 +118,14 @@ const TemplateManagement: React.FC = () => {
   const loadData = async () => {
     try {
       setLoading(true);
-      const [templates, badges] = await Promise.all([
+      const [templates, badges, surveyItemsData] = await Promise.all([
         TemplateService.getAllDescriptionTemplates(),
-        TemplateService.getAllRequirementBadges()
+        TemplateService.getAllRequirementBadges(),
+        TemplateService.getAllSurveyItems()
       ]);
       setDescriptionTemplates(templates);
       setRequirementBadges(badges);
+      setSurveyItems(surveyItemsData);
     } catch (error) {
       console.error('데이터 로드 실패:', error);
       setSnackbar({
@@ -281,6 +298,92 @@ const TemplateManagement: React.FC = () => {
     }
   };
 
+  // 만족도 조사 항목 관련 핸들러
+  const handleSurveyItemFormChange = (field: string, value: any) => {
+    setSurveyItemForm(prev => ({
+      ...prev,
+      [field]: value
+    }));
+  };
+
+  const handleSurveyItemSubmit = async () => {
+    try {
+      setLoading(true);
+      if (editingSurveyItem) {
+        await TemplateService.updateSurveyItem(editingSurveyItem.id, surveyItemForm);
+        setSnackbar({
+          open: true,
+          message: '만족도 조사 항목이 수정되었습니다.',
+          severity: 'success'
+        });
+      } else {
+        await TemplateService.saveSurveyItem(surveyItemForm);
+        setSnackbar({
+          open: true,
+          message: '만족도 조사 항목이 저장되었습니다.',
+          severity: 'success'
+        });
+      }
+      setSurveyItemDialogOpen(false);
+      setEditingSurveyItem(null);
+      setSurveyItemForm({ 
+        question: '', 
+        type: 'rating', 
+        options: [''], 
+        isRequired: true, 
+        order: 1, 
+        isActive: true 
+      });
+      loadData();
+    } catch (error) {
+      console.error('만족도 조사 항목 저장 실패:', error);
+      setSnackbar({
+        open: true,
+        message: '만족도 조사 항목 저장에 실패했습니다.',
+        severity: 'error'
+      });
+    } finally {
+      setLoading(false);
+    }
+  };
+
+  const handleSurveyItemEdit = (item: any) => {
+    setEditingSurveyItem(item);
+    setSurveyItemForm({
+      question: item.question,
+      type: item.type,
+      options: item.options || [''],
+      isRequired: item.isRequired,
+      order: item.order,
+      isActive: item.isActive
+    });
+    setSurveyItemDialogOpen(true);
+  };
+
+  const handleSurveyItemDelete = async (id: string) => {
+    if (window.confirm('정말 삭제하시겠습니까?')) {
+      try {
+        setLoading(true);
+        await TemplateService.deleteSurveyItem(id);
+        setSnackbar({
+          open: true,
+          message: '만족도 조사 항목이 삭제되었습니다.',
+          severity: 'success'
+        });
+        loadData();
+      } catch (error) {
+        console.error('만족도 조사 항목 삭제 실패:', error);
+        setSnackbar({
+          open: true,
+          message: '만족도 조사 항목 삭제에 실패했습니다.',
+          severity: 'error'
+        });
+      } finally {
+        setLoading(false);
+      }
+    }
+  };
+
   return (
     <Box>
       <Typography variant="h4" gutterBottom>
@@ -292,6 +395,7 @@ const TemplateManagement: React.FC = () => {
           <Tabs value={tabValue} onChange={handleTabChange}>
             <Tab label="설명 템플릿" />
             <Tab label="요구사항 뱃지" />
+            <Tab label="만족도 조사 항목" />
           </Tabs>
         </Box>
 
@@ -327,14 +431,14 @@ const TemplateManagement: React.FC = () => {
                       </Box>
                     }
                     secondary={
-                      <Box>
+                      <>
                         <Typography variant="body2" color="textSecondary" sx={{ mb: 1 }}>
                           {template.content}
                         </Typography>
                         <Typography variant="caption" color="textSecondary">
                           생성일: {template.createdAt.toLocaleDateString()}
                         </Typography>
-                      </Box>
+                      </>
                     }
                   />
                   <ListItemSecondaryAction>
@@ -413,6 +517,79 @@ const TemplateManagement: React.FC = () => {
               </Grid>
             ))}
           </Grid>
+        </TabPanel>
+
+        <TabPanel value={tabValue} index={2}>
+          <Box display="flex" justifyContent="space-between" alignItems="center" mb={2}>
+            <Typography variant="h6">만족도 조사 항목 설정</Typography>
+            <Button
+              variant="contained"
+              startIcon={<AddIcon />}
+              onClick={() => setSurveyItemDialogOpen(true)}
+            >
+              항목 추가
+            </Button>
+          </Box>
+
+          <List>
+            {surveyItems.map((item) => (
+              <React.Fragment key={item.id}>
+                <ListItem>
+                  <ListItemText
+                    primary={
+                      <Box display="flex" alignItems="center" gap={1}>
+                        <Typography variant="subtitle1">{item.question}</Typography>
+                        <Chip 
+                          label={item.type === 'rating' ? '평점' : item.type === 'text' ? '텍스트' : '선택'} 
+                          size="small" 
+                          color="primary" 
+                          variant="outlined" 
+                        />
+                        {item.isRequired && (
+                          <Chip label="필수" size="small" color="error" />
+                        )}
+                        {!item.isActive && (
+                          <Chip label="비활성" size="small" color="error" />
+                        )}
+                      </Box>
+                    }
+                    secondary={
+                      <>
+                        <Typography variant="body2" color="textSecondary" sx={{ mb: 1 }}>
+                          순서: {item.order} | 타입: {item.type}
+                        </Typography>
+                        {item.options && item.options.length > 0 && item.options[0] !== '' && (
+                          <Typography variant="body2" color="textSecondary" sx={{ mb: 1 }}>
+                            옵션: {item.options.join(', ')}
+                          </Typography>
+                        )}
+                        <Typography variant="caption" color="textSecondary">
+                          생성일: {item.createdAt?.toLocaleDateString()}
+                        </Typography>
+                      </>
+                    }
+                  />
+                  <ListItemSecondaryAction>
+                    <IconButton
+                      edge="end"
+                      onClick={() => handleSurveyItemEdit(item)}
+                      sx={{ mr: 1 }}
+                    >
+                      <EditIcon />
+                    </IconButton>
+                    <IconButton
+                      edge="end"
+                      onClick={() => handleSurveyItemDelete(item.id)}
+                      color="error"
+                    >
+                      <DeleteIcon />
+                    </IconButton>
+                  </ListItemSecondaryAction>
+                </ListItem>
+                <Divider />
+              </React.Fragment>
+            ))}
+          </List>
         </TabPanel>
       </Card>
 
@@ -542,6 +719,130 @@ const TemplateManagement: React.FC = () => {
             disabled={loading || !badgeForm.name || !badgeForm.description}
           >
             {loading ? '저장 중...' : (editingBadge ? '수정' : '저장')}
+          </Button>
+        </DialogActions>
+      </Dialog>
+
+      {/* 만족도 조사 항목 다이얼로그 */}
+      <Dialog open={surveyItemDialogOpen} onClose={() => setSurveyItemDialogOpen(false)} maxWidth="md" fullWidth>
+        <DialogTitle>
+          {editingSurveyItem ? '만족도 조사 항목 수정' : '만족도 조사 항목 추가'}
+        </DialogTitle>
+        <DialogContent>
+          <Grid container spacing={2} sx={{ mt: 1 }}>
+            <Grid item xs={12}>
+              <TextField
+                fullWidth
+                label="질문"
+                value={surveyItemForm.question}
+                onChange={(e) => handleSurveyItemFormChange('question', e.target.value)}
+                margin="normal"
+                placeholder="예: 시공 품질에 만족하십니까?"
+              />
+            </Grid>
+            <Grid item xs={12} sm={6}>
+              <FormControl fullWidth margin="normal">
+                <InputLabel>질문 타입</InputLabel>
+                <Select
+                  value={surveyItemForm.type}
+                  onChange={(e) => handleSurveyItemFormChange('type', e.target.value)}
+                  label="질문 타입"
+                >
+                  <MenuItem value="rating">평점 (1-5점)</MenuItem>
+                  <MenuItem value="text">텍스트 입력</MenuItem>
+                  <MenuItem value="choice">선택형</MenuItem>
+                </Select>
+              </FormControl>
+            </Grid>
+            <Grid item xs={12} sm={6}>
+              <TextField
+                fullWidth
+                label="순서"
+                type="number"
+                value={surveyItemForm.order}
+                onChange={(e) => handleSurveyItemFormChange('order', parseInt(e.target.value))}
+                margin="normal"
+                inputProps={{ min: 1 }}
+              />
+            </Grid>
+            {surveyItemForm.type === 'choice' && (
+              <Grid item xs={12}>
+                <Typography variant="subtitle2" sx={{ mb: 1 }}>
+                  선택 옵션
+                </Typography>
+                {surveyItemForm.options.map((option, index) => (
+                  <Box key={index} display="flex" gap={1} sx={{ mb: 1 }}>
+                    <TextField
+                      fullWidth
+                      label={`옵션 ${index + 1}`}
+                      value={option}
+                      onChange={(e) => {
+                        const newOptions = [...surveyItemForm.options];
+                        newOptions[index] = e.target.value;
+                        handleSurveyItemFormChange('options', newOptions);
+                      }}
+                      size="small"
+                    />
+                    <Button
+                      variant="outlined"
+                      color="error"
+                      size="small"
+                      onClick={() => {
+                        const newOptions = surveyItemForm.options.filter((_, i) => i !== index);
+                        handleSurveyItemFormChange('options', newOptions);
+                      }}
+                      disabled={surveyItemForm.options.length <= 1}
+                    >
+                      삭제
+                    </Button>
+                  </Box>
+                ))}
+                <Button
+                  variant="outlined"
+                  size="small"
+                  onClick={() => {
+                    const newOptions = [...surveyItemForm.options, ''];
+                    handleSurveyItemFormChange('options', newOptions);
+                  }}
+                >
+                  옵션 추가
+                </Button>
+              </Grid>
+            )}
+            <Grid item xs={12}>
+              <FormControlLabel
+                control={
+                  <Switch
+                    checked={surveyItemForm.isRequired}
+                    onChange={(e) => handleSurveyItemFormChange('isRequired', e.target.checked)}
+                  />
+                }
+                label="필수 항목"
+              />
+            </Grid>
+            <Grid item xs={12}>
+              <FormControlLabel
+                control={
+                  <Switch
+                    checked={surveyItemForm.isActive}
+                    onChange={(e) => handleSurveyItemFormChange('isActive', e.target.checked)}
+                  />
+                }
+                label="활성화"
+              />
+            </Grid>
+          </Grid>
+        </DialogContent>
+        <DialogActions>
+          <Button onClick={() => setSurveyItemDialogOpen(false)}>
+            취소
+          </Button>
+          <Button
+            onClick={handleSurveyItemSubmit}
+            variant="contained"
+            disabled={loading || !surveyItemForm.question}
+          >
+            {loading ? '저장 중...' : (editingSurveyItem ? '수정' : '저장')}
           </Button>
         </DialogActions>
       </Dialog>

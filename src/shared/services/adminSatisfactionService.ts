@@ -8,8 +8,7 @@ import {
   getDocs, 
   query, 
   where, 
-  serverTimestamp,
-  orderBy
+  serverTimestamp
 } from 'firebase/firestore';
 import { ChatService } from './chatService';
 import { SatisfactionService } from './satisfactionService';
@@ -121,10 +120,11 @@ ${surveyLink}
       await ChatService.sendMessage(
         chatRoomId,
         notification.jobId,
-        'admin',
-        'seller',
-        '관리자',
-        notification.message
+        'admin-system', // senderId
+        'admin', // senderType
+        '관리자', // senderName
+        notification.message, // content
+        '' // senderProfileImage - 관리자는 프로필 이미지가 없으므로 빈 문자열 전달
       );
 
       // 알림 상태 업데이트

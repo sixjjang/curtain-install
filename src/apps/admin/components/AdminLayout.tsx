@@ -29,7 +29,8 @@ import {
   Star as LevelIcon,
   RateReview as SurveyIcon,
   Settings as SettingsIcon,
-  Menu as MenuIcon
+  Menu as MenuIcon,
+  Article as TemplateIcon
 } from '@mui/icons-material';
 import { useAuth } from '../../../shared/contexts/AuthContext';
 
@@ -53,6 +54,7 @@ const AdminLayout: React.FC<AdminLayoutProps> = ({ children }) => {
     { text: '시공단가 관리', icon: <PricingIcon />, path: '/admin/pricing' },
     { text: '레벨 관리', icon: <LevelIcon />, path: '/admin/levels' },
     { text: '만족도 조사 관리', icon: <SurveyIcon />, path: '/admin/surveys' },
+    { text: '템플릿 관리', icon: <TemplateIcon />, path: '/admin/templates' },
     { text: '분석', icon: <AnalyticsIcon />, path: '/admin/analytics' },
     { text: '시스템 설정', icon: <SettingsIcon />, path: '/admin/settings' },
   ];

@@ -29,6 +29,15 @@ import { ConstructionJob } from '../../../types';
 
 const CalendarView: React.FC = () => {
   const { user } = useAuth();
+
+  // 총 예산 계산 함수
+  const calculateTotalBudget = (job: ConstructionJob): number => {
+    if (job.items && job.items.length > 0) {
+      return job.items.reduce((sum, item) => sum + item.totalPrice, 0);
+    }
+    return 0;
+  };
+
   const [allJobs, setAllJobs] = useState<ConstructionJob[]>([]);
   const [pendingJobs, setPendingJobs] = useState<ConstructionJob[]>([]);
   const [myJobs, setMyJobs] = useState<ConstructionJob[]>([]);
@@ -218,7 +227,12 @@ const CalendarView: React.FC = () => {
                                 </Typography>
                               )}
                               <Typography variant="body2" color="textSecondary" component="div">
-                                예산: {job.budget?.min?.toLocaleString()}~{job.budget?.max?.toLocaleString()}원
+                                예산: {job.finalAmount 
+                                  ? `${job.finalAmount.toLocaleString()}원` 
+                                  : calculateTotalBudget(job) > 0 
+                                    ? `${calculateTotalBudget(job).toLocaleString()}원`
+                                    : '예산 미정'
+                                }
                               </Typography>
                             </React.Fragment>
                           }
@@ -287,7 +301,12 @@ const CalendarView: React.FC = () => {
                                 </Typography>
                               )}
                               <Typography variant="body2" color="textSecondary" component="div">
-                                예산: {job.budget?.min?.toLocaleString()}~{job.budget?.max?.toLocaleString()}원
+                                예산: {job.finalAmount 
+                                  ? `${job.finalAmount.toLocaleString()}원` 
+                                  : calculateTotalBudget(job) > 0 
+                                    ? `${calculateTotalBudget(job).toLocaleString()}원`
+                                    : '예산 미정'
+                                }
                               </Typography>
                             </React.Fragment>
                           }
@@ -331,7 +350,12 @@ const CalendarView: React.FC = () => {
                 </Typography>
               )}
               <Typography variant="body2" color="textSecondary" gutterBottom>
-                예산: {selectedJob.budget?.min?.toLocaleString()}~{selectedJob.budget?.max?.toLocaleString()}원
+                예산: {selectedJob.finalAmount 
+                  ? `${selectedJob.finalAmount.toLocaleString()}원` 
+                  : calculateTotalBudget(selectedJob) > 0 
+                    ? `${calculateTotalBudget(selectedJob).toLocaleString()}원`
+                    : '예산 미정'
+                }
               </Typography>
               <Chip 
                 label={selectedJob.status === 'pending' ? '수락 가능' : getStatusText(selectedJob.status)} 

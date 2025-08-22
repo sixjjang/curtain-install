@@ -1,4 +1,4 @@
-import React, { useState } from 'react';
+import React, { useState, useEffect } from 'react';
 import {
   Box,
   Typography,
@@ -17,7 +17,6 @@ import {
   TableRow,
   Paper,
   IconButton,
-  Checkbox,
   TextField,
   Dialog,
   DialogTitle,
@@ -34,30 +33,27 @@ import {
 import {
   CloudUpload,
   Download,
-  Edit,
   Delete,
   CheckCircle,
   Error,
-  Warning,
   AttachFile,
-  Save,
-  Cancel,
   FileDownload,
   Upload
 } from '@mui/icons-material';
 import { ExcelUploadService } from '../../../shared/services/excelUploadService';
 import { ExcelJobData, WorkInstruction } from '../../../types';
 import { StorageService } from '../../../shared/services/storageService';
-import { JobService } from '../../../shared/services/jobService';
-import { CustomerService } from '../../../shared/services/customerService';
+import { PricingService } from '../../../shared/services/pricingService';
+import { SellerService } from '../../../shared/services/sellerService';
 import { useAuth } from '../../../shared/contexts/AuthContext';
 import { formatPhoneInput } from '../../../shared/utils/phoneFormatter';
+import CreateJobDialog from '../components/CreateJobDialog';
 
 const ExcelJobUpload: React.FC = () => {
   const { user } = useAuth();
   const [jobs, setJobs] = useState<ExcelJobData[]>([]);
   const [loading, setLoading] = useState(false);
-  const [uploading, setUploading] = useState(false);
+
   const [error, setError] = useState('');
   const [success, setSuccess] = useState('');
   const [editDialogOpen, setEditDialogOpen] = useState(false);
@@ -65,6 +61,23 @@ const ExcelJobUpload: React.FC = () => {
   const [fileUploadDialogOpen, setFileUploadDialogOpen] = useState(false);
   const [selectedJobForFile, setSelectedJobForFile] = useState<ExcelJobData | null>(null);
   const [uploadingFiles, setUploadingFiles] = useState(false);
+  const [createJobDialogOpen, setCreateJobDialogOpen] = useState(false);
+  const [selectedJobForCreate, setSelectedJobForCreate] = useState<ExcelJobData | null>(null);
+  const [pricingItems, setPricingItems] = useState<any[]>([]);
+
+  // 품목 목록 로드
+  useEffect(() => {
+    const loadPricingItems = async () => {
+      try {
+        const items = await PricingService.getAllItems();
+        setPricingItems(items);
+      } catch (error) {
+        console.error('품목 목록 로드 실패:', error);
+      }
+    };
+
+    loadPricingItems();
+  }, []);
 
   // 템플릿 다운로드
   const handleDownloadTemplate = () => {
@@ -80,7 +93,38 @@ const ExcelJobUpload: React.FC = () => {
       setLoading(true);
       setError('');
       
-      const uploadedJobs = await ExcelUploadService.parseExcelFile(file);
+      let uploadedJobs = await ExcelUploadService.parseExcelFile(file);
+      
+      // 기본출장비와 픽업 정보 자동입력
+      uploadedJobs = await Promise.all(uploadedJobs.map(async (job) => {
+        // 기본출장비가 비어있으면 자동입력
+        if (!job.travelFee) {
+          try {
+            const travelFee = await PricingService.getTravelFee();
+            job.travelFee = travelFee;
+          } catch (error) {
+            console.error('기본출장비 가져오기 실패:', error);
+            job.travelFee = 17000; // 기본값
+          }
+        }
+        
+        // 픽업 정보가 비어있으면 판매자 정보로 자동입력
+        if (!job.pickupCompanyName || !job.pickupPhone || !job.pickupAddress) {
+          try {
+            const pickupInfo = await SellerService.getPickupInfo(user?.id || '');
+            if (pickupInfo) {
+              job.pickupCompanyName = job.pickupCompanyName || pickupInfo.companyName;
+              job.pickupPhone = job.pickupPhone || pickupInfo.phone;
+              job.pickupAddress = job.pickupAddress || pickupInfo.address;
+            }
+          } catch (error) {
+            console.error('픽업 정보 가져오기 실패:', error);
+          }
+        }
+        
+        return job;
+      }));
+      
       setJobs(uploadedJobs);
       setSuccess(`${uploadedJobs.length}개의 작업이 업로드되었습니다.`);
     } catch (error: any) {
@@ -90,22 +134,18 @@ const ExcelJobUpload: React.FC = () => {
     }
   };
 
-  // 작업 선택/해제
-  const handleSelectJob = (jobId: string, selected: boolean) => {
-    setJobs(prev => prev.map(job => 
-      job.id === jobId ? { ...job, isSelected: selected } : job
-    ));
-  };
 
-  // 전체 선택/해제
-  const handleSelectAll = (selected: boolean) => {
-    setJobs(prev => prev.map(job => ({ ...job, isSelected: selected })));
-  };
 
   // 작업 수정
   const handleEditJob = (job: ExcelJobData) => {
     setEditingJob({ ...job });
     setEditDialogOpen(true);
+  };
+
+  // 새작업등록 모달로 수정
+  const handleEditWithCreateDialog = (job: ExcelJobData) => {
+    setSelectedJobForCreate(job);
+    setCreateJobDialogOpen(true);
   };
 
   // 작업 삭제
@@ -118,13 +158,24 @@ const ExcelJobUpload: React.FC = () => {
     if (!editingJob) return;
 
     // 데이터 검증
-    if (!editingJob.title || !editingJob.address || !editingJob.customerName || !editingJob.customerPhone) {
+    if (!editingJob.customerName || !editingJob.customerPhone) {
       setError('필수 항목을 모두 입력해주세요.');
       return;
     }
 
+    // 제목 자동생성
+    const autoTitle = ExcelUploadService.generateTitle(
+      editingJob.scheduledDate,
+      editingJob.scheduledTime,
+      editingJob.customerAddress,
+      editingJob.blindsQuantity,
+      editingJob.curtainsQuantity
+    );
+    
+    const updatedJob = { ...editingJob, title: autoTitle };
+
     setJobs(prev => prev.map(job => 
-      job.id === editingJob.id ? { ...editingJob, status: 'ready' } : job
+      job.id === editingJob.id ? { ...updatedJob, status: 'ready' } : job
     ));
     
     setEditDialogOpen(false);
@@ -210,95 +261,7 @@ const ExcelJobUpload: React.FC = () => {
     ));
   };
 
-  // 선택된 작업들 시공의뢰 등록
-  const handleSubmitSelectedJobs = async () => {
-    const selectedJobs = jobs.filter(job => job.isSelected && job.status === 'ready');
-    
-    if (selectedJobs.length === 0) {
-      setError('등록할 작업을 선택해주세요.');
-      return;
-    }
 
-    try {
-      setUploading(true);
-      setError('');
-
-      for (const job of selectedJobs) {
-        // 고객 정보 저장
-        let customerId = 'temp-customer-id';
-        if (job.customerPhone) {
-          try {
-            customerId = await CustomerService.saveCustomerInfo({
-              name: job.customerName,
-              phone: job.customerPhone,
-              address: job.address,
-              rating: 0,
-              totalJobs: 0
-            });
-          } catch (error) {
-            console.error('고객 정보 저장 실패:', error);
-            customerId = `temp-${Date.now()}`;
-          }
-        }
-
-        // 시공일시 생성
-        let scheduledDateTime: Date | undefined;
-        if (job.scheduledDate && job.scheduledTime) {
-          const [hours, minutes] = job.scheduledTime.split(':').map(Number);
-          scheduledDateTime = new Date(job.scheduledDate);
-          scheduledDateTime.setHours(hours, minutes, 0, 0);
-        }
-
-        // 작업 데이터 생성
-        const jobData = {
-          sellerId: user?.id || '',
-          customerId: customerId,
-          title: job.title,
-          description: job.description,
-          address: job.address,
-          coordinates: { lat: 37.5665, lng: 126.9780 }, // 서울 시청 좌표 (기본값)
-          budget: {
-            min: job.budgetMin || 0,
-            max: job.budgetMax || 0
-          },
-          items: [],
-          status: 'pending' as const,
-          scheduledDate: scheduledDateTime,
-          isInternal: job.isInternal,
-          workInstructions: job.workInstructions || [],
-          createdAt: new Date(),
-          updatedAt: new Date()
-        };
-
-        await JobService.createJob(jobData);
-      }
-
-      // 성공한 작업들 제거
-      setJobs(prev => prev.filter(job => !job.isSelected || job.status !== 'ready'));
-      setSuccess(`${selectedJobs.length}개의 작업이 성공적으로 등록되었습니다.`);
-    } catch (error: any) {
-      setError(`작업 등록 실패: ${error.message}`);
-    } finally {
-      setUploading(false);
-    }
-  };
-
-  // 전체 작업 시공의뢰 등록
-  const handleSubmitAllJobs = async () => {
-    const readyJobs = jobs.filter(job => job.status === 'ready');
-    
-    if (readyJobs.length === 0) {
-      setError('등록할 준비된 작업이 없습니다.');
-      return;
-    }
-
-    // 모든 준비된 작업을 선택
-    setJobs(prev => prev.map(job => 
-      job.status === 'ready' ? { ...job, isSelected: true } : job
-    ));
-
-    await handleSubmitSelectedJobs();
-  };
 
   // 엑셀 내보내기
   const handleExportToExcel = () => {
@@ -307,7 +270,6 @@ const ExcelJobUpload: React.FC = () => {
 
   const readyJobsCount = jobs.filter(job => job.status === 'ready').length;
   const errorJobsCount = jobs.filter(job => job.status === 'error').length;
-  const selectedJobsCount = jobs.filter(job => job.isSelected).length;
 
   return (
     <Box sx={{ p: 3 }}>
@@ -410,12 +372,7 @@ const ExcelJobUpload: React.FC = () => {
                   icon={<Error />}
                 />
               </Grid>
-              <Grid item>
-                <Chip 
-                  label={`선택됨: ${selectedJobsCount}개`} 
-                  color="info" 
-                />
-              </Grid>
+
             </Grid>
           </CardContent>
         </Card>
@@ -429,43 +386,21 @@ const ExcelJobUpload: React.FC = () => {
               <Typography variant="h6">
                 업로드된 작업 목록
               </Typography>
-              <Box>
-                <Button
-                  variant="contained"
-                  color="success"
-                  onClick={handleSubmitAllJobs}
-                  disabled={readyJobsCount === 0 || uploading}
-                  sx={{ mr: 1 }}
-                >
-                  {uploading ? <CircularProgress size={20} /> : '전체 시공의뢰'}
-                </Button>
-                <Button
-                  variant="contained"
-                  onClick={handleSubmitSelectedJobs}
-                  disabled={selectedJobsCount === 0 || uploading}
-                >
-                  {uploading ? <CircularProgress size={20} /> : '선택 시공의뢰'}
-                </Button>
-              </Box>
+              <Typography variant="body2" color="textSecondary">
+                행을 클릭하면 새작업등록 모달이 열립니다
+              </Typography>
             </Box>
 
             <TableContainer component={Paper}>
               <Table>
                 <TableHead>
                   <TableRow>
-                    <TableCell padding="checkbox">
-                      <Checkbox
-                        checked={jobs.length > 0 && jobs.every(job => job.isSelected)}
-                        indeterminate={jobs.some(job => job.isSelected) && !jobs.every(job => job.isSelected)}
-                        onChange={(e) => handleSelectAll(e.target.checked)}
-                      />
-                    </TableCell>
                     <TableCell>상태</TableCell>
                     <TableCell>제목</TableCell>
                     <TableCell>고객정보</TableCell>
-                    <TableCell>시공주소</TableCell>
                     <TableCell>시공일시</TableCell>
-                    <TableCell>예산</TableCell>
+                    <TableCell>품목수량</TableCell>
+                    <TableCell>총예산</TableCell>
                     <TableCell>픽업정보</TableCell>
                     <TableCell>작업지시서</TableCell>
                     <TableCell>작업</TableCell>
@@ -473,14 +408,14 @@ const ExcelJobUpload: React.FC = () => {
                 </TableHead>
                 <TableBody>
                   {jobs.map((job) => (
-                    <TableRow key={job.id}>
-                      <TableCell padding="checkbox">
-                        <Checkbox
-                          checked={job.isSelected}
-                          onChange={(e) => handleSelectJob(job.id, e.target.checked)}
-                          disabled={job.status === 'error'}
-                        />
-                      </TableCell>
+                    <TableRow 
+                      key={job.id}
+                      onClick={() => handleEditWithCreateDialog(job)}
+                      sx={{ 
+                        cursor: 'pointer',
+                        '&:hover': { backgroundColor: 'action.hover' }
+                      }}
+                    >
                       <TableCell>
                         <Chip
                           label={job.status === 'ready' ? '준비완료' : job.status === 'error' ? '오류' : '대기중'}
@@ -513,11 +448,6 @@ const ExcelJobUpload: React.FC = () => {
                       </TableCell>
                       <TableCell>
                         <Typography variant="body2">
-                          {job.address}
-                        </Typography>
-                      </TableCell>
-                      <TableCell>
-                        <Typography variant="body2">
                           {job.scheduledDate && job.scheduledTime 
                             ? `${job.scheduledDate} ${job.scheduledTime}`
                             : '-'
@@ -526,10 +456,33 @@ const ExcelJobUpload: React.FC = () => {
                       </TableCell>
                       <TableCell>
                         <Typography variant="body2">
-                          {job.budgetMin && job.budgetMax
-                            ? `${job.budgetMin.toLocaleString()} ~ ${job.budgetMax.toLocaleString()}원`
-                            : '-'
-                          }
+                          {[
+                            job.blindsQuantity ? `블라인드 ${job.blindsQuantity}창` : '',
+                            job.curtainsQuantity ? `커튼 ${job.curtainsQuantity}조` : ''
+                          ].filter(Boolean).join(', ') || '-'}
+                        </Typography>
+                      </TableCell>
+                      <TableCell>
+                        <Typography variant="body2" fontWeight="bold">
+                          {(() => {
+                            let total = job.travelFee || 0;
+                            
+                            // 블라인드 금액 계산 (실제 가격 사용)
+                            if (job.blindsQuantity && job.blindsQuantity > 0) {
+                              const blindsItem = pricingItems.find(item => item.name === '블라인드');
+                              const blindsPrice = blindsItem ? blindsItem.basePrice : 50000;
+                              total += job.blindsQuantity * blindsPrice;
+                            }
+                            
+                            // 커튼 금액 계산 (실제 가격 사용)
+                            if (job.curtainsQuantity && job.curtainsQuantity > 0) {
+                              const curtainsItem = pricingItems.find(item => item.name === '커튼');
+                              const curtainsPrice = curtainsItem ? curtainsItem.basePrice : 80000;
+                              total += job.curtainsQuantity * curtainsPrice;
+                            }
+                            
+                            return `${total.toLocaleString()}원`;
+                          })()}
                         </Typography>
                       </TableCell>
                       <TableCell>
@@ -547,7 +500,7 @@ const ExcelJobUpload: React.FC = () => {
                           </Typography>
                         )}
                       </TableCell>
-                      <TableCell>
+                      <TableCell onClick={(e) => e.stopPropagation()}>
                         <Box display="flex" alignItems="center" gap={1}>
                           <Typography variant="body2">
                             {job.workInstructions?.length || 0}개
@@ -561,15 +514,8 @@ const ExcelJobUpload: React.FC = () => {
                           </IconButton>
                         </Box>
                       </TableCell>
-                      <TableCell>
+                      <TableCell onClick={(e) => e.stopPropagation()}>
                         <Box display="flex" gap={1}>
-                          <IconButton
-                            size="small"
-                            onClick={() => handleEditJob(job)}
-                            disabled={job.status === 'error'}
-                          >
-                            <Edit />
-                          </IconButton>
                           <IconButton
                             size="small"
                             color="error"
@@ -616,9 +562,9 @@ const ExcelJobUpload: React.FC = () => {
               <Grid item xs={12}>
                 <TextField
                   fullWidth
-                  label="시공주소"
-                  value={editingJob.address}
-                  onChange={(e) => setEditingJob({ ...editingJob, address: e.target.value })}
+                  label="고객주소"
+                  value={editingJob.customerAddress || ''}
+                  onChange={(e) => setEditingJob({ ...editingJob, customerAddress: e.target.value })}
                   required
                 />
               </Grid>
@@ -671,30 +617,29 @@ const ExcelJobUpload: React.FC = () => {
               <Grid item xs={6}>
                 <TextField
                   fullWidth
-                  label="최소예산"
+                  label="블라인드 수량"
                   type="number"
-                  value={editingJob.budgetMin || ''}
-                  onChange={(e) => setEditingJob({ ...editingJob, budgetMin: Number(e.target.value) || undefined })}
+                  value={editingJob.blindsQuantity || ''}
+                  onChange={(e) => setEditingJob({ ...editingJob, blindsQuantity: Number(e.target.value) || undefined })}
                 />
               </Grid>
               <Grid item xs={6}>
                 <TextField
                   fullWidth
-                  label="최대예산"
+                  label="커튼 수량"
                   type="number"
-                  value={editingJob.budgetMax || ''}
-                  onChange={(e) => setEditingJob({ ...editingJob, budgetMax: Number(e.target.value) || undefined })}
+                  value={editingJob.curtainsQuantity || ''}
+                  onChange={(e) => setEditingJob({ ...editingJob, curtainsQuantity: Number(e.target.value) || undefined })}
                 />
               </Grid>
               <Grid item xs={12}>
-                <FormControlLabel
-                  control={
-                    <Switch
-                      checked={editingJob.isInternal}
-                      onChange={(e) => setEditingJob({ ...editingJob, isInternal: e.target.checked })}
-                    />
-                  }
-                  label="내부 작업"
+                <TextField
+                  fullWidth
+                  label="작업설명"
+                  value={editingJob.description || ''}
+                  onChange={(e) => setEditingJob({ ...editingJob, description: e.target.value })}
+                  multiline
+                  rows={3}
                 />
               </Grid>
               
@@ -822,6 +767,24 @@ const ExcelJobUpload: React.FC = () => {
           <Button onClick={() => setFileUploadDialogOpen(false)}>닫기</Button>
         </DialogActions>
       </Dialog>
+
+      {/* 새작업등록 모달 */}
+      <CreateJobDialog
+        open={createJobDialogOpen}
+        onClose={() => {
+          setCreateJobDialogOpen(false);
+          setSelectedJobForCreate(null);
+        }}
+        onJobCreated={() => {
+          setCreateJobDialogOpen(false);
+          setSelectedJobForCreate(null);
+          // 성공한 작업 제거
+          if (selectedJobForCreate) {
+            setJobs(prev => prev.filter(job => job.id !== selectedJobForCreate.id));
+          }
+        }}
+        excelJobData={selectedJobForCreate || undefined}
+      />
     </Box>
   );
 };

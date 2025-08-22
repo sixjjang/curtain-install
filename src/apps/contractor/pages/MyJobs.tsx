@@ -30,8 +30,24 @@ import {
   Checkbox,
   Paper
 } from '@mui/material';
-import { Search, Schedule, LocationOn, CheckCircle, Assignment, Chat, CheckCircleOutline } from '@mui/icons-material';
+import { 
+  Search, 
+  Schedule, 
+  LocationOn, 
+  CheckCircle, 
+  Assignment, 
+  Chat, 
+  CheckCircleOutline,
+  Person,
+  AccountBalance,
+  ListAlt,
+  LocalShipping,
+  Description,
+  Visibility,
+  Info
+} from '@mui/icons-material';
 import { JobService } from '../../../shared/services/jobService';
+import { CustomerService, CustomerInfo } from '../../../shared/services/customerService';
 import { ConstructionJob } from '../../../types';
 import { useAuth } from '../../../shared/contexts/AuthContext';
 
@@ -63,6 +79,11 @@ const MyJobs: React.FC = () => {
   const [signatureCanvas, setSignatureCanvas] = useState<HTMLCanvasElement | null>(null);
   const [isDrawing, setIsDrawing] = useState(false);
   const [currentJobId, setCurrentJobId] = useState<string>('');
+  
+  // 상세보기 다이얼로그 관련 상태
+  const [selectedJob, setSelectedJob] = useState<ConstructionJob | null>(null);
+  const [detailDialogOpen, setDetailDialogOpen] = useState(false);
+  const [customerInfo, setCustomerInfo] = useState<CustomerInfo | null>(null);
 
   useEffect(() => {
     const fetchMyJobs = async () => {
@@ -142,8 +163,26 @@ const MyJobs: React.FC = () => {
     return job.items.reduce((total, item) => total + item.totalPrice, 0);
   };
 
-  const handleJobDetail = (jobId: string) => {
-    navigate(`/contractor/jobs/${jobId}`);
+  const handleJobDetail = async (jobId: string) => {
+    // 작업 상세 정보를 모달로 표시하도록 수정
+    const job = jobs.find(j => j.id === jobId);
+    if (job) {
+      setSelectedJob(job);
+      setDetailDialogOpen(true);
+      
+      // 고객 정보 가져오기
+      if (job.customerId) {
+        try {
+          const customer = await CustomerService.getCustomerInfo(job.customerId);
+          setCustomerInfo(customer);
+        } catch (error) {
+          console.error('고객 정보 조회 실패:', error);
+          setCustomerInfo(null);
+        }
+      } else {
+        setCustomerInfo(null);
+      }
+    }
   };
 
   // 픽업 완료 처리
@@ -641,7 +680,9 @@ const MyJobs: React.FC = () => {
                 <Card>
                   <CardContent>
                     <Box display="flex" justifyContent="space-between" alignItems="flex-start" mb={2}>
-                      <Typography variant="h6">{job.title} - {calculateTotalPrice(job).toLocaleString()}원</Typography>
+                      <Typography variant="h6">
+                        {job.title.replace(/-\d{1,3}(,\d{3})*원$/, '')}
+                      </Typography>
                       <Button 
                         variant="outlined" 
                         size="small"
@@ -878,6 +919,233 @@ const MyJobs: React.FC = () => {
             </Button>
           )}
             </DialogActions>
+          </Dialog>
+
+          {/* 상세보기 다이얼로그 */}
+          <Dialog
+            open={detailDialogOpen}
+            onClose={() => {
+              setDetailDialogOpen(false);
+              setCustomerInfo(null);
+            }}
+            maxWidth="md"
+            fullWidth
+          >
+            <DialogTitle>
+              <Box display="flex" alignItems="center" justifyContent="space-between">
+                <Typography variant="h6">작업 상세 정보</Typography>
+                <Button onClick={() => {
+                  setDetailDialogOpen(false);
+                  setCustomerInfo(null);
+                }}>
+                  닫기
+                </Button>
+              </Box>
+            </DialogTitle>
+            
+            <DialogContent>
+              {selectedJob && (
+                <Box>
+                  <Typography variant="h5" gutterBottom>
+                    {selectedJob.title.replace(/-\d{1,3}(,\d{3})*원$/, '')}
+                  </Typography>
+                  
+                  <Box display="flex" alignItems="center" gap={1} mb={3}>
+                    <Chip 
+                      label={getStatusText(selectedJob.status)} 
+                      color={getStatusColor(selectedJob.status)} 
+                      size="medium"
+                    />
+                  </Box>
+
+                  {/* 고객 정보 */}
+                  {customerInfo && (
+                    <Box sx={{ mb: 3 }}>
+                      <Typography variant="h6" gutterBottom sx={{ display: 'flex', alignItems: 'center', gap: 1 }}>
+                        <Person color="action" />
+                        고객 정보
+                      </Typography>
+                      <Box sx={{ ml: 3, p: 2, bgcolor: 'grey.50', borderRadius: 1 }}>
+                        <Typography variant="body2" sx={{ mb: 1 }}>
+                          <strong>이름:</strong> {customerInfo.name}
+                        </Typography>
+                        <Typography variant="body2" sx={{ mb: 1 }}>
+                          <strong>연락처:</strong> {customerInfo.phone}
+                        </Typography>
+                        {customerInfo.address && (
+                          <Typography variant="body2" sx={{ mb: 1 }}>
+                            <strong>주소:</strong> {customerInfo.address}
+                          </Typography>
+                        )}
+                        {customerInfo.email && (
+                          <Typography variant="body2">
+                            <strong>이메일:</strong> {customerInfo.email}
+                          </Typography>
+                        )}
+                      </Box>
+                    </Box>
+                  )}
+
+                  {/* 시공일시 */}
+                  {selectedJob.scheduledDate && (
+                    <Box sx={{ mb: 3 }}>
+                      <Typography variant="h6" gutterBottom sx={{ display: 'flex', alignItems: 'center', gap: 1 }}>
+                        <Schedule color="action" />
+                        시공일시
+                      </Typography>
+                      <Box sx={{ ml: 3, p: 2, bgcolor: 'grey.50', borderRadius: 1 }}>
+                        <Typography variant="body2">
+                          {formatDateTime(selectedJob.scheduledDate)}
+                        </Typography>
+                      </Box>
+                    </Box>
+                  )}
+
+                  {/* 준비일시 */}
+                  {selectedJob.pickupInfo && selectedJob.pickupInfo.scheduledDateTime && (
+                    <Box sx={{ mb: 3 }}>
+                      <Typography variant="h6" gutterBottom sx={{ display: 'flex', alignItems: 'center', gap: 1 }}>
+                        <Schedule color="action" />
+                        준비일시
+                      </Typography>
+                      <Box sx={{ ml: 3, p: 2, bgcolor: 'grey.50', borderRadius: 1 }}>
+                        <Typography variant="body2">
+                          {formatDateTime(new Date(selectedJob.pickupInfo.scheduledDateTime))}
+                        </Typography>
+                      </Box>
+                    </Box>
+                  )}
+
+                  {/* 총 금액 */}
+                  <Box sx={{ mb: 3 }}>
+                    <Typography variant="h6" gutterBottom sx={{ display: 'flex', alignItems: 'center', gap: 1 }}>
+                      <AccountBalance color="action" />
+                      총 금액
+                    </Typography>
+                    <Box sx={{ ml: 3, p: 2, bgcolor: 'grey.50', borderRadius: 1 }}>
+                      <Typography variant="h6" color="primary" fontWeight="bold">
+                        {calculateTotalPrice(selectedJob).toLocaleString()}원
+                      </Typography>
+                    </Box>
+                  </Box>
+
+                  {/* 품목 및 단가 */}
+                  {selectedJob.items && selectedJob.items.length > 0 && (
+                    <Box sx={{ mb: 3 }}>
+                      <Typography variant="h6" gutterBottom sx={{ display: 'flex', alignItems: 'center', gap: 1 }}>
+                        <ListAlt color="action" />
+                        품목 및 단가
+                      </Typography>
+                      <Box sx={{ ml: 3, bgcolor: 'grey.50', borderRadius: 1 }}>
+                        <List dense>
+                          {selectedJob.items.map((item, index) => (
+                            <ListItem key={index}>
+                              <ListItemText
+                                primary={
+                                  <>
+                                    <Typography variant="body2" component="span">
+                                      {item.name} × {item.quantity}
+                                    </Typography>
+                                    <Typography variant="body2" fontWeight="bold" component="span" sx={{ float: 'right' }}>
+                                      {item.totalPrice.toLocaleString()}원
+                                    </Typography>
+                                  </>
+                                }
+                                secondary={
+                                  <Typography variant="caption" color="textSecondary" component="span">
+                                    단가: {item.unitPrice.toLocaleString()}원
+                                  </Typography>
+                                }
+                              />
+                            </ListItem>
+                          ))}
+                        </List>
+                      </Box>
+                    </Box>
+                  )}
+
+                  {/* 픽업 정보 */}
+                  {selectedJob.pickupInfo && (
+                    <Box sx={{ mb: 3 }}>
+                      <Typography variant="h6" gutterBottom sx={{ display: 'flex', alignItems: 'center', gap: 1 }}>
+                        <LocalShipping color="action" />
+                        픽업 정보
+                      </Typography>
+                      <Box sx={{ ml: 3, p: 2, bgcolor: 'grey.50', borderRadius: 1 }}>
+                        {selectedJob.pickupInfo.companyName && (
+                          <Typography variant="body2" sx={{ mb: 1 }}>
+                            <strong>상호:</strong> {selectedJob.pickupInfo.companyName}
+                          </Typography>
+                        )}
+                        {selectedJob.pickupInfo.phone && (
+                          <Typography variant="body2" sx={{ mb: 1 }}>
+                            <strong>연락처:</strong> {selectedJob.pickupInfo.phone}
+                          </Typography>
+                        )}
+                        {selectedJob.pickupInfo.address && (
+                          <Typography variant="body2" sx={{ mb: 1 }}>
+                            <strong>픽업주소:</strong> {selectedJob.pickupInfo.address}
+                          </Typography>
+                        )}
+                        {selectedJob.pickupInfo.scheduledDateTime && (
+                          <Typography variant="body2">
+                            <strong>픽업일시:</strong> {formatDateTime(new Date(selectedJob.pickupInfo.scheduledDateTime))}
+                          </Typography>
+                        )}
+                      </Box>
+                    </Box>
+                  )}
+
+                  {/* 작업지시서 파일 */}
+                  {selectedJob.workInstructions && selectedJob.workInstructions.length > 0 && (
+                    <Box sx={{ mb: 3 }}>
+                      <Typography variant="h6" gutterBottom sx={{ display: 'flex', alignItems: 'center', gap: 1 }}>
+                        <Description color="action" />
+                        작업지시서 파일
+                      </Typography>
+                      <Box sx={{ ml: 3, bgcolor: 'grey.50', borderRadius: 1 }}>
+                        {selectedJob.workInstructions.map((file, index) => (
+                          <Box key={file.id} sx={{ p: 2, borderBottom: index < selectedJob.workInstructions!.length - 1 ? 1 : 0, borderColor: 'divider' }}>
+                            <Typography variant="body2" sx={{ mb: 1 }}>
+                              <strong>파일명:</strong> {file.fileName}
+                            </Typography>
+                            <Typography variant="body2" sx={{ mb: 1 }}>
+                              <strong>파일 크기:</strong> {(file.fileSize / 1024).toFixed(1)} KB
+                            </Typography>
+                            <Typography variant="body2" sx={{ mb: 2 }}>
+                              <strong>파일 타입:</strong> {file.fileType}
+                            </Typography>
+                            <Button 
+                              variant="outlined" 
+                              size="small"
+                              startIcon={<Visibility />}
+                              onClick={() => window.open(file.fileUrl, '_blank')}
+                            >
+                              파일 미리보기
+                            </Button>
+                          </Box>
+                        ))}
+                      </Box>
+                    </Box>
+                  )}
+
+                  {/* 작업 설명 */}
+                  {selectedJob.description && (
+                    <Box sx={{ mb: 3 }}>
+                      <Typography variant="h6" gutterBottom sx={{ display: 'flex', alignItems: 'center', gap: 1 }}>
+                        <Info color="action" />
+                        작업 설명
+                      </Typography>
+                      <Box sx={{ ml: 3, p: 2, bgcolor: 'grey.50', borderRadius: 1 }}>
+                        <Typography variant="body2">
+                          {selectedJob.description}
+                        </Typography>
+                      </Box>
+                    </Box>
+                  )}
+                </Box>
+              )}
+            </DialogContent>
           </Dialog>
 
           <Snackbar

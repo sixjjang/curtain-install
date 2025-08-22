@@ -26,6 +26,33 @@ import { ConstructionJob } from '../../../types';
 const Chat: React.FC = () => {
   const { jobId } = useParams<{ jobId: string }>();
   const { user } = useAuth();
+
+  // 총 예산 계산 함수
+  const calculateTotalBudget = (job: ConstructionJob): number => {
+    if (job.items && job.items.length > 0) {
+      return job.items.reduce((sum, item) => sum + item.totalPrice, 0);
+    }
+    return 0;
+  };
+
+  // 시공일시-주소 포맷팅 함수
+  const formatJobTitle = (job: ConstructionJob): string => {
+    if (job.scheduledDate) {
+      const date = new Date(job.scheduledDate);
+      const month = date.getMonth() + 1;
+      const day = date.getDate();
+      const hours = date.getHours();
+      const minutes = date.getMinutes();
+      const timeStr = `${hours.toString().padStart(2, '0')}:${minutes.toString().padStart(2, '0')}`;
+      
+      // 주소에서 시/도 부분만 추출 (예: "경기도 시흥시 소래포구" -> "경기도 시흥시")
+      const addressParts = job.address.split(' ');
+      const cityPart = addressParts.slice(0, 2).join(' '); // 시/도 부분
+      
+      return `${month}/${day} ${timeStr}-${cityPart}`;
+    }
+    return job.title;
+  };
   const [jobs, setJobs] = useState<ConstructionJob[]>([]);
   const [selectedJob, setSelectedJob] = useState<ConstructionJob | null>(null);
   const [messages, setMessages] = useState<any[]>([]);
@@ -196,7 +223,7 @@ const Chat: React.FC = () => {
                       primary={
                         <Box display="flex" justifyContent="space-between" alignItems="center">
                           <Typography variant="subtitle2" noWrap>
-                            {job.title}
+                            {formatJobTitle(job)}
                           </Typography>
                           <Chip 
                             label={getStatusText(job.status)} 
@@ -211,7 +238,12 @@ const Chat: React.FC = () => {
                             {job.address}
                           </Typography>
                           <Typography variant="caption" color="textSecondary">
-                            예산: {job.budget?.min?.toLocaleString()}~{job.budget?.max?.toLocaleString()}원
+                            총금액: {job.finalAmount 
+                              ? `${job.finalAmount.toLocaleString()}원` 
+                              : calculateTotalBudget(job) > 0 
+                                ? `${calculateTotalBudget(job).toLocaleString()}원`
+                                : '예산 미정'
+                            }
                           </Typography>
                         </Box>
                       }

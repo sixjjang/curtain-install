@@ -37,7 +37,8 @@ import {
   CreditCard,
   AccountBalanceWallet,
   CheckCircle,
-  Warning
+  Warning,
+  Edit as EditIcon
 } from '@mui/icons-material';
 import { JobService } from '../../../shared/services/jobService';
 import { PricingService, PricingItem } from '../../../shared/services/pricingService';
@@ -47,7 +48,7 @@ import { PointService } from '../../../shared/services/pointService';
 import { PaymentService } from '../../../shared/services/paymentService';
 import { StorageService } from '../../../shared/services/storageService';
 import { useAuth } from '../../../shared/contexts/AuthContext';
-import { JobItem, PricingOption, WorkInstruction } from '../../../types';
+import { JobItem, PricingOption, WorkInstruction, ExcelJobData, ConstructionJob } from '../../../types';
 import AddressSearch from '../../../shared/components/AddressSearch';
 import { formatPhoneInput } from '../../../shared/utils/phoneFormatter';
 
@@ -57,6 +58,8 @@ interface CreateJobDialogProps {
   onJobCreated: () => void;
   initialScheduledDate?: string;
   initialScheduledTime?: string;
+  excelJobData?: ExcelJobData; // 엑셀 업로드된 작업 데이터
+  initialJobData?: ConstructionJob; // 기존 작업 데이터 (수정용)
 }
 
 const CreateJobDialog: React.FC<CreateJobDialogProps> = ({ 
@@ -64,7 +67,9 @@ const CreateJobDialog: React.FC<CreateJobDialogProps> = ({
   onClose, 
   onJobCreated, 
   initialScheduledDate, 
-  initialScheduledTime 
+  initialScheduledTime,
+  excelJobData,
+  initialJobData
 }) => {
   const { user } = useAuth();
   const [formData, setFormData] = useState({
@@ -74,8 +79,7 @@ const CreateJobDialog: React.FC<CreateJobDialogProps> = ({
     budgetMin: '',
     budgetMax: '',
     scheduledDate: initialScheduledDate || '',
-    scheduledTime: initialScheduledTime || '',
-    isInternal: false
+    scheduledTime: initialScheduledTime || ''
   });
   
   // 고객정보 상태 추가
@@ -121,16 +125,162 @@ const CreateJobDialog: React.FC<CreateJobDialogProps> = ({
     loadSavedData();
   }, [user?.id, open]);
 
-  // 초기 시공일시 설정
+  // 초기 시공일시 설정 및 엑셀 데이터 초기화
   React.useEffect(() => {
-    if (open && (initialScheduledDate || initialScheduledTime)) {
-      setFormData(prev => ({
-        ...prev,
-        scheduledDate: initialScheduledDate || prev.scheduledDate,
-        scheduledTime: initialScheduledTime || prev.scheduledTime
-      }));
+    if (open) {
+      if (initialJobData) {
+        // 기존 작업 데이터로 폼 초기화 (수정용)
+        setFormData({
+          title: initialJobData.title,
+          description: initialJobData.description,
+          address: initialJobData.address,
+          budgetMin: '',
+          budgetMax: '',
+          scheduledDate: initialJobData.scheduledDate 
+            ? new Date(initialJobData.scheduledDate).toISOString().split('T')[0]
+            : '',
+          scheduledTime: initialJobData.scheduledDate 
+            ? new Date(initialJobData.scheduledDate).toTimeString().slice(0, 5)
+            : ''
+        });
+        
+        // 품목 설정
+        if (initialJobData.items && initialJobData.items.length > 0) {
+          setItems(initialJobData.items);
+        }
+        
+        // 고객 정보 설정 (있는 경우)
+        if (initialJobData.customerId) {
+          // 고객 정보는 별도로 로드해야 할 수 있음
+          setCustomerInfo({
+            name: '',
+            phone: '',
+            address: initialJobData.address
+          });
+        }
+        
+        // 픽업 정보 설정 (있는 경우)
+        if (initialJobData.pickupInfo) {
+          setPickupInfo({
+            companyName: initialJobData.pickupInfo.companyName,
+            phone: initialJobData.pickupInfo.phone,
+            address: initialJobData.pickupInfo.address,
+            scheduledDateTime: initialJobData.pickupInfo.scheduledDateTime || ''
+          });
+        }
+      } else if (excelJobData) {
+        console.log('엑셀 데이터 처리:', excelJobData);
+        
+        console.log('엑셀 데이터에서 시공일시 추출:', {
+          scheduledDate: excelJobData.scheduledDate,
+          scheduledTime: excelJobData.scheduledTime,
+          scheduledDateType: typeof excelJobData.scheduledDate,
+          scheduledTimeType: typeof excelJobData.scheduledTime
+        });
+        
+        // 엑셀 데이터로 폼 초기화
+        const formDataToSet = {
+          title: excelJobData.title,
+          description: excelJobData.description,
+          address: excelJobData.customerAddress || '',
+          budgetMin: '',
+          budgetMax: '',
+          scheduledDate: excelJobData.scheduledDate || '',
+          scheduledTime: excelJobData.scheduledTime || ''
+        };
+        
+        console.log('폼 데이터 설정:', formDataToSet);
+        setFormData(formDataToSet);
+        
+        setCustomerInfo({
+          name: excelJobData.customerName,
+          phone: excelJobData.customerPhone,
+          address: excelJobData.customerAddress || ''
+        });
+        
+        const pickupDateTime = excelJobData.pickupScheduledDate && excelJobData.pickupScheduledTime 
+          ? `${excelJobData.pickupScheduledDate}T${excelJobData.pickupScheduledTime}`
+          : '';
+        
+        console.log('준비일시 설정:', {
+          pickupScheduledDate: excelJobData.pickupScheduledDate,
+          pickupScheduledTime: excelJobData.pickupScheduledTime,
+          pickupDateTime: pickupDateTime
+        });
+        
+        setPickupInfo({
+          companyName: excelJobData.pickupCompanyName || '',
+          phone: excelJobData.pickupPhone || '',
+          address: excelJobData.pickupAddress || '',
+          scheduledDateTime: pickupDateTime
+        });
+        
+        // 품목 설정 (자동 추가)
+        const newItems = [];
+        
+        // 기본출장비 먼저 추가
+        if (excelJobData.travelFee) {
+          newItems.push({
+            name: '기본출장비',
+            quantity: 1,
+            unitPrice: excelJobData.travelFee,
+            totalPrice: excelJobData.travelFee
+          });
+        }
+        
+        // 기본 아이템 목록부터 설정
+        setItems(newItems);
+        
+        // pricingItems가 로드된 후 블라인드와 커튼을 자동으로 추가
+        const addExcelItems = () => {
+          // 블라인드 자동 추가
+          if (excelJobData.blindsQuantity && excelJobData.blindsQuantity > 0) {
+            addItemAutomatically('블라인드', excelJobData.blindsQuantity);
+          }
+          
+          // 커튼 자동 추가
+          if (excelJobData.curtainsQuantity && excelJobData.curtainsQuantity > 0) {
+            addItemAutomatically('커튼', excelJobData.curtainsQuantity);
+          }
+          
+          // 첫 번째 품목을 폼에 선택 (추가 품목 입력을 위해)
+          if (excelJobData.blindsQuantity && excelJobData.blindsQuantity > 0) {
+            setSelectedCategory('기본');
+            setNewItem({
+              name: '',
+              quantity: 1,
+              unitPrice: 0
+            });
+          } else if (excelJobData.curtainsQuantity && excelJobData.curtainsQuantity > 0) {
+            setSelectedCategory('기본');
+            setNewItem({
+              name: '',
+              quantity: 1,
+              unitPrice: 0
+            });
+          }
+        };
+
+        // pricingItems가 로드될 때까지 대기
+        const checkAndAddItems = () => {
+          if (pricingItems.length > 0) {
+            addExcelItems();
+          } else {
+            setTimeout(checkAndAddItems, 100);
+          }
+        };
+        
+        checkAndAddItems();
+      } else if (initialScheduledDate || initialScheduledTime) {
+        // 기존 초기화 로직
+        setFormData(prev => ({
+          ...prev,
+          scheduledDate: initialScheduledDate || prev.scheduledDate,
+          scheduledTime: initialScheduledTime || prev.scheduledTime
+        }));
+      }
     }
-  }, [open, initialScheduledDate, initialScheduledTime]);
+  }, [open, initialScheduledDate, initialScheduledTime, excelJobData, initialJobData]);
   const [items, setItems] = useState<JobItem[]>([]);
   const [newItem, setNewItem] = useState({
     name: '',
@@ -163,6 +313,19 @@ const CreateJobDialog: React.FC<CreateJobDialogProps> = ({
   const [workInstructions, setWorkInstructions] = useState<WorkInstruction[]>([]);
   const [uploadingFiles, setUploadingFiles] = useState(false);
 
+  // 설명예시 관리 상태
+  const [descriptionExamples, setDescriptionExamples] = useState([
+    { id: 1, title: '꼼꼼시공', content: '고객분이 세심하게 시공해주시길 원하세요' },
+    { id: 2, title: '바닥주의', content: '바닥에 흠집이 없게 주의해주세요' },
+    { id: 3, title: '소파이동', content: '고객님께 소파이동에 대해 상의후 작업해주세요' },
+    { id: 4, title: '침대보양', content: '침대를 밟는것에 대해 고객분과 상의후 비닐로 덮고 진행해주세요' },
+    { id: 5, title: '아기주의', content: '이 댁에 아기가 있어요 소음에 신경써주세요' },
+    { id: 6, title: '친절부탁', content: '최대한 고객님께 친절하게 시공 부탁드려요' }
+  ]);
+  const [exampleDialogOpen, setExampleDialogOpen] = useState(false);
+  const [editingExample, setEditingExample] = useState<{ id: number; title: string; content: string } | null>(null);
+  const [newExample, setNewExample] = useState({ title: '', content: '' });
+
   // 품목 목록 가져오기
   React.useEffect(() => {
     const fetchData = async () => {
@@ -173,15 +336,17 @@ const CreateJobDialog: React.FC<CreateJobDialogProps> = ({
         // 기본출장비 가져오기
         const travelFee = await PricingService.getTravelFee();
         
-        // 기본출장비를 자동으로 추가
-        const travelFeeItem: JobItem = {
-          name: '기본출장비',
-          quantity: 1,
-          unitPrice: travelFee,
-          totalPrice: travelFee
-        };
-        
-        setItems([travelFeeItem]);
+        // 엑셀 데이터가 없을 때만 기본출장비를 자동으로 추가
+        if (!excelJobData) {
+          const travelFeeItem: JobItem = {
+            name: '기본출장비',
+            quantity: 1,
+            unitPrice: travelFee,
+            totalPrice: travelFee
+          };
+          
+          setItems([travelFeeItem]);
+        }
 
         // 옵션 목록 가져오기
         const options = await PricingService.getAllOptions();
@@ -192,7 +357,7 @@ const CreateJobDialog: React.FC<CreateJobDialogProps> = ({
     };
 
     fetchData();
-  }, []);
+  }, [open, excelJobData]); // open과 excelJobData가 변경될 때마다 실행
 
   // 30분 단위 시간 옵션 생성 (06:00 ~ 23:30)
   const generateTimeOptions = () => {
@@ -313,6 +478,37 @@ const CreateJobDialog: React.FC<CreateJobDialogProps> = ({
     }, 100);
   };
 
+  // 자동으로 품목 추가하는 헬퍼 함수
+  const addItemAutomatically = (itemName: string, quantity: number) => {
+    console.log(`자동 품목 추가 시도: ${itemName} ${quantity}개`);
+    console.log('현재 pricingItems:', pricingItems);
+    
+    const selectedPricingItem = pricingItems.find(item => item.name === itemName);
+    if (!selectedPricingItem) {
+      console.warn(`품목 '${itemName}'을 찾을 수 없습니다.`);
+      return;
+    }
+
+    const basePrice = selectedPricingItem.basePrice;
+    const totalPrice = basePrice * quantity;
+
+    const item: JobItem = {
+      name: itemName,
+      quantity: quantity,
+      unitPrice: basePrice,
+      totalPrice,
+      options: [],
+      optionPrices: 0
+    };
+
+    console.log(`품목 추가:`, item);
+    setItems(prev => {
+      const newItems = [...prev, item];
+      console.log('업데이트된 품목 목록:', newItems);
+      return newItems;
+    });
+  };
+
   // 카테고리 선택 핸들러
   const handleCategoryChange = (category: string) => {
     setSelectedCategory(category);
@@ -417,19 +613,19 @@ const CreateJobDialog: React.FC<CreateJobDialogProps> = ({
     }, 0);
   };
 
-  // 총 금액 계산
-  const calculateTotalPrice = () => {
-    return items.reduce((total, item) => total + item.totalPrice, 0);
-  };
+
 
   // 포인트 잔액 검증
   const validatePointBalance = async () => {
     if (!user?.id) return;
     
-    const totalPrice = calculateTotalPrice();
-    if (totalPrice > 0) {
+    const totalBudget = calculateTotalBudget(); // 총예산과 동일한 값 사용
+    console.log('🔍 포인트 잔액 검증 - 총예산과 동일한 값 사용:', { totalBudget });
+    
+    if (totalBudget > 0) {
       try {
-        const validation = await PointService.validatePointBalance(user.id, totalPrice);
+        const validation = await PointService.validatePointBalance(user.id, totalBudget);
+        console.log('🔍 포인트 잔액 검증 결과:', validation);
         setPointValidation(validation);
         return validation.isValid;
       } catch (error) {
@@ -480,11 +676,11 @@ const CreateJobDialog: React.FC<CreateJobDialogProps> = ({
       parts.push(itemSummary);
     }
     
-    // 4. 총 금액 (기본출장비 제외, 천 단위 콤마 포함)
-    const totalAmountWithoutTravelFee = nonTravelFeeItems.reduce((sum, item) => sum + item.totalPrice, 0);
-    if (totalAmountWithoutTravelFee > 0) {
-      parts.push(`${totalAmountWithoutTravelFee.toLocaleString()}원`);
-    }
+    // 4. 총 금액 제거 (시공자 내 작업 페이지에서 금액 표시하지 않기 위해)
+    // const totalAmountWithoutTravelFee = nonTravelFeeItems.reduce((sum, item) => sum + item.totalPrice, 0);
+    // if (totalAmountWithoutTravelFee > 0) {
+    //   parts.push(`${totalAmountWithoutTravelFee.toLocaleString()}원`);
+    // }
     
     // 최소한의 정보가 없으면 기본 제목 생성
     if (parts.length === 0) {
@@ -500,7 +696,6 @@ const CreateJobDialog: React.FC<CreateJobDialogProps> = ({
       scheduledTime: formData.scheduledTime,
       items: items.map(item => ({ name: item.name, quantity: item.quantity })),
       nonTravelFeeItems: nonTravelFeeItems.map(item => ({ name: item.name, quantity: item.quantity })),
-      totalAmount: totalAmountWithoutTravelFee,
       generatedTitle: autoTitle
     });
     
@@ -568,7 +763,17 @@ const CreateJobDialog: React.FC<CreateJobDialogProps> = ({
 
   // 총 예산 계산
   const calculateTotalBudget = () => {
-    return items.reduce((sum, item) => sum + item.totalPrice, 0);
+    const total = items.reduce((sum, item) => sum + item.totalPrice, 0);
+    console.log('🔍 총 예산 계산:', { 
+      total, 
+      items: items.map(item => ({ 
+        name: item.name, 
+        quantity: item.quantity,
+        unitPrice: item.unitPrice,
+        totalPrice: item.totalPrice 
+      }))
+    });
+    return total;
   };
 
   const handleSubmit = async () => {
@@ -592,6 +797,9 @@ const CreateJobDialog: React.FC<CreateJobDialogProps> = ({
       return;
     }
 
+    // 수정 모드인지 확인
+    const isEditMode = !!initialJobData;
+
     try {
       setLoading(true);
       setError('');
@@ -599,9 +807,26 @@ const CreateJobDialog: React.FC<CreateJobDialogProps> = ({
       const totalBudget = calculateTotalBudget();
       
       // 시공일시 생성
-      const [hours, minutes] = formData.scheduledTime.split(':').map(Number);
-      const scheduledDateTime = new Date(formData.scheduledDate);
-      scheduledDateTime.setHours(hours, minutes, 0, 0);
+      let scheduledDateTime: Date | undefined = undefined;
+      console.log('시공일시 생성:', {
+        scheduledDate: formData.scheduledDate,
+        scheduledTime: formData.scheduledTime,
+        excelJobData: excelJobData
+      });
+      
+      if (formData.scheduledDate && formData.scheduledTime) {
+        const [hours, minutes] = formData.scheduledTime.split(':').map(Number);
+        scheduledDateTime = new Date(formData.scheduledDate);
+        scheduledDateTime.setHours(hours, minutes, 0, 0);
+        console.log('생성된 시공일시:', scheduledDateTime);
+      } else {
+        console.log('시공일시 생성 실패 - 데이터 부족:', {
+          scheduledDate: formData.scheduledDate,
+          scheduledTime: formData.scheduledTime,
+          scheduledDateType: typeof formData.scheduledDate,
+          scheduledTimeType: typeof formData.scheduledTime
+        });
+      }
 
       // 1. 고객 정보 저장
       let customerId = 'temp-customer-id';
@@ -623,6 +848,8 @@ const CreateJobDialog: React.FC<CreateJobDialogProps> = ({
       }
 
       // 2. 작업 데이터 생성
+      console.log('픽업 정보:', pickupInfo);
+      
       // undefined 값 제거를 위한 픽업 정보 정리
       const cleanedPickupInfo = {
         companyName: pickupInfo.companyName || '',
@@ -630,6 +857,8 @@ const CreateJobDialog: React.FC<CreateJobDialogProps> = ({
         phone: pickupInfo.phone || '',
         scheduledDateTime: pickupInfo.scheduledDateTime || ''
       };
+      
+      console.log('정리된 픽업 정보:', cleanedPickupInfo);
 
       // undefined 값 제거를 위한 안전한 데이터 생성
       // 작업지시서 파일 정보 생성
@@ -651,6 +880,12 @@ const CreateJobDialog: React.FC<CreateJobDialogProps> = ({
         return;
       }
 
+      console.log('작업 데이터 생성:', {
+        formData: formData,
+        scheduledDateTime: scheduledDateTime,
+        pickupInfo: cleanedPickupInfo
+      });
+      
       const jobData = {
         sellerId: user.id,
         customerId: customerId,
@@ -665,7 +900,7 @@ const CreateJobDialog: React.FC<CreateJobDialogProps> = ({
         items: items || [],
         status: 'pending' as const,
         scheduledDate: scheduledDateTime,
-        isInternal: formData.isInternal || false,
+        isInternal: false,
         createdAt: new Date(),
         updatedAt: new Date(),
         images: [],
@@ -673,39 +908,57 @@ const CreateJobDialog: React.FC<CreateJobDialogProps> = ({
         pickupInfo: cleanedPickupInfo, // 정리된 픽업 정보 추가
         workInstructions: workInstructionFiles // 작업지시서 파일 정보 추가
       };
+      
+      console.log('최종 작업 데이터:', jobData);
 
-      await JobService.createJob(jobData);
-      
-      // 폼 초기화
-      setFormData({
-        title: '',
-        description: '',
-        address: '',
-        budgetMin: '',
-        budgetMax: '',
-        scheduledDate: '',
-        scheduledTime: '',
-        isInternal: false
-      });
-      setCustomerInfo({
-        name: '',
-        phone: '',
-        address: ''
-      });
-      setPickupInfo({
-        companyName: '',
-        address: '',
-        phone: '',
-        scheduledDateTime: ''
-      });
-      setItems([]);
-      setNewItem({ name: '', quantity: 1, unitPrice: 0 });
-      setSelectedCategory('');
-      setSelectedOptions([]);
-      setWorkInstructions([]);
-      
-      // 기본출장비 재설정
-      await resetTravelFee();
+      if (isEditMode && initialJobData) {
+        // 기존 작업 업데이트
+        await JobService.updateJob(initialJobData.id, {
+          title: jobData.title,
+          description: jobData.description,
+          address: jobData.address,
+          scheduledDate: jobData.scheduledDate,
+          items: jobData.items,
+          pickupInfo: jobData.pickupInfo,
+          workInstructions: jobData.workInstructions,
+          status: 'pending' // 취소된 작업을 다시 대기중 상태로 변경
+        });
+        
+        alert('작업이 성공적으로 수정되었습니다.');
+      } else {
+        // 새 작업 생성
+        await JobService.createJob(jobData);
+        
+        // 폼 초기화
+        setFormData({
+          title: '',
+          description: '',
+          address: '',
+          budgetMin: '',
+          budgetMax: '',
+          scheduledDate: '',
+          scheduledTime: ''
+        });
+        setCustomerInfo({
+          name: '',
+          phone: '',
+          address: ''
+        });
+        setPickupInfo({
+          companyName: '',
+          address: '',
+          phone: '',
+          scheduledDateTime: ''
+        });
+        setItems([]);
+        setNewItem({ name: '', quantity: 1, unitPrice: 0 });
+        setSelectedCategory('');
+        setSelectedOptions([]);
+        setWorkInstructions([]);
+        
+        // 기본출장비 재설정
+        await resetTravelFee();
+      }
       
       onJobCreated();
       onClose();
@@ -724,8 +977,7 @@ const CreateJobDialog: React.FC<CreateJobDialogProps> = ({
       budgetMin: '',
       budgetMax: '',
       scheduledDate: '',
-      scheduledTime: '',
-      isInternal: false
+      scheduledTime: ''
     });
     setCustomerInfo({
       name: '',
@@ -738,7 +990,7 @@ const CreateJobDialog: React.FC<CreateJobDialogProps> = ({
       phone: '',
       scheduledDateTime: ''
     });
-    setItems([]);
+    // setItems([]); // 기본출장비는 유지하므로 제거
     setNewItem({ name: '', quantity: 1, unitPrice: 0 });
     setSelectedCategory('');
     setSelectedOptions([]);
@@ -773,6 +1025,54 @@ const CreateJobDialog: React.FC<CreateJobDialogProps> = ({
       ...prev,
       description: newDescription
     }));
+  };
+
+  // 설명예시 관리 함수들
+  const handleAddExample = () => {
+    setEditingExample(null);
+    setNewExample({ title: '', content: '' });
+    setExampleDialogOpen(true);
+  };
+
+  const handleEditExample = (example: { id: number; title: string; content: string }) => {
+    setEditingExample(example);
+    setNewExample({ title: example.title, content: example.content });
+    setExampleDialogOpen(true);
+  };
+
+  const handleDeleteExample = (id: number) => {
+    setDescriptionExamples(prev => prev.filter(example => example.id !== id));
+  };
+
+  const handleSaveExample = () => {
+    if (!newExample.title.trim() || !newExample.content.trim()) {
+      return;
+    }
+
+    if (editingExample) {
+      // 수정
+      setDescriptionExamples(prev => 
+        prev.map(example => 
+          example.id === editingExample.id 
+            ? { ...example, title: newExample.title, content: newExample.content }
+            : example
+        )
+      );
+    } else {
+      // 새로 추가
+      const newId = Math.max(...descriptionExamples.map(e => e.id), 0) + 1;
+      setDescriptionExamples(prev => [...prev, { id: newId, title: newExample.title, content: newExample.content }]);
+    }
+
+    setExampleDialogOpen(false);
+    setEditingExample(null);
+    setNewExample({ title: '', content: '' });
+  };
+
+  const handleCancelExample = () => {
+    setExampleDialogOpen(false);
+    setEditingExample(null);
+    setNewExample({ title: '', content: '' });
   };
 
   // 포인트 충전 관련 함수들
@@ -868,10 +1168,33 @@ const CreateJobDialog: React.FC<CreateJobDialogProps> = ({
 
   return (
     <>
-      <Dialog open={open} onClose={handleClose} maxWidth="md" fullWidth>
+      <Dialog 
+        open={open} 
+        onClose={handleClose} 
+        maxWidth="md" 
+        fullWidth
+        disableEnforceFocus
+        disableAutoFocus
+        disableRestoreFocus
+        disablePortal
+        keepMounted={false}
+        container={() => document.body}
+        sx={{
+          '& .MuiBackdrop-root': {
+            pointerEvents: 'none'
+          }
+        }}
+        slotProps={{
+          backdrop: {
+            inert: true
+          }
+        }}
+      >
       <DialogTitle>
         <Box display="flex" justifyContent="space-between" alignItems="center">
-          <Typography variant="h6">새 작업 등록</Typography>
+          <Typography variant="h6">
+            {initialJobData ? '작업 수정' : '새 작업 등록'}
+          </Typography>
           <TextField
             size="small"
             label="작업제목 (자동생성)"
@@ -890,23 +1213,6 @@ const CreateJobDialog: React.FC<CreateJobDialogProps> = ({
         )}
 
         <Grid container spacing={3}>
-          {/* 작업 유형 선택 */}
-          <Grid item xs={12}>
-            <Box display="flex" alignItems="center" gap={2} mb={2}>
-              <Typography variant="h6">작업 유형</Typography>
-              <Box display="flex" alignItems="center" gap={1}>
-                <Checkbox
-                  checked={formData.isInternal}
-                  onChange={(e) => setFormData(prev => ({ ...prev, isInternal: e.target.checked }))}
-                  color="secondary"
-                />
-                <Typography variant="body2">
-                  자사 직접 시공 (체크 시 시공의뢰가 아닌 자사가 직접 시공하는 작업으로 등록됩니다)
-                </Typography>
-              </Box>
-            </Box>
-          </Grid>
-
           {/* 고객정보 섹션 */}
           <Grid item xs={12}>
             <Typography variant="h6" gutterBottom>
@@ -994,6 +1300,59 @@ const CreateJobDialog: React.FC<CreateJobDialogProps> = ({
             )}
           </Grid>
 
+          {/* 준비일시 섹션 */}
+          <Grid item xs={12}>
+            <Typography variant="h6" gutterBottom>
+              준비일시
+            </Typography>
+            <Grid container spacing={2}>
+              <Grid item xs={12} sm={6}>
+                <TextField
+                  fullWidth
+                  label="준비예정일"
+                  type="date"
+                  value={pickupInfo.scheduledDateTime ? pickupInfo.scheduledDateTime.split('T')[0] : ''}
+                  onChange={(e) => {
+                    const date = e.target.value;
+                    const time = pickupInfo.scheduledDateTime ? pickupInfo.scheduledDateTime.split('T')[1] || '09:00' : '09:00';
+                    handlePickupInfoChange('scheduledDateTime', `${date}T${time}`);
+                  }}
+                  InputLabelProps={{
+                    shrink: true,
+                  }}
+                  inputProps={{
+                    min: new Date().toISOString().split('T')[0]
+                  }}
+                />
+              </Grid>
+              <Grid item xs={12} sm={6}>
+                <FormControl fullWidth>
+                  <InputLabel>준비예정시간</InputLabel>
+                  <Select
+                    value={pickupInfo.scheduledDateTime ? pickupInfo.scheduledDateTime.split('T')[1] || '09:00' : '09:00'}
+                    label="준비예정시간"
+                    onChange={(e) => {
+                      const date = pickupInfo.scheduledDateTime ? pickupInfo.scheduledDateTime.split('T')[0] : new Date().toISOString().split('T')[0];
+                      const time = e.target.value;
+                      handlePickupInfoChange('scheduledDateTime', `${date}T${time}`);
+                    }}
+                  >
+                    {timeOptions.map((time) => (
+                      <MenuItem key={time} value={time}>
+                        {time}
+                      </MenuItem>
+                    ))}
+                  </Select>
+                </FormControl>
+              </Grid>
+            </Grid>
+            {pickupInfo.scheduledDateTime && (
+              <Typography variant="body2" color="textSecondary" sx={{ mt: 1 }}>
+                선택된 준비일시: {pickupInfo.scheduledDateTime.split('T')[0]} {pickupInfo.scheduledDateTime.split('T')[1]}
+              </Typography>
+            )}
+          </Grid>
+
           <Grid item xs={12}>
             <Divider sx={{ my: 2 }} />
             <Typography variant="h6" gutterBottom>
@@ -1071,9 +1430,9 @@ const CreateJobDialog: React.FC<CreateJobDialogProps> = ({
                      onClick={handleAddItem}
                      startIcon={<AddIcon />}
                      sx={{
-                       bgcolor: formData.isInternal ? 'grey.800' : 'primary.main',
+                       bgcolor: 'primary.main',
                        '&:hover': {
-                         bgcolor: formData.isInternal ? 'grey.900' : 'primary.dark'
+                         bgcolor: 'primary.dark'
                        }
                      }}
                    >
@@ -1097,7 +1456,7 @@ const CreateJobDialog: React.FC<CreateJobDialogProps> = ({
                              alignItems: 'center',
                              p: 1,
                              border: selectedOptions.includes(option.id) 
-                               ? `2px solid ${formData.isInternal ? '#424242' : '#1976d2'}` 
+                               ? '2px solid #1976d2' 
                                : '1px solid #e0e0e0',
                              borderRadius: 1,
                              backgroundColor: selectedOptions.includes(option.id) 
@@ -1133,7 +1492,7 @@ const CreateJobDialog: React.FC<CreateJobDialogProps> = ({
                      <Box sx={{ mt: 1 }}>
                        <Typography 
                          variant="body2" 
-                         color={formData.isInternal ? 'grey.800' : 'primary.main'}
+                         color="primary.main"
                        >
                          선택된 옵션: {selectedOptions.map(id => {
                            const option = pricingOptions.find(opt => opt.id === id);
@@ -1182,7 +1541,7 @@ const CreateJobDialog: React.FC<CreateJobDialogProps> = ({
                          <Box sx={{ mt: 1 }}>
                            <Typography 
                              variant="caption" 
-                             color={formData.isInternal ? 'grey.800' : 'primary.main'}
+                             color="primary.main"
                            >
                              옵션: {item.options.map(optionId => {
                                const option = pricingOptions.find(opt => opt.id === optionId);
@@ -1215,7 +1574,7 @@ const CreateJobDialog: React.FC<CreateJobDialogProps> = ({
                     <Box sx={{ textAlign: 'right', mr: 2 }}>
                       <Typography 
                         variant="h6" 
-                        color={formData.isInternal ? 'grey.800' : 'primary.main'} 
+                        color="primary.main" 
                         fontWeight="bold"
                       >
                         {item.totalPrice.toLocaleString()}원
@@ -1236,7 +1595,7 @@ const CreateJobDialog: React.FC<CreateJobDialogProps> = ({
                 <Box sx={{ 
                   mt: 2, 
                   p: 2, 
-                  bgcolor: formData.isInternal ? 'grey.800' : 'primary.main', 
+                  bgcolor: 'primary.main', 
                   borderRadius: 1 
                 }}>
                   <Typography 
@@ -1246,18 +1605,6 @@ const CreateJobDialog: React.FC<CreateJobDialogProps> = ({
                   >
                     <CalculateIcon />
                     총 예산: {calculateTotalBudget().toLocaleString()}원
-                    {formData.isInternal && (
-                      <Chip 
-                        label="자사시공" 
-                        size="small" 
-                        sx={{ 
-                          ml: 1, 
-                          bgcolor: 'grey.600', 
-                          color: 'white',
-                          fontSize: '0.75rem'
-                        }} 
-                      />
-                    )}
                   </Typography>
                 </Box>
               </Box>
@@ -1280,34 +1627,74 @@ const CreateJobDialog: React.FC<CreateJobDialogProps> = ({
               
               {/* 작업 설명 예시 */}
               <Box sx={{ mt: 2 }}>
-                <Typography variant="subtitle2" color="textSecondary" gutterBottom>
-                  자주 사용하는 설명 예시 (클릭하여 추가):
-                </Typography>
+                <Box sx={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', mb: 1 }}>
+                  <Typography variant="subtitle2" color="textSecondary">
+                    자주 사용하는 설명 예시 (클릭하여 추가):
+                  </Typography>
+                  <Button
+                    size="small"
+                    variant="outlined"
+                    onClick={handleAddExample}
+                    sx={{ minWidth: 'auto', px: 1 }}
+                  >
+                    예시 추가
+                  </Button>
+                </Box>
                 <Box sx={{ display: 'flex', flexWrap: 'wrap', gap: 1 }}>
-                  {[
-                    { title: '꼼꼼시공', content: '고객분이 세심하게 시공해주시길 원하세요' },
-                    { title: '바닥주의', content: '바닥에 흠집이 없게 주의해주세요' },
-                    { title: '소파이동', content: '고객님께 소파이동에 대해 상의후 작업해주세요' },
-                    { title: '침대보양', content: '침대를 밟는것에 대해 고객분과 상의후 비닐로 덮고 진행해주세요' },
-                    { title: '아기주의', content: '이 댁에 아기가 있어요 소음에 신경써주세요' },
-                    { title: '친절부탁', content: '최대한 고객님께 친절하게 시공 부탁드려요' }
-                  ].map((example, index) => (
-                    <Chip
-                      key={index}
-                      label={example.title}
-                      variant="outlined"
-                      size="small"
-                      onClick={() => handleAddDescriptionExample(example.content)}
-                      sx={{
-                        cursor: 'pointer',
-                        borderColor: formData.isInternal ? 'grey.600' : 'primary.main',
-                        color: formData.isInternal ? 'grey.700' : 'primary.main',
-                        '&:hover': {
-                          backgroundColor: formData.isInternal ? 'grey.600' : 'primary.light',
-                          color: 'white'
-                        }
-                      }}
-                    />
+                  {descriptionExamples.map((example) => (
+                    <Box key={example.id} sx={{ position: 'relative' }}>
+                      <Chip
+                        label={example.title}
+                        variant="outlined"
+                        size="small"
+                        onClick={() => handleAddDescriptionExample(example.content)}
+                        sx={{
+                          cursor: 'pointer',
+                          borderColor: 'primary.main',
+                          color: 'primary.main',
+                          '&:hover': {
+                            backgroundColor: 'primary.light',
+                            color: 'white'
+                          }
+                        }}
+                      />
+                      <IconButton
+                        size="small"
+                        onClick={() => handleEditExample(example)}
+                        sx={{
+                          position: 'absolute',
+                          top: -8,
+                          right: -8,
+                          width: 16,
+                          height: 16,
+                          backgroundColor: 'primary.main',
+                          color: 'white',
+                          '&:hover': {
+                            backgroundColor: 'primary.dark'
+                          }
+                        }}
+                      >
+                        <EditIcon sx={{ fontSize: 10 }} />
+                      </IconButton>
+                      <IconButton
+                        size="small"
+                        onClick={() => handleDeleteExample(example.id)}
+                        sx={{
+                          position: 'absolute',
+                          top: -8,
+                          right: 8,
+                          width: 16,
+                          height: 16,
+                          backgroundColor: 'error.main',
+                          color: 'white',
+                          '&:hover': {
+                            backgroundColor: 'error.dark'
+                          }
+                        }}
+                      >
+                        <DeleteIcon sx={{ fontSize: 10 }} />
+                      </IconButton>
+                    </Box>
                   ))}
                 </Box>
               </Box>
@@ -1338,11 +1725,11 @@ const CreateJobDialog: React.FC<CreateJobDialogProps> = ({
                     component="span"
                     startIcon={<CloudUpload />}
                     sx={{
-                      borderColor: formData.isInternal ? 'grey.600' : 'primary.main',
-                      color: formData.isInternal ? 'grey.700' : 'primary.main',
+                      borderColor: 'primary.main',
+                      color: 'primary.main',
                       '&:hover': {
-                        borderColor: formData.isInternal ? 'grey.800' : 'primary.dark',
-                        backgroundColor: formData.isInternal ? 'grey.100' : 'primary.50'
+                        borderColor: 'primary.dark',
+                        backgroundColor: 'primary.50'
                       }
                     }}
                   >
@@ -1485,51 +1872,7 @@ const CreateJobDialog: React.FC<CreateJobDialogProps> = ({
                       label="픽업 주소"
                     />
                   </Grid>
-                  <Grid item xs={12} sm={6}>
-                    <TextField
-                      fullWidth
-                      label="준비예정일"
-                      type="date"
-                      value={pickupInfo.scheduledDateTime ? pickupInfo.scheduledDateTime.split('T')[0] : ''}
-                      onChange={(e) => {
-                        const date = e.target.value;
-                        const time = pickupInfo.scheduledDateTime ? pickupInfo.scheduledDateTime.split('T')[1] || '09:00' : '09:00';
-                        handlePickupInfoChange('scheduledDateTime', `${date}T${time}`);
-                      }}
-                      InputLabelProps={{
-                        shrink: true,
-                      }}
-                      inputProps={{
-                        min: new Date().toISOString().split('T')[0]
-                      }}
-                    />
-                  </Grid>
-                  <Grid item xs={12} sm={6}>
-                    <FormControl fullWidth>
-                      <InputLabel>준비예정시간</InputLabel>
-                      <Select
-                        value={pickupInfo.scheduledDateTime ? pickupInfo.scheduledDateTime.split('T')[1] || '09:00' : '09:00'}
-                        label="준비예정시간"
-                        onChange={(e) => {
-                          const date = pickupInfo.scheduledDateTime ? pickupInfo.scheduledDateTime.split('T')[0] : new Date().toISOString().split('T')[0];
-                          const time = e.target.value;
-                          handlePickupInfoChange('scheduledDateTime', `${date}T${time}`);
-                        }}
-                      >
-                        {timeOptions.map((time) => (
-                          <MenuItem key={time} value={time}>
-                            {time}
-                          </MenuItem>
-                        ))}
-                      </Select>
-                    </FormControl>
-                  </Grid>
                 </Grid>
-                {pickupInfo.scheduledDateTime && (
-                  <Typography variant="body2" color="textSecondary" sx={{ mt: 1 }}>
-                    픽업 준비예정일시: {pickupInfo.scheduledDateTime.split('T')[0]} {pickupInfo.scheduledDateTime.split('T')[1]}
-                  </Typography>
-                )}
               </Box>
             </Box>
           </Grid>
@@ -1542,19 +1885,40 @@ const CreateJobDialog: React.FC<CreateJobDialogProps> = ({
           variant="contained"
           disabled={loading}
           sx={{
-            bgcolor: formData.isInternal ? 'grey.800' : 'primary.main',
+            bgcolor: 'primary.main',
             '&:hover': {
-              bgcolor: formData.isInternal ? 'grey.900' : 'primary.dark'
+              bgcolor: 'primary.dark'
             }
           }}
         >
-          {loading ? '등록 중...' : '작업 등록'}
+          {loading ? (initialJobData ? '수정 중...' : '등록 중...') : (initialJobData ? '작업 수정' : '작업 등록')}
         </Button>
       </DialogActions>
     </Dialog>
 
     {/* 포인트 충전 다이얼로그 */}
-    <Dialog open={chargeDialogOpen} onClose={handleChargeDialogClose} maxWidth="sm" fullWidth>
+    <Dialog 
+      open={chargeDialogOpen} 
+      onClose={handleChargeDialogClose} 
+      maxWidth="sm" 
+      fullWidth
+      disableEnforceFocus
+      disableAutoFocus
+      disableRestoreFocus
+      disablePortal
+      keepMounted={false}
+      container={() => document.body}
+      sx={{
+        '& .MuiBackdrop-root': {
+          pointerEvents: 'none'
+        }
+      }}
+      slotProps={{
+        backdrop: {
+          inert: true
+        }
+      }}
+    >
       <DialogTitle>
         <Box display="flex" alignItems="center" gap={1}>
           <Payment color="primary" />
@@ -1661,6 +2025,65 @@ const CreateJobDialog: React.FC<CreateJobDialogProps> = ({
           startIcon={charging ? <CircularProgress size={16} /> : <CheckCircle />}
         >
           {charging ? '충전 중...' : '충전하기'}
+        </Button>
+      </DialogActions>
+    </Dialog>
+
+    {/* 설명예시 편집 다이얼로그 */}
+    <Dialog 
+      open={exampleDialogOpen} 
+      onClose={handleCancelExample} 
+      maxWidth="sm" 
+      fullWidth
+      disableEnforceFocus
+      disableAutoFocus
+      disableRestoreFocus
+      disablePortal
+      keepMounted={false}
+      container={() => document.body}
+      sx={{
+        '& .MuiBackdrop-root': {
+          pointerEvents: 'none'
+        }
+      }}
+      slotProps={{
+        backdrop: {
+          inert: true
+        }
+      }}
+    >
+      <DialogTitle>
+        {editingExample ? '설명예시 수정' : '설명예시 추가'}
+      </DialogTitle>
+      <DialogContent>
+        <TextField
+          fullWidth
+          label="제목"
+          value={newExample.title}
+          onChange={(e) => setNewExample(prev => ({ ...prev, title: e.target.value }))}
+          placeholder="예시 제목을 입력하세요"
+          sx={{ mb: 2, mt: 1 }}
+        />
+        <TextField
+          fullWidth
+          label="내용"
+          multiline
+          rows={3}
+          value={newExample.content}
+          onChange={(e) => setNewExample(prev => ({ ...prev, content: e.target.value }))}
+          placeholder="설명 내용을 입력하세요"
+        />
+      </DialogContent>
+      <DialogActions>
+        <Button onClick={handleCancelExample}>
+          취소
+        </Button>
+        <Button
+          onClick={handleSaveExample}
+          variant="contained"
+          disabled={!newExample.title.trim() || !newExample.content.trim()}
+        >
+          {editingExample ? '수정' : '추가'}
         </Button>
       </DialogActions>
     </Dialog>

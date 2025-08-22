@@ -37,6 +37,14 @@ const Dashboard: React.FC = () => {
   const { user } = useAuth();
   const contractor = user?.contractor;
   const navigate = useNavigate();
+
+  // 총 예산 계산 함수
+  const calculateTotalBudget = (job: ConstructionJob): number => {
+    if (job.items && job.items.length > 0) {
+      return job.items.reduce((sum, item) => sum + item.totalPrice, 0);
+    }
+    return 0;
+  };
   
   // 상태 관리
   const [scheduledJobs, setScheduledJobs] = useState<ConstructionJob[]>([]);
@@ -462,13 +470,16 @@ const Dashboard: React.FC = () => {
                               </Typography>
                             </Box>
                           )}
-                          {job.budget && (
-                            <Box display="flex" alignItems="center" gap={1}>
-                              <Typography variant="body2" color="textSecondary">
-                                {job.budget.min?.toLocaleString()}원 ~ {job.budget.max?.toLocaleString()}원
-                              </Typography>
-                            </Box>
-                          )}
+                          <Box display="flex" alignItems="center" gap={1}>
+                            <Typography variant="body2" color="textSecondary">
+                              {job.finalAmount 
+                                ? `${job.finalAmount.toLocaleString()}원` 
+                                : calculateTotalBudget(job) > 0 
+                                  ? `${calculateTotalBudget(job).toLocaleString()}원`
+                                  : '예산 미정'
+                              }
+                            </Typography>
+                          </Box>
                         </Box>
                       </Box>
                     </ListItem>

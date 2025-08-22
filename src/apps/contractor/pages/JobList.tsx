@@ -37,6 +37,70 @@ const JobList: React.FC = () => {
   const navigate = useNavigate();
   const { user } = useAuth();
 
+  // 총 예산 계산 함수
+  const calculateTotalBudget = (job: ConstructionJob): number => {
+    if (job.items && job.items.length > 0) {
+      return job.items.reduce((sum, item) => sum + item.totalPrice, 0);
+    }
+    return 0;
+  };
+
+  // 품목 정보 포맷팅 함수
+  const formatItemsDescription = (job: ConstructionJob): string => {
+    if (job.items && job.items.length > 0) {
+      // 기본출장비 제외하고 품목만 표시
+      const nonTravelItems = job.items.filter(item => item.name !== '기본출장비');
+      if (nonTravelItems.length > 0) {
+        return nonTravelItems.map(item => `${item.name} ${item.quantity}${item.name.includes('커튼') ? '조' : item.name.includes('블라인드') ? '창' : '개'}`).join(', ');
+      }
+    }
+    return '';
+  };
+
+  // 설명에서 아파트명 제거하는 함수
+  const formatDescription = (description: string): string => {
+    // 아파트명 패턴 제거 (예: "소래포구 아파트", "역삼동 456" 등)
+    return description
+      .replace(/\b\d+동\s*\d+호\b/g, '') // 동호수 제거
+      .replace(/\b[가-힣]+동\s*\d+호\b/g, '') // 한글동+호수 제거
+      .replace(/\b[가-힣]+아파트\b/g, '') // 아파트명 제거
+      .replace(/\b[가-힣]+동\s*\d+\b/g, '') // 한글동+숫자 제거
+      .replace(/\s+/g, ' ') // 연속된 공백을 하나로
+      .trim();
+  };
+
+  // 주소 정규화 함수
+  const normalizeAddress = (address: string): { region: string; district: string } => {
+    // 주소에서 지역과 구/군 추출
+    const addressParts = address.split(' ');
+    
+    if (addressParts.length >= 2) {
+      let region = addressParts[0];
+      let district = addressParts[1];
+      
+      // 주소 정규화
+      if (region === '서울시' || region === '서울') {
+        region = '서울특별시';
+      } else if (region === '부산시' || region === '부산') {
+        region = '부산광역시';
+      } else if (region === '대구시' || region === '대구') {
+        region = '대구광역시';
+      } else if (region === '인천시' || region === '인천') {
+        region = '인천광역시';
+      } else if (region === '광주시' || region === '광주') {
+        region = '광주광역시';
+      } else if (region === '대전시' || region === '대전') {
+        region = '대전광역시';
+      } else if (region === '울산시' || region === '울산') {
+        region = '울산광역시';
+      }
+      
+      return { region, district };
+    }
+    
+    return { region: '', district: '' };
+  };
+
   // 주소를 구/동까지만 표시하는 함수
   const formatAddressForCard = (address: string): string => {
     const parts = address.split(' ');
@@ -377,16 +441,49 @@ const JobList: React.FC = () => {
       return pendingJobs;
     }
     
+    console.log('🔍 지역 필터:', regionFilter);
+    console.log('🔍 대기중인 작업들:', pendingJobs.map(job => ({ title: job.title, address: job.address })));
+    
     // 지역 필터 적용
-    return pendingJobs.filter(job => {
-      const addressParts = job.address.split(' ');
-      if (addressParts.length >= 2) {
-        const region = addressParts[0];
-        const district = addressParts[1];
-        return regionFilter.includes(`${region} ${district}`);
+    const filteredJobs = pendingJobs.filter(job => {
+      const { region, district } = normalizeAddress(job.address);
+      
+      if (region && district) {
+        const regionDistrict = `${region} ${district}`;
+        
+        console.log(`🔍 작업 "${job.title}": ${region} ${district} (원본: ${job.address})`);
+        
+        // 정확한 지역-구 매칭 확인
+        if (regionFilter.includes(regionDistrict)) {
+          console.log(`✅ 정확한 매칭: ${regionDistrict}`);
+          return true;
+        }
+        
+        // "전체" 선택 확인 (예: "서울특별시 전체")
+        const fullRegionFilter = regionFilter.find(filter => filter.includes('전체'));
+        if (fullRegionFilter) {
+          const fullRegion = fullRegionFilter.replace(' 전체', '');
+          console.log(`🔍 전체 지역 확인: ${fullRegion}`);
+          if (region === fullRegion) {
+            // 해당 지역의 모든 구/군 목록 가져오기
+            const allDistricts = regionData[fullRegion] || [];
+            console.log(`🔍 해당 지역의 모든 구/군:`, allDistricts);
+            // 현재 작업의 구가 해당 지역에 포함되는지 확인
+            if (allDistricts.includes(district)) {
+              console.log(`✅ 전체 지역 매칭: ${region} ${district}`);
+              return true;
+            }
+          }
+        }
+        
+        console.log(`❌ 매칭 실패: ${regionDistrict}`);
+        return false;
       }
       return false;
     });
+    
+    console.log('🔍 필터링 결과:', filteredJobs.length, '개 작업');
+    return filteredJobs;
   };
 
   // 지역 토글
@@ -423,17 +520,16 @@ const JobList: React.FC = () => {
                 
                 return (
                   <Box>
-                    <Box display="flex" justifyContent="space-between" alignItems="center" mb={3}>
-        <Typography variant="h4">
-          시공건 찾기
+                    <Box display="flex" justifyContent="space-between" alignItems="center" mb={2}>
+                      <Typography variant="h4" sx={{ fontSize: { xs: '1.5rem', sm: '2rem' } }}>
+                        시공건 찾기
                       </Typography>
-
-      </Box>
-      
-             {/* 지역 필터 */}
-       <Card sx={{ mb: 3 }}>
-         <CardContent sx={{ p: { xs: 1.5, sm: 2 } }}>
-             <Box display="flex" justifyContent="space-between" alignItems="center" mb={1.5}>
+                    </Box>
+                    
+                    {/* 지역 필터 */}
+                    <Card sx={{ mb: 2 }}>
+         <CardContent sx={{ p: { xs: 1, sm: 1.5 } }}>
+                            <Box display="flex" justifyContent="space-between" alignItems="center" mb={1}>
                <Box 
                  display="flex" 
                  alignItems="center" 
@@ -688,7 +784,7 @@ const JobList: React.FC = () => {
        </Card>
 
       {/* 작업 목록 */}
-      <Grid container spacing={{ xs: 2, sm: 3 }}>
+      <Grid container spacing={{ xs: 1, sm: 2, md: 2 }}>
         {filteredJobs.length === 0 ? (
           <Grid item xs={12}>
             <Card>
@@ -701,75 +797,134 @@ const JobList: React.FC = () => {
           </Grid>
         ) : (
           filteredJobs.map((job) => (
-            <Grid item xs={12} key={job.id}>
-              <Card>
-                <CardContent sx={{ p: { xs: 1.5, sm: 2 } }}>
-                  <Box display="flex" justifyContent="space-between" alignItems="flex-start" mb={{ xs: 1, sm: 2 }}>
-                    <Typography variant="h6" sx={{ fontSize: { xs: '1rem', sm: '1.25rem' } }}>
+            <Grid item xs={12} sm={6} md={4} lg={3} key={job.id}>
+              <Card sx={{ 
+                height: '100%',
+                display: 'flex',
+                flexDirection: 'column',
+                transition: 'all 0.2s ease-in-out',
+                '&:hover': {
+                  transform: 'translateY(-2px)',
+                  boxShadow: '0 4px 12px rgba(0,0,0,0.15)'
+                }
+              }}>
+                <CardContent sx={{ 
+                  p: { xs: 1, sm: 1.5 },
+                  flexGrow: 1,
+                  display: 'flex',
+                  flexDirection: 'column'
+                }}>
+                  {/* 헤더 영역 */}
+                  <Box display="flex" justifyContent="space-between" alignItems="flex-start" mb={1}>
+                    <Typography 
+                      variant="subtitle1" 
+                      sx={{ 
+                        fontSize: { xs: '0.9rem', sm: '1rem' },
+                        fontWeight: 'bold',
+                        lineHeight: 1.2,
+                        flex: 1,
+                        mr: 1
+                      }}
+                      noWrap
+                    >
                       {job.title}
                     </Typography>
-                        <Chip 
+                    <Chip 
                       label={getStatusText(job.status)} 
                       color={getStatusColor(job.status)} 
-                          size="small" 
-                        />
+                      size="small"
+                      sx={{ fontSize: '0.7rem', height: '20px' }}
+                    />
                   </Box>
                   
-                  <Typography variant="body2" color="textSecondary" mb={{ xs: 0.5, sm: 1 }} sx={{ 
-                    fontSize: { xs: '0.875rem', sm: '1rem' },
-                    lineHeight: { xs: 1.3, sm: 1.5 }
-                  }}>
-                    {job.description}
-                  </Typography>
-                  
-                  <Box display="flex" alignItems="center" gap={1} mb={{ xs: 0.5, sm: 1 }}>
-                    <LocationOn fontSize="small" color="action" />
-                    <Typography variant="body2" color="textSecondary" sx={{ 
-                      fontSize: { xs: '0.875rem', sm: '1rem' } 
-                    }}>
-                      {formatAddressForCard(job.address)}
+                  {/* 품목 정보 */}
+                  {formatItemsDescription(job) && (
+                    <Typography 
+                      variant="body2" 
+                      color="textSecondary" 
+                      mb={1} 
+                      sx={{ 
+                        fontSize: '0.8rem',
+                        lineHeight: 1.3,
+                        wordBreak: 'break-all'
+                      }}
+                    >
+                      {formatItemsDescription(job)}
                     </Typography>
-                  </Box>
-
-                  {job.scheduledDate && (
-                    <Box display="flex" alignItems="center" gap={1} mb={{ xs: 0.5, sm: 1 }}>
-                      <Schedule fontSize="small" color="action" />
-                      <Typography variant="body2" color="textSecondary" sx={{ 
-                        fontSize: { xs: '0.875rem', sm: '1rem' } 
-                      }}>
-                        {formatDate(job.scheduledDate)} {formatTime(job.scheduledDate)}
+                  )}
+                  
+                  {/* 설명 (아파트명 제거) */}
+                  {formatDescription(job.description) && (
+                    <Typography 
+                      variant="body2" 
+                      color="textSecondary" 
+                      mb={1} 
+                      sx={{ 
+                        fontSize: '0.75rem',
+                        lineHeight: 1.3,
+                        fontStyle: 'italic'
+                      }}
+                    >
+                      {formatDescription(job.description)}
+                    </Typography>
+                  )}
+                  
+                  {/* 예산 정보 */}
+                  <Box sx={{ flexGrow: 1, mb: 1.5 }}>
+                    <Box display="flex" alignItems="center" gap={0.5}>
+                      <Typography 
+                        variant="caption" 
+                        color="primary"
+                        sx={{ 
+                          fontSize: '0.9rem',
+                          fontWeight: 'bold'
+                        }}
+                      >
+                        예산: {job.finalAmount 
+                          ? `${job.finalAmount.toLocaleString()}원` 
+                          : calculateTotalBudget(job) > 0 
+                            ? `${calculateTotalBudget(job).toLocaleString()}원`
+                            : '예산 미정'
+                        }
                       </Typography>
                     </Box>
-                  )}
+                  </Box>
                   
-                  <Typography variant="body2" color="textSecondary" mb={{ xs: 1, sm: 2 }} sx={{ 
-                    fontSize: { xs: '0.875rem', sm: '1rem' } 
-                  }}>
-                    예산: {job.budget?.min?.toLocaleString()}~{job.budget?.max?.toLocaleString()}원
-                  </Typography>
-                  
-                      {job.status === 'pending' && (
-                        <Button 
-                          variant="contained" 
-                      color="primary"
-                          onClick={() => handleAcceptJob(job.id)}
-                      sx={{ mr: 1, fontSize: { xs: '0.875rem', sm: '1rem' } }}
-                        >
-                      작업 수락
-                        </Button>
-                      )}
-                  
-                  {job.status === 'assigned' && job.contractorId === user?.id && (
-                          <Button 
-                            variant="outlined" 
-                      color="error"
-                      startIcon={<Cancel />}
-                      onClick={() => handleCancelJobClick(job)}
-                      sx={{ fontSize: { xs: '0.875rem', sm: '1rem' } }}
-                          >
-                      작업 취소
-                          </Button>
-                  )}
+                  {/* 버튼 영역 */}
+                  <Box sx={{ mt: 'auto' }}>
+                    {job.status === 'pending' && (
+                      <Button 
+                        variant="contained" 
+                        color="primary"
+                        size="small"
+                        fullWidth
+                        onClick={() => handleAcceptJob(job.id)}
+                        sx={{ 
+                          fontSize: '0.8rem',
+                          py: 0.5
+                        }}
+                      >
+                        작업 수락
+                      </Button>
+                    )}
+                    
+                    {job.status === 'assigned' && job.contractorId === user?.id && (
+                      <Button 
+                        variant="outlined" 
+                        color="error"
+                        size="small"
+                        fullWidth
+                        startIcon={<Cancel sx={{ fontSize: '0.9rem' }} />}
+                        onClick={() => handleCancelJobClick(job)}
+                        sx={{ 
+                          fontSize: '0.8rem',
+                          py: 0.5
+                        }}
+                      >
+                        작업 취소
+                      </Button>
+                    )}
+                  </Box>
                 </CardContent>
               </Card>
             </Grid>
