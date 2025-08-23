@@ -167,7 +167,38 @@ const ContractorLayout: React.FC<ContractorLayoutProps> = ({ children }) => {
             <MenuIcon />
           </IconButton>
           <Typography variant="h6" noWrap component="div" sx={{ flexGrow: 1 }}>
-            {contractor?.businessName ? `${contractor.businessName} 대시보드` : '시공자 대시보드'}
+            {(() => {
+              // 현재 경로에 따라 제목 결정
+              if (location.pathname === '/contractor' || location.pathname === '/contractor/') {
+                return contractor?.businessName ? `${contractor.businessName} 대시보드` : '시공자 대시보드';
+              }
+              if (location.pathname === '/contractor/jobs') {
+                return '시공건 찾기';
+              }
+              if (location.pathname.startsWith('/contractor/jobs/') && location.pathname !== '/contractor/jobs') {
+                return '시공건 상세';
+              }
+              if (location.pathname === '/contractor/my-jobs') {
+                return '내 작업';
+              }
+              if (location.pathname === '/contractor/chat') {
+                return '고객과 채팅';
+              }
+              if (location.pathname === '/contractor/seller-chat') {
+                return '판매자와 채팅';
+              }
+              if (location.pathname.startsWith('/contractor/chat/')) {
+                return '고객과 채팅';
+              }
+              if (location.pathname === '/contractor/points') {
+                return '포인트 관리';
+              }
+              if (location.pathname === '/contractor/profile') {
+                return '프로필';
+              }
+              // 기본값
+              return contractor?.businessName ? `${contractor.businessName} 대시보드` : '시공자 대시보드';
+            })()}
           </Typography>
           
           <Box sx={{ display: 'flex', alignItems: 'center', gap: 2 }}>

@@ -10,6 +10,7 @@ import JobDetail from './pages/JobDetail';
 import Chat from './pages/Chat';
 import SellerChat from './pages/SellerChat';
 import PointManagement from './pages/PointManagement';
+import Notifications from './pages/Notifications';
 import Profile from './pages/Profile';
 
 const ContractorApp: React.FC = () => {
@@ -61,6 +62,9 @@ const ContractorApp: React.FC = () => {
     }
     if (location.pathname === '/contractor/points') {
       return canAccessFeature('/points') ? <PointManagement /> : <Profile />;
+    }
+    if (location.pathname === '/contractor/notifications') {
+      return canAccessFeature('/notifications') ? <Notifications /> : <Profile />;
     }
     
     // 기본값 - 대시보드 또는 프로필

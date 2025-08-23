@@ -24,6 +24,10 @@ export class SystemSettingsService {
       productNotReadyRate: 30, // 기본 30%
       customerAbsentRate: 100, // 기본 100%
       scheduleChangeFeeRate: 0 // 기본 0%
+    },
+    feeSettings: {
+      sellerCommissionRate: 3, // 기본 3%
+      contractorCommissionRate: 2 // 기본 2%
     }
   };
 
@@ -48,6 +52,11 @@ export class SystemSettingsService {
             customerAbsentRate: data.compensationPolicy?.customerAbsentRate || this.DEFAULT_SETTINGS.compensationPolicy.customerAbsentRate,
             scheduleChangeFeeRate: data.compensationPolicy?.scheduleChangeFeeRate || this.DEFAULT_SETTINGS.compensationPolicy.scheduleChangeFeeRate
           },
+          feeSettings: {
+            sellerCommissionRate: data.feeSettings?.sellerCommissionRate || this.DEFAULT_SETTINGS.feeSettings.sellerCommissionRate,
+            contractorCommissionRate: data.feeSettings?.contractorCommissionRate || this.DEFAULT_SETTINGS.feeSettings.contractorCommissionRate
+          },
+          tossAccount: data.tossAccount || null,
           createdAt: data.createdAt?.toDate() || new Date(),
           updatedAt: data.updatedAt?.toDate() || new Date(),
           updatedBy: data.updatedBy || 'system'
@@ -219,6 +228,199 @@ export class SystemSettingsService {
     } catch (error) {
       console.error('보상 정책 조회 실패:', error);
       return this.DEFAULT_SETTINGS.compensationPolicy;
+    }
+  }
+
+  // 토스페이먼츠 계좌 설정 업데이트
+  static async updateTossAccount(
+    bankName: string,
+    accountNumber: string,
+    accountHolder: string,
+    isActive: boolean,
+    adminId: string
+  ): Promise<void> {
+    try {
+      if (!bankName || !accountNumber || !accountHolder) {
+        throw new Error('은행명, 계좌번호, 예금주명을 모두 입력해주세요.');
+      }
+
+      const settingsRef = doc(db, 'systemSettings', this.SETTINGS_ID);
+      await updateDoc(settingsRef, {
+        tossAccount: {
+          bankName,
+          accountNumber,
+          accountHolder,
+          isActive
+        },
+        updatedAt: serverTimestamp(),
+        updatedBy: adminId
+      });
+
+      console.log(`✅ 토스페이먼츠 계좌 설정이 업데이트되었습니다. (${bankName} ${accountNumber})`);
+    } catch (error) {
+      console.error('토스페이먼츠 계좌 설정 업데이트 실패:', error);
+      throw new Error('토스페이먼츠 계좌 설정을 업데이트할 수 없습니다.');
+    }
+  }
+
+  // 토스페이먼츠 계좌 설정 조회
+  static async getTossAccount(): Promise<{ bankName: string; accountNumber: string; accountHolder: string; isActive: boolean } | null> {
+    try {
+      const settings = await this.getSystemSettings();
+      return settings.tossAccount || null;
+    } catch (error) {
+      console.error('토스페이먼츠 계좌 설정 조회 실패:', error);
+      return null;
+    }
+  }
+
+  // 수수료 설정 업데이트
+  static async updateFeeSettings(
+    sellerCommissionRate: number,
+    contractorCommissionRate: number,
+    adminId: string
+  ): Promise<void> {
+    try {
+      if (sellerCommissionRate < 0 || sellerCommissionRate > 100) {
+        throw new Error('판매자 수수료율은 0%에서 100% 사이여야 합니다.');
+      }
+      if (contractorCommissionRate < 0 || contractorCommissionRate > 100) {
+        throw new Error('시공자 수수료율은 0%에서 100% 사이여야 합니다.');
+      }
+
+      const settingsRef = doc(db, 'systemSettings', this.SETTINGS_ID);
+      await updateDoc(settingsRef, {
+        'feeSettings.sellerCommissionRate': sellerCommissionRate,
+        'feeSettings.contractorCommissionRate': contractorCommissionRate,
+        updatedAt: serverTimestamp(),
+        updatedBy: adminId
+      });
+
+      console.log(`✅ 수수료 설정이 업데이트되었습니다. (판매자 수수료: ${sellerCommissionRate}%, 시공자 수수료: ${contractorCommissionRate}%)`);
+    } catch (error) {
+      console.error('수수료 설정 업데이트 실패:', error);
+      throw new Error('수수료 설정을 업데이트할 수 없습니다.');
+    }
+  }
+
+  // 수수료 설정 조회 (간편 메서드)
+  static async getFeeSettings(): Promise<{ sellerCommissionRate: number; contractorCommissionRate: number }> {
+    try {
+      const settings = await this.getSystemSettings();
+      return settings.feeSettings;
+    } catch (error) {
+      console.error('수수료 설정 조회 실패:', error);
+      return this.DEFAULT_SETTINGS.feeSettings;
+    }
+  }
+
+  // 토스페이먼츠 계좌 설정 테스트 (개발용)
+  static async testTossAccountSettings(): Promise<void> {
+    try {
+      console.log('🧪 토스페이먼츠 계좌 설정 테스트 시작...');
+      
+      // 1. 전체 시스템 설정 조회
+      console.log('📋 1단계: 전체 시스템 설정 조회 중...');
+      const systemSettings = await this.getSystemSettings();
+      console.log('📋 전체 시스템 설정:', systemSettings);
+      console.log('📋 tossAccount 필드:', systemSettings.tossAccount);
+      
+      // 2. 현재 토스페이먼츠 계좌 설정만 조회
+      console.log('📋 2단계: 토스페이먼츠 계좌 설정만 조회 중...');
+      const currentSettings = await this.getTossAccount();
+      console.log('📋 현재 토스페이먼츠 계좌 설정:', currentSettings);
+      
+      // 3. 테스트 데이터로 설정 업데이트
+      const testData = {
+        bankName: '테스트은행',
+        accountNumber: '123-456-789012',
+        accountHolder: '테스트예금주',
+        isActive: true
+      };
+      
+      console.log('💾 3단계: 테스트 데이터로 설정 업데이트 중...');
+      console.log('💾 테스트 데이터:', testData);
+      
+      await this.updateTossAccount(
+        testData.bankName,
+        testData.accountNumber,
+        testData.accountHolder,
+        testData.isActive,
+        'test_admin'
+      );
+      
+      console.log('✅ 3단계 완료: 설정 업데이트 성공');
+      
+      // 4. 업데이트된 설정 조회
+      console.log('📋 4단계: 업데이트된 설정 조회 중...');
+      const updatedSettings = await this.getTossAccount();
+      console.log('✅ 업데이트된 토스페이먼츠 계좌 설정:', updatedSettings);
+      
+      // 5. 전체 시스템 설정 다시 조회
+      console.log('📋 5단계: 전체 시스템 설정 다시 조회 중...');
+      const updatedSystemSettings = await this.getSystemSettings();
+      console.log('📋 업데이트된 전체 시스템 설정:', updatedSystemSettings);
+      console.log('📋 업데이트된 tossAccount 필드:', updatedSystemSettings.tossAccount);
+      
+      // 6. 설정 비교 (키 순서 무관하게 비교)
+      console.log('🔍 6단계: 설정 비교 중...');
+      console.log('🔍 원본 테스트 데이터:', testData);
+      console.log('🔍 업데이트된 설정:', updatedSettings);
+      
+      // 키 순서를 무관하게 비교
+      const isMatch = testData.bankName === updatedSettings?.bankName &&
+                     testData.accountNumber === updatedSettings?.accountNumber &&
+                     testData.accountHolder === updatedSettings?.accountHolder &&
+                     testData.isActive === updatedSettings?.isActive;
+      console.log('🔍 설정 일치 여부:', isMatch ? '✅ 성공' : '❌ 실패');
+      
+      if (isMatch) {
+        console.log('🎉 토스페이먼츠 계좌 설정 테스트 성공!');
+      } else {
+        console.error('❌ 토스페이먼츠 계좌 설정 테스트 실패!');
+        console.error('❌ 원인: 저장된 데이터와 테스트 데이터가 일치하지 않습니다.');
+        console.error('❌ 차이점:', {
+          testData,
+          updatedSettings,
+          bankNameMatch: testData.bankName === updatedSettings?.bankName,
+          accountNumberMatch: testData.accountNumber === updatedSettings?.accountNumber,
+          accountHolderMatch: testData.accountHolder === updatedSettings?.accountHolder,
+          isActiveMatch: testData.isActive === updatedSettings?.isActive
+        });
+      }
+      
+    } catch (error) {
+      console.error('❌ 토스페이먼츠 계좌 설정 테스트 중 오류 발생:', error);
+      console.error('❌ 오류 상세 정보:', {
+        name: error instanceof Error ? error.name : 'Unknown',
+        message: error instanceof Error ? error.message : 'Unknown error',
+        stack: error instanceof Error ? error.stack : 'No stack trace'
+      });
+    }
+  }
+
+  // Firebase Firestore 직접 확인 (디버깅용)
+  static async debugFirestoreData(): Promise<void> {
+    try {
+      console.log('🔍 Firebase Firestore 직접 확인 시작...');
+      
+      const settingsRef = doc(db, 'systemSettings', this.SETTINGS_ID);
+      const settingsDoc = await getDoc(settingsRef);
+      
+      console.log('📋 문서 존재 여부:', settingsDoc.exists());
+      
+      if (settingsDoc.exists()) {
+        const data = settingsDoc.data();
+        console.log('📋 Firestore 원본 데이터:', data);
+        console.log('📋 tossAccount 필드:', data.tossAccount);
+        console.log('📋 tossAccount 타입:', typeof data.tossAccount);
+        console.log('📋 tossAccount 키들:', data.tossAccount ? Object.keys(data.tossAccount) : 'null');
+      } else {
+        console.log('📋 문서가 존재하지 않습니다.');
+      }
+      
+    } catch (error) {
+      console.error('❌ Firebase Firestore 확인 중 오류:', error);
     }
   }
 }

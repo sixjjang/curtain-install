@@ -1,6 +1,7 @@
 import { JobService } from './jobService';
 import { AuthService } from './authService';
 import { ConstructionJob, User } from '../../types';
+import { SystemSettingsService } from './systemSettingsService';
 
 export interface AnalyticsData {
   // 사용자 통계
@@ -31,6 +32,7 @@ export interface AnalyticsData {
   // 시공금액 분석
   revenueAnalysis: {
     totalRevenue: number;
+    totalTransactionAmount: number; // 총 거래액 (참고용)
     averageRevenue: number;
     monthlyRevenue: { month: string; revenue: number }[];
     revenueByStatus: { status: string; revenue: number }[];
@@ -122,6 +124,7 @@ export class AnalyticsService {
         },
         revenueAnalysis: {
           totalRevenue: 0,
+          totalTransactionAmount: 0,
           averageRevenue: 0,
           monthlyRevenue: [],
           revenueByStatus: []
@@ -259,9 +262,28 @@ export class AnalyticsService {
   private static async getRevenueAnalysis(jobs: ConstructionJob[]) {
     const completedJobs = jobs.filter(job => job.status === 'completed');
     
-    // 총 수익 계산
-    const totalRevenue = completedJobs.reduce((sum, job) => {
+    // 시스템 설정에서 수수료율 가져오기
+    const systemSettings = await SystemSettingsService.getSystemSettings();
+    const sellerCommissionRate = systemSettings.feeSettings.sellerCommissionRate;
+    const contractorCommissionRate = systemSettings.feeSettings.contractorCommissionRate;
+    
+    // 총 거래액 계산 (기존 방식)
+    const totalTransactionAmount = completedJobs.reduce((sum, job) => {
       return sum + (job.items?.reduce((itemSum, item) => itemSum + item.totalPrice, 0) || 0);
+    }, 0);
+    
+    // 실제 플랫폼 수익 계산 (수수료 수익)
+    const totalRevenue = completedJobs.reduce((sum, job) => {
+      const jobAmount = job.items?.reduce((itemSum, item) => itemSum + item.totalPrice, 0) || 0;
+      
+      // 판매자 수수료 (예: 100,000원 작업에서 3,000원)
+      const sellerFee = jobAmount * (sellerCommissionRate / 100);
+      
+      // 시공자 수수료 (예: 97,000원에서 2% = 1,940원)
+      const contractorFee = (jobAmount - sellerFee) * (contractorCommissionRate / 100);
+      
+      // 플랫폼 총 수익 = 판매자 수수료 + 시공자 수수료
+      return sum + sellerFee + contractorFee;
     }, 0);
     
     // 평균 수익
@@ -273,8 +295,17 @@ export class AnalyticsService {
     // 상태별 수익
     const revenueByStatus = this.calculateRevenueByStatus(jobs);
     
+    console.log('💰 수익 분석:', {
+      totalTransactionAmount: totalTransactionAmount.toLocaleString(),
+      totalRevenue: totalRevenue.toLocaleString(),
+      sellerCommissionRate: `${sellerCommissionRate}%`,
+      contractorCommissionRate: `${contractorCommissionRate}%`,
+      completedJobsCount: completedJobs.length
+    });
+    
     return {
       totalRevenue,
+      totalTransactionAmount, // 총 거래액 (참고용)
       averageRevenue,
       monthlyRevenue,
       revenueByStatus

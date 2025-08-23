@@ -38,7 +38,8 @@ import {
   AccountBalanceWallet,
   CheckCircle,
   Warning,
-  Edit as EditIcon
+  Edit as EditIcon,
+  Info
 } from '@mui/icons-material';
 import { JobService } from '../../../shared/services/jobService';
 import { PricingService, PricingItem } from '../../../shared/services/pricingService';
@@ -47,6 +48,7 @@ import { CustomerService } from '../../../shared/services/customerService';
 import { PointService } from '../../../shared/services/pointService';
 import { PaymentService } from '../../../shared/services/paymentService';
 import { StorageService } from '../../../shared/services/storageService';
+import { SystemSettingsService } from '../../../shared/services/systemSettingsService';
 import { useAuth } from '../../../shared/contexts/AuthContext';
 import { JobItem, PricingOption, WorkInstruction, ExcelJobData, ConstructionJob } from '../../../types';
 import AddressSearch from '../../../shared/components/AddressSearch';
@@ -313,6 +315,14 @@ const CreateJobDialog: React.FC<CreateJobDialogProps> = ({
   const [charging, setCharging] = useState(false);
   const [paymentMethod, setPaymentMethod] = useState('simulation');
   const [tossPaymentMethod, setTossPaymentMethod] = useState('카드');
+  
+  // 토스페이먼츠 계좌 정보 상태
+  const [tossAccountInfo, setTossAccountInfo] = useState<{
+    bankName: string;
+    accountNumber: string;
+    accountHolder: string;
+    isActive: boolean;
+  } | null>(null);
   
   // 작업지시서 파일 상태
   const [workInstructions, setWorkInstructions] = useState<WorkInstruction[]>([]);
@@ -1211,6 +1221,32 @@ const CreateJobDialog: React.FC<CreateJobDialogProps> = ({
   const handleAmountSelect = (amount: number) => {
     setSelectedAmount(amount);
     setChargeAmount(amount.toString());
+  };
+
+  // 토스페이먼츠 계좌 정보 로드
+  const loadTossAccountInfo = async () => {
+    try {
+      const accountInfo = await SystemSettingsService.getTossAccount();
+      setTossAccountInfo(accountInfo);
+    } catch (error) {
+      console.error('토스페이먼츠 계좌 정보 로드 실패:', error);
+    }
+  };
+
+  // 결제 수단 변경 시 계좌 정보 로드
+  const handlePaymentMethodChange = async (method: string) => {
+    setPaymentMethod(method);
+    if (method === 'toss_payments') {
+      await loadTossAccountInfo();
+    }
+  };
+
+  // 토스페이먼츠 결제 수단 변경 시 계좌 정보 로드
+  const handleTossPaymentMethodChange = async (method: string) => {
+    setTossPaymentMethod(method);
+    if (method === '계좌이체') {
+      await loadTossAccountInfo();
+    }
   };
 
   // 포인트 충전 처리
@@ -2156,7 +2192,7 @@ const CreateJobDialog: React.FC<CreateJobDialogProps> = ({
           <RadioGroup
             row
             value={paymentMethod}
-            onChange={(e) => setPaymentMethod(e.target.value)}
+            onChange={(e) => handlePaymentMethodChange(e.target.value)}
           >
             <FormControlLabel 
               value="simulation" 
@@ -2178,13 +2214,55 @@ const CreateJobDialog: React.FC<CreateJobDialogProps> = ({
             <Select
               value={tossPaymentMethod}
               label="결제 방법"
-              onChange={(e) => setTossPaymentMethod(e.target.value)}
+              onChange={(e) => handleTossPaymentMethodChange(e.target.value)}
             >
               <MenuItem value="카드">신용카드</MenuItem>
               <MenuItem value="가상계좌">가상계좌</MenuItem>
               <MenuItem value="계좌이체">계좌이체</MenuItem>
             </Select>
           </FormControl>
+        )}
+
+        {/* 토스페이먼츠 계좌 정보 표시 */}
+        {paymentMethod === 'toss_payments' && tossPaymentMethod === '계좌이체' && (
+          <Box sx={{ mb: 3 }}>
+            {tossAccountInfo ? (
+              <Alert severity={tossAccountInfo.isActive ? 'info' : 'warning'}>
+                <Box display="flex" alignItems="center" gap={1} mb={1}>
+                  <Info color={tossAccountInfo.isActive ? 'info' : 'warning'} />
+                  <Typography variant="subtitle2" fontWeight="bold">
+                    토스페이먼츠 계좌 정보
+                  </Typography>
+                </Box>
+                <Typography variant="body2" color="textSecondary">
+                  은행: {tossAccountInfo.bankName}
+                </Typography>
+                <Typography variant="body2" color="textSecondary">
+                  계좌번호: {tossAccountInfo.accountNumber}
+                </Typography>
+                <Typography variant="body2" color="textSecondary">
+                  예금주: {tossAccountInfo.accountHolder}
+                </Typography>
+                <Chip 
+                  label={tossAccountInfo.isActive ? '활성화' : '비활성화'}
+                  color={tossAccountInfo.isActive ? 'success' : 'default'}
+                  size="small"
+                  sx={{ mt: 1 }}
+                />
+                {!tossAccountInfo.isActive && (
+                  <Typography variant="body2" color="warning.main" sx={{ mt: 1 }}>
+                    현재 계좌가 비활성화되어 있습니다. 계좌이체 결제를 사용할 수 없습니다.
+                  </Typography>
+                )}
+              </Alert>
+            ) : (
+              <Alert severity="warning">
+                <Typography variant="body2">
+                  토스페이먼츠 계좌 정보를 불러올 수 없습니다. 관리자에게 문의해주세요.
+                </Typography>
+              </Alert>
+            )}
+          </Box>
         )}
         
         {chargeAmount && (
@@ -2206,7 +2284,14 @@ const CreateJobDialog: React.FC<CreateJobDialogProps> = ({
         <Button
           onClick={handleCharge}
           variant="contained"
-          disabled={charging || !chargeAmount || parseInt(chargeAmount) <= 0}
+          disabled={
+            charging || 
+            !chargeAmount || 
+            parseInt(chargeAmount) <= 0 ||
+            (paymentMethod === 'toss_payments' && 
+             tossPaymentMethod === '계좌이체' && 
+             (!tossAccountInfo || !tossAccountInfo.isActive))
+          }
           startIcon={charging ? <CircularProgress size={16} /> : <CheckCircle />}
         >
           {charging ? '충전 중...' : '충전하기'}

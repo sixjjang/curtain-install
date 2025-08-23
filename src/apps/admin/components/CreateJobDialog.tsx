@@ -212,7 +212,7 @@ const CreateJobDialog: React.FC<CreateJobDialogProps> = ({ open, onClose, onSucc
   };
 
   return (
-    <Dialog open={open} onClose={handleClose} maxWidth="md" fullWidth>
+          <Dialog open={open} onClose={handleClose} maxWidth="md" fullWidth disableEnforceFocus disableAutoFocus>
       <DialogTitle>새 작업 생성</DialogTitle>
       <DialogContent>
         {error && (

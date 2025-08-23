@@ -30,7 +30,8 @@ import {
   RateReview as SurveyIcon,
   Settings as SettingsIcon,
   Menu as MenuIcon,
-  Article as TemplateIcon
+  Article as TemplateIcon,
+  AccountBalanceWallet as WithdrawalIcon
 } from '@mui/icons-material';
 import { useAuth } from '../../../shared/contexts/AuthContext';
 
@@ -55,6 +56,7 @@ const AdminLayout: React.FC<AdminLayoutProps> = ({ children }) => {
     { text: '레벨 관리', icon: <LevelIcon />, path: '/admin/levels' },
     { text: '만족도 조사 관리', icon: <SurveyIcon />, path: '/admin/surveys' },
     { text: '템플릿 관리', icon: <TemplateIcon />, path: '/admin/templates' },
+    { text: '포인트 인출 관리', icon: <WithdrawalIcon />, path: '/admin/point-withdrawals' },
     { text: '분석', icon: <AnalyticsIcon />, path: '/admin/analytics' },
     { text: '시스템 설정', icon: <SettingsIcon />, path: '/admin/settings' },
   ];

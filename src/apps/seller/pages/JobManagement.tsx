@@ -27,7 +27,8 @@ import {
   Select,
   MenuItem,
   ToggleButtonGroup,
-  ToggleButton
+  ToggleButton,
+  TextField
 } from '@mui/material';
 import { 
   Add, 
@@ -99,6 +100,12 @@ const JobManagement: React.FC = () => {
   const [jobToEdit, setJobToEdit] = useState<ConstructionJob | null>(null);
   const [chatDialogOpen, setChatDialogOpen] = useState(false);
   const [chatJob, setChatJob] = useState<ConstructionJob | null>(null);
+  
+  // 일정 재조정 다이얼로그 관련 상태
+  const [rescheduleDialogOpen, setRescheduleDialogOpen] = useState(false);
+  const [rescheduleJob, setRescheduleJob] = useState<ConstructionJob | null>(null);
+  const [newScheduledDate, setNewScheduledDate] = useState<string>('');
+  const [newScheduledTime, setNewScheduledTime] = useState<string>('');
 
   const [customerInfo, setCustomerInfo] = useState<any>(null);
   const [contractorInfo, setContractorInfo] = useState<any>(null);
@@ -236,6 +243,50 @@ const JobManagement: React.FC = () => {
   const handleJobCreated = () => {
     // 작업 생성 후 목록 새로고침
     fetchJobs();
+  };
+
+  // 일정 재조정 다이얼로그 열기
+  const handleRescheduleClick = (job: ConstructionJob) => {
+    setRescheduleJob(job);
+    setRescheduleDialogOpen(true);
+    
+    // 현재 일정을 기본값으로 설정
+    if (job.scheduledDate) {
+      const date = new Date(job.scheduledDate);
+      setNewScheduledDate(date.toISOString().split('T')[0]);
+      setNewScheduledTime(date.toTimeString().slice(0, 5));
+    } else {
+      setNewScheduledDate('');
+      setNewScheduledTime('');
+    }
+  };
+
+  // 일정 재조정 처리
+  const handleRescheduleSubmit = async () => {
+    if (!rescheduleJob || !newScheduledDate || !newScheduledTime || !user?.id) {
+      return;
+    }
+
+    try {
+      // 새로운 일정 생성
+      const [hours, minutes] = newScheduledTime.split(':').map(Number);
+      const newScheduledDateTime = new Date(newScheduledDate);
+      newScheduledDateTime.setHours(hours, minutes, 0, 0);
+
+      // 일정 재조정 처리
+      await JobService.processReschedule(rescheduleJob.id, newScheduledDateTime, user.id);
+
+      // 성공 메시지
+      alert('일정 재조정이 완료되었습니다. 시공자에게 자동으로 알림이 전송됩니다.');
+
+      // 다이얼로그 닫기 및 목록 새로고침
+      setRescheduleDialogOpen(false);
+      setRescheduleJob(null);
+      fetchJobs();
+    } catch (error) {
+      console.error('일정 재조정 실패:', error);
+      alert('일정 재조정에 실패했습니다: ' + (error as Error).message);
+    }
   };
 
   // 상세보기 다이얼로그 열기
@@ -377,6 +428,7 @@ const JobManagement: React.FC = () => {
       case 'in_progress': return '진행중';
       case 'completed': return '완료';
       case 'cancelled': return '취소';
+      case 'reschedule_requested': return '일정 재조정 요청';
       default: return '알 수 없음';
     }
   };
@@ -392,6 +444,7 @@ const JobManagement: React.FC = () => {
       case 'in_progress': return 'primary';
       case 'completed': return 'success';
       case 'cancelled': return 'error';
+      case 'reschedule_requested': return 'warning';
       default: return 'default';
     }
   };
@@ -673,9 +726,14 @@ const JobManagement: React.FC = () => {
                     <Card>
                       <CardContent>
                                                  <Box display="flex" justifyContent="space-between" alignItems="flex-start" mb={2}>
-                           <Typography variant="h6" sx={{ flex: 1, mr: 2 }}>
-                             {job.title}
-                           </Typography>
+                           <Box sx={{ flex: 1, mr: 2 }}>
+                             <Typography variant="h6">
+                               {job.title}
+                             </Typography>
+                             <Typography variant="caption" color="textSecondary">
+                               작업 ID: {job.id}
+                             </Typography>
+                           </Box>
                            <Box display="flex" gap={1} alignItems="center">
                              {chatNotifications[job.id] > 0 && (
                                <Chip 
@@ -940,6 +998,20 @@ const JobManagement: React.FC = () => {
                                 삭제
                               </Button>
                             </>
+                          )}
+                          
+                          {/* 일정 재조정 요청 상태일 때 수정 버튼 */}
+                          {job.status === 'reschedule_requested' && (
+                            <Button 
+                              variant="contained" 
+                              size="small"
+                              color="warning"
+                              startIcon={<Edit />}
+                              onClick={() => handleRescheduleClick(job)}
+                              sx={{ ml: 1 }}
+                            >
+                              일정 수정
+                            </Button>
                           )}
                         </Box>
                       </CardContent>
@@ -1574,6 +1646,8 @@ const JobManagement: React.FC = () => {
         onClose={() => setChatDialogOpen(false)}
         maxWidth="md"
         fullWidth
+        disableEnforceFocus
+        disableAutoFocus
         PaperProps={{
           sx: {
             height: '80vh',
@@ -1607,6 +1681,85 @@ const JobManagement: React.FC = () => {
             />
           )}
         </DialogContent>
+      </Dialog>
+
+      {/* 일정 재조정 다이얼로그 */}
+      <Dialog
+        open={rescheduleDialogOpen}
+        onClose={() => setRescheduleDialogOpen(false)}
+        maxWidth="sm"
+        fullWidth
+      >
+        <DialogTitle sx={{ 
+          bgcolor: 'warning.light', 
+          color: 'warning.contrastText',
+          display: 'flex',
+          alignItems: 'center',
+          gap: 1
+        }}>
+          📅 일정 재조정
+        </DialogTitle>
+        <DialogContent sx={{ pt: 3 }}>
+          {rescheduleJob && (
+            <>
+              <Typography variant="body1" gutterBottom>
+                시공자가 {rescheduleJob.rescheduleInfo?.type === 'product_not_ready' ? '제품 미준비' : '소비자 부재'}로 인한 보상을 받았습니다.
+              </Typography>
+              <Typography variant="body2" color="textSecondary" sx={{ mb: 3 }}>
+                새로운 시공일시를 설정하여 시공을 계속 진행할 수 있습니다.
+              </Typography>
+              
+              <Grid container spacing={2}>
+                <Grid item xs={12}>
+                  <TextField
+                    fullWidth
+                    label="새로운 시공일"
+                    type="date"
+                    value={newScheduledDate}
+                    onChange={(e: React.ChangeEvent<HTMLInputElement>) => setNewScheduledDate(e.target.value)}
+                    InputLabelProps={{ shrink: true }}
+                    required
+                  />
+                </Grid>
+                <Grid item xs={12}>
+                  <TextField
+                    fullWidth
+                    label="새로운 시공시간"
+                    type="time"
+                    value={newScheduledTime}
+                    onChange={(e: React.ChangeEvent<HTMLInputElement>) => setNewScheduledTime(e.target.value)}
+                    InputLabelProps={{ shrink: true }}
+                    required
+                  />
+                </Grid>
+              </Grid>
+              
+              <Box sx={{ mt: 2, p: 2, bgcolor: 'info.light', borderRadius: 1 }}>
+                <Typography variant="body2" color="info.contrastText">
+                  💡 새로운 일정으로 설정하면 시공자에게 자동으로 알림이 전송됩니다.
+                </Typography>
+              </Box>
+            </>
+          )}
+        </DialogContent>
+        <DialogActions sx={{ p: 2, gap: 1 }}>
+          <Button 
+            onClick={() => setRescheduleDialogOpen(false)}
+            variant="outlined"
+            color="inherit"
+          >
+            취소
+          </Button>
+          <Button 
+            onClick={handleRescheduleSubmit}
+            variant="contained"
+            color="warning"
+            disabled={!newScheduledDate || !newScheduledTime}
+            startIcon={<span>📅</span>}
+          >
+            일정 재조정 완료
+          </Button>
+        </DialogActions>
       </Dialog>
 
     </Box>

@@ -5,6 +5,59 @@ body {
     sans-serif;
   -webkit-font-smoothing: antialiased;
   -moz-osx-font-smoothing: grayscale;
+  
+  /* 모바일 터치 스크롤 부드럽게 */
+  -webkit-overflow-scrolling: touch;
+  scroll-behavior: smooth;
+  overscroll-behavior: smooth;
+}
+
+/* 전체 앱에 부드러운 스크롤 적용 */
+* {
+  -webkit-overflow-scrolling: touch;
+}
+
+/* 모바일에서 스크롤 영역 부드럽게 */
+html, body {
+  -webkit-overflow-scrolling: touch;
+  scroll-behavior: smooth;
+}
+
+/* Material-UI 컴포넌트들의 터치 반응 개선 */
+.MuiDialog-root,
+.MuiDrawer-root,
+.MuiModal-root {
+  -webkit-overflow-scrolling: touch;
+}
+
+/* 스크롤바 스타일링 (웹킷 기반 브라우저) */
+::-webkit-scrollbar {
+  width: 6px;
+  height: 6px;
+}
+
+::-webkit-scrollbar-track {
+  background: transparent;
+}
+
+::-webkit-scrollbar-thumb {
+  background: rgba(0, 0, 0, 0.2);
+  border-radius: 3px;
+}
+
+::-webkit-scrollbar-thumb:hover {
+  background: rgba(0, 0, 0, 0.3);
+}
+
+/* 다크모드에서 스크롤바 */
+@media (prefers-color-scheme: dark) {
+  ::-webkit-scrollbar-thumb {
+    background: rgba(255, 255, 255, 0.2);
+  }
+  
+  ::-webkit-scrollbar-thumb:hover {
+    background: rgba(255, 255, 255, 0.3);
+  }
 }
 
 code {

@@ -19,7 +19,7 @@ import {
   getDownloadURL, 
   deleteObject 
 } from 'firebase/storage';
-import { db, storage } from '../../firebase/config';
+import { db, storage, handleFirestoreError } from '../../firebase/config';
 import { ChatMessage, ChatRoom, Customer } from '../../types';
 import { NotificationService } from './notificationService';
 
@@ -53,7 +53,8 @@ export class ChatService {
       return docRef.id;
     } catch (error) {
       console.error('채팅방 생성/가져오기 실패:', error);
-      throw error;
+      const errorMessage = handleFirestoreError(error);
+      throw new Error(`채팅방 생성/가져오기 실패: ${errorMessage}`);
     }
   }
 
@@ -682,6 +683,59 @@ ${surveyLink}
       console.log('이미지 삭제 완료:', imageUrl);
     } catch (error) {
       console.error('이미지 삭제 실패:', error);
+      throw error;
+    }
+  }
+
+  // 일정 재조정 메시지 전송
+  static async sendRescheduleMessage(
+    jobId: string,
+    newScheduledDate: Date,
+    rescheduleType: 'product_not_ready' | 'customer_absent' | 'unknown'
+  ): Promise<void> {
+    try {
+      // 작업 정보 조회
+      const { JobService } = await import('./jobService');
+      const job = await JobService.getJobById(jobId);
+      if (!job) {
+        throw new Error('작업을 찾을 수 없습니다.');
+      }
+
+      // 메시지 내용 생성
+      const dateStr = newScheduledDate.toLocaleDateString('ko-KR', {
+        year: 'numeric',
+        month: 'long',
+        day: 'numeric',
+        weekday: 'long'
+      });
+      const timeStr = newScheduledDate.toLocaleTimeString('ko-KR', {
+        hour: '2-digit',
+        minute: '2-digit'
+      });
+
+      let messageContent = '';
+      if (rescheduleType === 'product_not_ready') {
+        messageContent = `📅 제품 미준비로 인한 일정 재조정이 완료되었습니다.\n\n새로운 시공일시: ${dateStr} ${timeStr}\n\n시공자님께서는 새로운 일정에 맞춰 시공을 진행해주시기 바랍니다.`;
+      } else if (rescheduleType === 'customer_absent') {
+        messageContent = `📅 소비자 부재로 인한 일정 재조정이 완료되었습니다.\n\n새로운 시공일시: ${dateStr} ${timeStr}\n\n시공자님께서는 새로운 일정에 맞춰 시공을 진행해주시기 바랍니다.`;
+      } else {
+        messageContent = `📅 일정 재조정이 완료되었습니다.\n\n새로운 시공일시: ${dateStr} ${timeStr}\n\n시공자님께서는 새로운 일정에 맞춰 시공을 진행해주시기 바랍니다.`;
+      }
+
+      // 판매자 메시지 전송
+      await this.sendMessage(
+        jobId,
+        jobId,
+        job.sellerId,
+        'seller',
+        job.sellerName || '판매자',
+        messageContent,
+        ''
+      );
+
+      console.log(`✅ 일정 재조정 메시지 전송 완료: ${jobId}`);
+    } catch (error) {
+      console.error('일정 재조정 메시지 전송 실패:', error);
       throw error;
     }
   }

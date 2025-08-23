@@ -36,14 +36,31 @@ function App() {
   useEffect(() => {
     const testConnection = async () => {
       try {
-        const result = await testFirebaseConnection();
-        console.log('🔥 Firebase 연결 테스트 결과:', result);
+        console.log('🔥 Firebase 연결 테스트 시작...');
+        const result = await testFirebaseConnection(3); // 3번 재시도
+        
+        if (result && result.firestore && result.auth) {
+          console.log('✅ Firebase 연결 성공:', result.message);
+        } else if (result) {
+          console.warn('⚠️ Firebase 연결 부분 실패:', result.message);
+          if (result.error) {
+            console.error('오류 상세:', result.error);
+          }
+        }
       } catch (error) {
-        console.error('🔥 Firebase 연결 테스트 실패:', error);
+        console.error('❌ Firebase 연결 테스트 실패:', error);
+        
+        // BloomFilter 오류 특별 처리
+        if (error instanceof Error && error.message.includes('BloomFilter')) {
+          console.warn('BloomFilter 오류 감지됨. 네트워크 연결을 확인해주세요.');
+        }
       }
     };
     
-    testConnection();
+    // 페이지 로드 후 1초 뒤에 테스트 실행
+    const timer = setTimeout(testConnection, 1000);
+    
+    return () => clearTimeout(timer);
   }, []);
 
   return (

@@ -11,6 +11,7 @@ import SatisfactionSurveyManagement from './pages/SatisfactionSurveyManagement';
 import TemplateManagement from './pages/TemplateManagement';
 import Analytics from './pages/Analytics';
 import SystemSettings from './pages/SystemSettings';
+import PointWithdrawalManagement from './pages/PointWithdrawalManagement';
 
 const AdminApp: React.FC = () => {
   return (
@@ -26,6 +27,7 @@ const AdminApp: React.FC = () => {
           <Route path="/templates" element={<TemplateManagement />} />
           <Route path="/analytics" element={<Analytics />} />
           <Route path="/settings" element={<SystemSettings />} />
+          <Route path="/point-withdrawals" element={<PointWithdrawalManagement />} />
         </Routes>
       </Box>
     </AdminLayout>

@@ -27,12 +27,31 @@ import { CustomerService, CustomerInfo } from '../../../shared/services/customer
 import { ConstructionJob } from '../../../types';
 
 interface ChatAreaProps {
-  selectedJob: ConstructionJob | null;
+  selectedJob?: ConstructionJob | null;
   onJobDetail?: (jobId: string) => void;
   isModal?: boolean;
+  // 새로운 props for direct usage
+  jobId?: string;
+  jobTitle?: string;
+  jobAddress?: string;
+  contractorName?: string;
+  contractorPhone?: string;
+  isDialog?: boolean;
+  userRole?: 'seller' | 'contractor';
 }
 
-const ChatArea: React.FC<ChatAreaProps> = ({ selectedJob, onJobDetail, isModal = false }) => {
+const ChatArea: React.FC<ChatAreaProps> = ({ 
+  selectedJob, 
+  onJobDetail, 
+  isModal = false,
+  jobId,
+  jobTitle,
+  jobAddress,
+  contractorName,
+  contractorPhone,
+  isDialog = false,
+  userRole = 'seller'
+}) => {
   const { user } = useAuth();
   const theme = useTheme();
   const [messages, setMessages] = useState<any[]>([]);
@@ -51,30 +70,43 @@ const ChatArea: React.FC<ChatAreaProps> = ({ selectedJob, onJobDetail, isModal =
 
   // 메시지 스크롤을 맨 아래로
   const scrollToBottom = () => {
-    messagesEndRef.current?.scrollIntoView({ behavior: 'smooth' });
+    setTimeout(() => {
+      messagesEndRef.current?.scrollIntoView({ behavior: 'smooth' });
+    }, 100);
   };
 
   useEffect(() => {
     scrollToBottom();
   }, [messages]);
 
+  // 선택된 작업이 변경될 때도 스크롤을 맨 아래로
+  useEffect(() => {
+    if ((selectedJob || jobId) && messages.length > 0) {
+      scrollToBottom();
+    }
+  }, [selectedJob, jobId]);
+
   // 선택된 시공건이 변경될 때 메시지 불러오기
   useEffect(() => {
-    if (selectedJob) {
-      loadChatMessages(selectedJob.id);
-      subscribeToChat(selectedJob.id);
-      loadJobDetails(selectedJob.id);
+    const targetJobId = jobId || selectedJob?.id;
+    if (targetJobId) {
+      loadChatMessages(targetJobId);
+      subscribeToChat(targetJobId);
+      if (selectedJob) {
+        loadJobDetails(targetJobId);
+      }
     }
-  }, [selectedJob]);
+  }, [selectedJob, jobId]);
 
   // 작업 상세 정보 로드
-  const loadJobDetails = async (jobId: string) => {
-    if (!selectedJob) return;
+  const loadJobDetails = async (targetJobId: string) => {
+    const targetJob = selectedJob;
+    if (!targetJob) return;
 
     // 고객 정보 가져오기
-    if (selectedJob.customerId) {
+    if (targetJob.customerId) {
       try {
-        const customer = await CustomerService.getCustomerInfo(selectedJob.customerId);
+        const customer = await CustomerService.getCustomerInfo(targetJob.customerId);
         setCustomerInfo(customer);
       } catch (error) {
         console.error('고객 정보 조회 실패:', error);
@@ -85,10 +117,10 @@ const ChatArea: React.FC<ChatAreaProps> = ({ selectedJob, onJobDetail, isModal =
     }
 
     // 시공자 정보 가져오기
-    if (selectedJob.contractorId) {
+    if (targetJob.contractorId) {
       try {
         const { AuthService } = await import('../../../shared/services/authService');
-        const contractor = await AuthService.getUserById(selectedJob.contractorId);
+        const contractor = await AuthService.getUserById(targetJob.contractorId);
         setContractorInfo(contractor);
       } catch (error) {
         console.error('시공자 정보 조회 실패:', error);
@@ -118,15 +150,16 @@ const ChatArea: React.FC<ChatAreaProps> = ({ selectedJob, onJobDetail, isModal =
 
   // 메시지 전송
   const handleSendMessage = async () => {
-    if (!selectedJob || !newMessage.trim() || !user?.id) return;
+    const targetJobId = jobId || selectedJob?.id;
+    if (!targetJobId || !newMessage.trim() || !user?.id) return;
 
     try {
       await ChatService.sendMessage(
-        selectedJob.id,
-        selectedJob.id,
+        targetJobId,
+        targetJobId,
         user.id,
-        'seller',
-        user.name || '판매자',
+        userRole,
+        user.name || (userRole === 'seller' ? '판매자' : '시공자'),
         newMessage.trim(),
         user.profileImage || ''
       );
@@ -175,25 +208,26 @@ const ChatArea: React.FC<ChatAreaProps> = ({ selectedJob, onJobDetail, isModal =
 
   // 이미지 전송 처리
   const handleSendImage = async () => {
-    if (!selectedJob || !selectedImage || !user?.id) return;
+    const targetJobId = jobId || selectedJob?.id;
+    if (!targetJobId || !selectedImage || !user?.id) return;
 
     try {
       setUploadingImage(true);
       setImageError(null);
 
       console.log('📤 이미지 전송 시작:', {
-        jobId: selectedJob.id,
+        jobId: targetJobId,
         fileName: selectedImage.name,
         fileSize: selectedImage.size,
         fileType: selectedImage.type
       });
 
       await ChatService.sendImageMessage(
-        selectedJob.id,
-        selectedJob.id,
+        targetJobId,
+        targetJobId,
         user.id,
-        'seller',
-        user.name || '판매자',
+        userRole,
+        user.name || (userRole === 'seller' ? '판매자' : '시공자'),
         selectedImage,
         user.profileImage || ''
       );
@@ -295,7 +329,7 @@ const ChatArea: React.FC<ChatAreaProps> = ({ selectedJob, onJobDetail, isModal =
     return job.title;
   };
 
-  if (!selectedJob) {
+  if (!selectedJob && !jobId) {
     return (
       <Box 
         display="flex" 
@@ -326,19 +360,30 @@ const ChatArea: React.FC<ChatAreaProps> = ({ selectedJob, onJobDetail, isModal =
       }}>
         <Box display="flex" justifyContent="space-between" alignItems="flex-start">
           <Box sx={{ flexGrow: 1, minWidth: 0 }}>
-            <Typography 
-              variant="h6" 
-              sx={{ 
-                overflow: 'hidden', 
-                textOverflow: 'ellipsis',
-                whiteSpace: 'nowrap',
-                fontWeight: 600,
-                fontSize: isModal ? '0.9rem' : '1.25rem',
-                lineHeight: 1.2
-              }}
-            >
-              {formatChatHeaderTitle(selectedJob)}
-            </Typography>
+            <Box display="flex" alignItems="center" gap={1} mb={0.5}>
+              <Typography 
+                variant="h6" 
+                sx={{ 
+                  overflow: 'hidden', 
+                  textOverflow: 'ellipsis',
+                  whiteSpace: 'nowrap',
+                  fontWeight: 600,
+                  fontSize: isModal ? '0.9rem' : '1.25rem',
+                  lineHeight: 1.2,
+                  flexGrow: 1
+                }}
+              >
+                {selectedJob ? formatChatHeaderTitle(selectedJob) : (jobTitle || '작업 정보')}
+              </Typography>
+              {selectedJob && (
+                <Chip 
+                  label={getStatusText(selectedJob.status)} 
+                  color={getStatusColor(selectedJob.status)} 
+                  size="small"
+                  sx={{ flexShrink: 0 }}
+                />
+              )}
+            </Box>
             <Typography 
               variant="body2" 
               color="textSecondary"
@@ -350,10 +395,10 @@ const ChatArea: React.FC<ChatAreaProps> = ({ selectedJob, onJobDetail, isModal =
                 lineHeight: 1.2
               }}
             >
-              {selectedJob.address}
+              {selectedJob ? selectedJob.address : (jobAddress || '주소 정보 없음')}
               {customerInfo && ` (${customerInfo.phone})`}
             </Typography>
-            {contractorInfo && (
+            {(contractorInfo || contractorName) && (
               <Typography 
                 variant="body2" 
                 color="textSecondary"
@@ -365,17 +410,11 @@ const ChatArea: React.FC<ChatAreaProps> = ({ selectedJob, onJobDetail, isModal =
                   lineHeight: 1.2
                 }}
               >
-                시공자({contractorInfo.name || contractorInfo.email}, {contractorInfo.phone || '연락처 없음'})
+                시공자({contractorInfo ? (contractorInfo.name || contractorInfo.email) : contractorName}, {contractorInfo ? (contractorInfo.phone || '연락처 없음') : (contractorPhone || '연락처 없음')})
               </Typography>
             )}
-            <Chip 
-              label={getStatusText(selectedJob.status)} 
-              color={getStatusColor(selectedJob.status)} 
-              size="small"
-              sx={{ mt: 1 }}
-            />
           </Box>
-          {onJobDetail && (
+          {onJobDetail && selectedJob && (
             <Button 
               variant="outlined" 
               size="small"

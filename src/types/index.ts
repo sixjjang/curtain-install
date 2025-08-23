@@ -130,17 +130,26 @@ export interface PointTransaction {
   id: string;
   userId: string;
   userRole: 'seller' | 'contractor';
-  type: 'charge' | 'withdraw' | 'escrow' | 'release' | 'refund' | 'payment';
+  type: 'charge' | 'withdraw' | 'escrow' | 'release' | 'refund' | 'payment' | 'compensation';
   amount: number;
   balance: number; // 거래 후 잔액
   description: string;
   jobId?: string; // 관련 작업 ID
   relatedJobId?: string; // 관련 작업 ID (별칭)
+  compensationType?: 'product_not_ready' | 'customer_absent' | 'schedule_change'; // 보상 타입
   status: 'pending' | 'completed' | 'failed' | 'cancelled';
   createdAt: Date;
   completedAt?: Date;
   adminId?: string; // 관리자 승인 ID
   notes?: string;
+  bankInfo?: {
+    bankName: string;
+    accountNumber: string;
+    accountHolder: string;
+  };
+  relatedTransactionId?: string;
+  transferId?: string;
+  transferCompletedAt?: Date; // 관련 거래 ID (환불 시 원본 거래 ID)
 }
 
 // 포인트 에스크로 타입
@@ -218,6 +227,18 @@ export interface SystemSettings {
     customerAbsentRate: number; // 소비자 부재 시 보상율 (기본 100%)
     scheduleChangeFeeRate: number; // 일정 변경 시 수수료율 (기본 0%)
   };
+  // 수수료 설정
+  feeSettings: {
+    sellerCommissionRate: number; // 판매자 수수료율 (기본 3%)
+    contractorCommissionRate: number; // 시공자 수수료율 (기본 2%)
+  };
+  // 토스페이먼츠 계좌 설정
+  tossAccount?: {
+    bankName: string;
+    accountNumber: string;
+    accountHolder: string;
+    isActive: boolean;
+  };
   createdAt: Date;
   updatedAt: Date;
   updatedBy: string; // 관리자 ID
@@ -290,12 +311,26 @@ export interface ConstructionJob {
     min: number;
     max: number;
   };
-  status: 'pending' | 'assigned' | 'product_preparing' | 'product_ready' | 'pickup_completed' | 'in_progress' | 'completed' | 'cancelled' | 'product_not_ready' | 'customer_absent' | 'schedule_changed';
+  status: 'pending' | 'assigned' | 'product_preparing' | 'product_ready' | 'pickup_completed' | 'in_progress' | 'completed' | 'cancelled' | 'product_not_ready' | 'customer_absent' | 'schedule_changed' | 'compensation_completed' | 'reschedule_requested';
   sellerId: string;
   sellerName?: string;
   customerId?: string;
+  customerName?: string;
+  customerPhone?: string;
   contractorId?: string;
   contractorName?: string;
+  contractorPhone?: string;
+  // 금액 관련 정보
+  travelFee?: number;
+  finalAmount?: number;
+  escrowAmount?: number;
+  // 일정 관련 정보
+  preparationDate?: Date;
+  pickupScheduledDate?: Date;
+  // 픽업 관련 정보
+  pickupCompanyName?: string;
+  pickupPhone?: string;
+  pickupAddress?: string;
   // 취소 관련 정보
   acceptedAt?: Date; // 시공자가 작업을 수락한 시간
   cancelledAt?: Date; // 작업이 취소된 시간
@@ -304,10 +339,24 @@ export interface ConstructionJob {
   requirements?: string[];
   pickupInfo?: PickupInfo;
   progressHistory?: JobProgressStep[];
-  finalAmount?: number;
   isInternal?: boolean;
   images?: string[];
   workInstructions?: WorkInstruction[];
+  compensationInfo?: {
+    type: 'product_not_ready' | 'customer_absent' | 'schedule_change';
+    amount: number;
+    rate: number;
+    processedAt: Date;
+    processedBy: string;
+  };
+  rescheduleInfo?: {
+    type: 'product_not_ready' | 'customer_absent';
+    requestedAt: Date;
+    requestedBy: string;
+    newScheduledDate?: Date;
+    confirmedAt?: Date;
+    confirmedBy?: string;
+  };
   createdAt: Date;
   updatedAt: Date;
   customerSatisfaction?: number;

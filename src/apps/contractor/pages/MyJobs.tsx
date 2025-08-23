@@ -52,6 +52,7 @@ import { JobService } from '../../../shared/services/jobService';
 import { CustomerService, CustomerInfo } from '../../../shared/services/customerService';
 import { ConstructionJob } from '../../../types';
 import { useAuth } from '../../../shared/contexts/AuthContext';
+import ChatArea from '../../seller/components/ChatArea';
 
 
 const MyJobs: React.FC = () => {
@@ -89,6 +90,37 @@ const MyJobs: React.FC = () => {
   const [selectedJob, setSelectedJob] = useState<ConstructionJob | null>(null);
   const [detailDialogOpen, setDetailDialogOpen] = useState(false);
   const [customerInfo, setCustomerInfo] = useState<CustomerInfo | null>(null);
+  
+  // 채팅 모달 관련 상태
+  const [chatDialogOpen, setChatDialogOpen] = useState(false);
+  const [chatJob, setChatJob] = useState<ConstructionJob | null>(null);
+  
+  // 픽업지연 확인 다이얼로그 관련 상태
+  const [pickupDelayDialogOpen, setPickupDelayDialogOpen] = useState(false);
+  const [pickupDelayJobId, setPickupDelayJobId] = useState<string>('');
+  
+  // 소비자 부재 확인 다이얼로그 관련 상태
+  const [customerAbsentDialogOpen, setCustomerAbsentDialogOpen] = useState(false);
+  const [customerAbsentJobId, setCustomerAbsentJobId] = useState<string>('');
+
+  // 시공일시-주소 포맷팅 함수
+  const formatJobTitle = (job: ConstructionJob): string => {
+    if (job.scheduledDate) {
+      const date = new Date(job.scheduledDate);
+      const month = date.getMonth() + 1;
+      const day = date.getDate();
+      const hours = date.getHours();
+      const minutes = date.getMinutes();
+      const timeStr = `${hours.toString().padStart(2, '0')}:${minutes.toString().padStart(2, '0')}`;
+      
+      // 주소에서 시/도 부분만 추출 (예: "경기도 시흥시 소래포구" -> "경기도 시흥시")
+      const addressParts = job.address.split(' ');
+      const cityPart = addressParts.slice(0, 2).join(' '); // 시/도 부분
+      
+      return `${month}/${day} ${timeStr}-${cityPart}`;
+    }
+    return job.title;
+  };
 
   useEffect(() => {
     const fetchMyJobs = async () => {
@@ -106,7 +138,7 @@ const MyJobs: React.FC = () => {
         
         // 상태 필터링 (배정된 작업들만)
         const filteredJobs = myJobs.filter(job => 
-          ['assigned', 'product_preparing', 'product_ready', 'pickup_completed', 'in_progress', 'completed'].includes(job.status)
+          ['assigned', 'product_preparing', 'product_ready', 'pickup_completed', 'in_progress', 'completed', 'compensation_completed'].includes(job.status)
         );
         
         console.log(`전체 작업: ${myJobs.length}개, 필터링된 작업: ${filteredJobs.length}개`);
@@ -136,6 +168,8 @@ const MyJobs: React.FC = () => {
       case 'pickup_completed': return 'secondary';
       case 'in_progress': return 'primary';
       case 'completed': return 'success';
+      case 'compensation_completed': return 'warning';
+      case 'reschedule_requested': return 'warning';
       default: return 'default';
     }
   };
@@ -148,6 +182,8 @@ const MyJobs: React.FC = () => {
       case 'pickup_completed': return '🚚 픽업완료';
       case 'in_progress': return '🏗️ 진행중';
       case 'completed': return '✅ 완료';
+      case 'compensation_completed': return '💰 보상완료';
+      case 'reschedule_requested': return '📅 일정 재조정 요청';
       default: return '알 수 없음';
     }
   };
@@ -218,6 +254,84 @@ const MyJobs: React.FC = () => {
     }
   };
 
+  // 픽업지연 확인 다이얼로그 열기
+  const handlePickupDelayConfirm = (jobId: string) => {
+    setPickupDelayJobId(jobId);
+    setPickupDelayDialogOpen(true);
+  };
+
+  // 픽업지연 처리 (제품 미준비 보상)
+  const handlePickupDelay = async (jobId: string) => {
+    try {
+      // 제품 미준비 보상 처리
+      await JobService.processProductNotReadyCompensation(jobId, user?.id || '');
+      
+      setSnackbar({
+        open: true,
+        message: '제품 미준비 보상이 처리되었습니다. 포인트가 지급되었습니다.',
+        severity: 'success'
+      });
+      
+      // 작업 목록 새로고침
+      const updatedJobs = await JobService.getAllJobs();
+      const myJobs = updatedJobs.filter(job => {
+        const statusMatch = ['assigned', 'product_preparing', 'product_ready', 'pickup_completed', 'in_progress', 'completed', 'compensation_completed', 'reschedule_requested'].includes(job.status);
+        const contractorMatch = job.contractorId === user?.id;
+        return statusMatch && contractorMatch;
+      });
+      setJobs(myJobs);
+      
+      // 다이얼로그 닫기
+      setPickupDelayDialogOpen(false);
+    } catch (error) {
+      console.error('픽업지연 처리 실패:', error);
+      setSnackbar({
+        open: true,
+        message: '픽업지연 처리에 실패했습니다: ' + (error as Error).message,
+        severity: 'error'
+      });
+    }
+  };
+
+  // 소비자 부재 확인 다이얼로그 열기
+  const handleCustomerAbsentConfirm = (jobId: string) => {
+    setCustomerAbsentJobId(jobId);
+    setCustomerAbsentDialogOpen(true);
+  };
+
+  // 소비자 부재 처리
+  const handleCustomerAbsent = async (jobId: string) => {
+    try {
+      // 소비자 부재 보상 처리
+      await JobService.processCustomerAbsentCompensation(jobId, user?.id || '');
+      
+      setSnackbar({
+        open: true,
+        message: '소비자 부재 보상이 처리되었습니다. 포인트가 지급되었습니다.',
+        severity: 'success'
+      });
+      
+      // 작업 목록 새로고침
+      const updatedJobs = await JobService.getAllJobs();
+      const myJobs = updatedJobs.filter(job => {
+        const statusMatch = ['assigned', 'product_preparing', 'product_ready', 'pickup_completed', 'in_progress', 'completed', 'compensation_completed', 'reschedule_requested'].includes(job.status);
+        const contractorMatch = job.contractorId === user?.id;
+        return statusMatch && contractorMatch;
+      });
+      setJobs(myJobs);
+      
+      // 다이얼로그 닫기
+      setCustomerAbsentDialogOpen(false);
+    } catch (error) {
+      console.error('소비자 부재 처리 실패:', error);
+      setSnackbar({
+        open: true,
+        message: '소비자 부재 처리에 실패했습니다: ' + (error as Error).message,
+        severity: 'error'
+      });
+    }
+  };
+
   // 고객님댁으로 이동 처리
   const handleStartWork = async (jobId: string) => {
     try {
@@ -231,7 +345,7 @@ const MyJobs: React.FC = () => {
       // 작업 목록 새로고침
       const updatedJobs = await JobService.getAllJobs();
       const myJobs = updatedJobs.filter(job => {
-        const statusMatch = ['assigned', 'product_preparing', 'product_ready', 'pickup_completed', 'in_progress', 'completed'].includes(job.status);
+        const statusMatch = ['assigned', 'product_preparing', 'product_ready', 'pickup_completed', 'in_progress', 'completed', 'compensation_completed', 'reschedule_requested'].includes(job.status);
         const contractorMatch = job.contractorId === user?.id;
         return statusMatch && contractorMatch;
       });
@@ -489,6 +603,12 @@ const MyJobs: React.FC = () => {
     }
   };
 
+  // 채팅 모달 열기 핸들러
+  const handleOpenChat = (job: ConstructionJob) => {
+    setChatJob(job);
+    setChatDialogOpen(true);
+  };
+
   const handleCompleteJob = async (jobId: string) => {
     try {
       // 작업 상태를 완료로 업데이트
@@ -711,9 +831,14 @@ const MyJobs: React.FC = () => {
                 <Card>
                   <CardContent>
                     <Box display="flex" justifyContent="space-between" alignItems="flex-start" mb={2}>
-                      <Typography variant="h6">
-                        {job.title.replace(/-\d{1,3}(,\d{3})*원$/, '')}
-                      </Typography>
+                      <Box>
+                        <Typography variant="h6">
+                          {job.title.replace(/-\d{1,3}(,\d{3})*원$/, '')}
+                        </Typography>
+                        <Typography variant="caption" color="textSecondary">
+                          작업 ID: {job.id}
+                        </Typography>
+                      </Box>
                       <Button 
                         variant="outlined" 
                         size="small"
@@ -757,83 +882,187 @@ const MyJobs: React.FC = () => {
                     </Box>
                     
                     <Box display="flex" gap={1} flexWrap="wrap">
-                      {/* 제품준비완료 상태일 때 픽업 버튼 */}
+                      {/* 제품준비완료 상태일 때 픽업 버튼과 픽업지연 버튼 */}
                       {job.status === 'product_ready' && (
-                        <Button 
-                          variant="contained" 
-                          color="success"
-                          size="medium"
-                          fullWidth
-                          sx={{ 
-                            fontSize: '1rem', 
-                            fontWeight: 'bold',
-                            py: 1.5,
-                            mb: 1,
-                            background: 'linear-gradient(45deg, #4CAF50 30%, #66BB6A 90%)',
-                            boxShadow: '0 3px 5px 2px rgba(76, 175, 80, .3)',
-                            animation: 'bounce 1.5s infinite',
-                            '@keyframes bounce': {
-                              '0%, 20%, 50%, 80%, 100%': {
-                                transform: 'translateY(0)'
+                        <>
+                          <Button 
+                            variant="contained" 
+                            color="success"
+                            size="medium"
+                            fullWidth
+                            sx={{ 
+                              fontSize: '1rem', 
+                              fontWeight: 'bold',
+                              py: 1.5,
+                              mb: 1,
+                              background: 'linear-gradient(45deg, #4CAF50 30%, #66BB6A 90%)',
+                              boxShadow: '0 3px 5px 2px rgba(76, 175, 80, .3)',
+                              animation: 'bounce 1.5s infinite',
+                              '@keyframes bounce': {
+                                '0%, 20%, 50%, 80%, 100%': {
+                                  transform: 'translateY(0)'
+                                },
+                                '40%': {
+                                  transform: 'translateY(-5px)'
+                                },
+                                '60%': {
+                                  transform: 'translateY(-3px)'
+                                }
                               },
-                              '40%': {
-                                transform: 'translateY(-5px)'
-                              },
-                              '60%': {
-                                transform: 'translateY(-3px)'
+                              '&:hover': {
+                                background: 'linear-gradient(45deg, #388E3C 30%, #4CAF50 90%)',
+                                transform: 'scale(1.05)',
+                                transition: 'all 0.3s ease'
                               }
-                            },
-                            '&:hover': {
-                              background: 'linear-gradient(45deg, #388E3C 30%, #4CAF50 90%)',
-                              transform: 'scale(1.05)',
-                              transition: 'all 0.3s ease'
-                            }
-                          }}
-                          onClick={() => handlePickupCompleted(job.id)}
-                        >
-                          📦 제품 픽업후 이 버튼을 눌러주세요~!!
-                        </Button>
+                            }}
+                            onClick={() => handlePickupCompleted(job.id)}
+                          >
+                            📦 제품 픽업후 이 버튼을 눌러주세요~!!
+                          </Button>
+                          
+                          <Button 
+                            variant="outlined" 
+                            color="warning"
+                            size="small"
+                            sx={{ 
+                              fontSize: '0.8rem', 
+                              fontWeight: 'normal',
+                              py: 0.5,
+                              px: 1,
+                              minWidth: 'auto',
+                              borderWidth: '1px',
+                              '&:hover': {
+                                borderWidth: '2px',
+                                transform: 'scale(1.02)',
+                                transition: 'all 0.2s ease'
+                              }
+                            }}
+                            onClick={() => handlePickupDelayConfirm(job.id)}
+                          >
+                            ⚠️ 픽업지연
+                          </Button>
+                        </>
                       )}
                       
-                      {/* 픽업완료 상태일 때 고객님댁으로 이동 버튼 */}
+                      {/* 픽업완료 상태일 때 고객님댁으로 이동 버튼과 소비자부재 버튼 */}
                       {job.status === 'pickup_completed' && (
-                        <Button 
-                          variant="contained" 
-                          color="primary"
-                          size="medium"
-                          fullWidth
-                          sx={{ 
-                            fontSize: '1rem', 
-                            fontWeight: 'bold',
-                            py: 1.5,
-                            mb: 1,
-                            background: 'linear-gradient(45deg, #F44336 30%, #EF5350 90%)',
-                            boxShadow: '0 3px 5px 2px rgba(244, 67, 54, .3)',
-                            animation: 'pulse 2s infinite',
-                            '@keyframes pulse': {
-                              '0%': {
-                                transform: 'scale(1)',
-                                boxShadow: '0 3px 5px 2px rgba(244, 67, 54, .3)'
+                        <>
+                          <Button 
+                            variant="contained" 
+                            color="primary"
+                            size="medium"
+                            fullWidth
+                            sx={{ 
+                              fontSize: '1rem', 
+                              fontWeight: 'bold',
+                              py: 1.5,
+                              mb: 1,
+                              background: 'linear-gradient(45deg, #F44336 30%, #EF5350 90%)',
+                              boxShadow: '0 3px 5px 2px rgba(244, 67, 54, .3)',
+                              animation: 'pulse 2s infinite',
+                              '@keyframes pulse': {
+                                '0%': {
+                                  transform: 'scale(1)',
+                                  boxShadow: '0 3px 5px 2px rgba(244, 67, 54, .3)'
+                                },
+                                '50%': {
+                                  transform: 'scale(1.02)',
+                                  boxShadow: '0 5px 15px 2px rgba(244, 67, 54, .5)'
+                                },
+                                '100%': {
+                                  transform: 'scale(1)',
+                                  boxShadow: '0 3px 5px 2px rgba(244, 67, 54, .3)'
+                                }
                               },
-                              '50%': {
-                                transform: 'scale(1.02)',
-                                boxShadow: '0 5px 15px 2px rgba(244, 67, 54, .5)'
-                              },
-                              '100%': {
-                                transform: 'scale(1)',
-                                boxShadow: '0 3px 5px 2px rgba(244, 67, 54, .3)'
+                              '&:hover': {
+                                background: 'linear-gradient(45deg, #D32F2F 30%, #F44336 90%)',
+                                transform: 'scale(1.05)',
+                                transition: 'all 0.3s ease'
                               }
-                            },
-                            '&:hover': {
-                              background: 'linear-gradient(45deg, #D32F2F 30%, #F44336 90%)',
-                              transform: 'scale(1.05)',
-                              transition: 'all 0.3s ease'
-                            }
-                          }}
-                          onClick={() => handleStartWork(job.id)}
-                        >
-                          🚚 늦지않게 시공지로 이동후 이 버튼을 눌러주세요~^^
-                        </Button>
+                            }}
+                            onClick={() => handleStartWork(job.id)}
+                          >
+                            🚚 늦지않게 시공지로 이동후 이 버튼을 눌러주세요~^^
+                          </Button>
+                          
+                          <Button 
+                            variant="outlined" 
+                            color="error"
+                            size="small"
+                            sx={{ 
+                              fontSize: '0.8rem', 
+                              fontWeight: 'normal',
+                              py: 0.5,
+                              px: 1,
+                              minWidth: 'auto',
+                              borderWidth: '1px',
+                              '&:hover': {
+                                borderWidth: '2px',
+                                transform: 'scale(1.02)',
+                                transition: 'all 0.2s ease'
+                              }
+                            }}
+                            onClick={() => handleCustomerAbsentConfirm(job.id)}
+                          >
+                            🏠 소비자부재
+                          </Button>
+                        </>
+                      )}
+                      
+                      {/* 보상완료 상태일 때 보상 정보 표시 */}
+                      {job.status === 'compensation_completed' && job.compensationInfo && (
+                        <Box sx={{ 
+                          p: 2, 
+                          mb: 2, 
+                          bgcolor: 'warning.light', 
+                          borderRadius: 1,
+                          border: '1px solid',
+                          borderColor: 'warning.main'
+                        }}>
+                          <Typography variant="h6" color="warning.dark" gutterBottom>
+                            {job.compensationInfo.type === 'product_not_ready' && '💰 제품 미준비 보상 완료'}
+                            {job.compensationInfo.type === 'customer_absent' && '💰 소비자 부재 보상 완료'}
+                            {job.compensationInfo.type === 'schedule_change' && '💰 일정 변경 보상 완료'}
+                          </Typography>
+                          <Typography variant="body2" color="textSecondary">
+                            보상 금액: {job.compensationInfo.amount.toLocaleString()}포인트
+                          </Typography>
+                          <Typography variant="body2" color="textSecondary">
+                            보상율: {job.compensationInfo.rate}%
+                          </Typography>
+                          <Typography variant="body2" color="textSecondary">
+                            처리일시: {job.compensationInfo.processedAt.toLocaleString('ko-KR')}
+                          </Typography>
+                        </Box>
+                      )}
+                      
+                      {/* 일정 재조정 요청 상태일 때 보상 정보 표시 */}
+                      {job.status === 'reschedule_requested' && job.compensationInfo && (
+                        <Box sx={{ 
+                          p: 2, 
+                          mb: 2, 
+                          bgcolor: 'info.light', 
+                          borderRadius: 1,
+                          border: '1px solid',
+                          borderColor: 'info.main'
+                        }}>
+                          <Typography variant="h6" color="info.dark" gutterBottom>
+                            {job.compensationInfo.type === 'product_not_ready' && '📅 제품 미준비 보상 + 일정 재조정 요청'}
+                            {job.compensationInfo.type === 'customer_absent' && '📅 소비자 부재 보상 + 일정 재조정 요청'}
+                          </Typography>
+                          <Typography variant="body2" color="textSecondary">
+                            보상 금액: {job.compensationInfo.amount.toLocaleString()}포인트
+                          </Typography>
+                          <Typography variant="body2" color="textSecondary">
+                            보상율: {job.compensationInfo.rate}%
+                          </Typography>
+                          <Typography variant="body2" color="textSecondary">
+                            처리일시: {job.compensationInfo.processedAt.toLocaleString('ko-KR')}
+                          </Typography>
+                          <Typography variant="body2" color="info.dark" sx={{ mt: 1, fontWeight: 'bold' }}>
+                            💡 판매자가 새로운 일정을 설정하면 시공을 계속 진행할 수 있습니다.
+                          </Typography>
+                        </Box>
                       )}
                       
                       {/* 진행중 상태일 때 시공완료 버튼 */}
@@ -876,7 +1105,7 @@ const MyJobs: React.FC = () => {
                         variant="outlined" 
                         size="small"
                         startIcon={<Chat />}
-                        onClick={() => navigate(`/contractor/chat/${job.id}`)}
+                        onClick={() => handleOpenChat(job)}
                       >
                         채팅
                       </Button>
@@ -915,7 +1144,9 @@ const MyJobs: React.FC = () => {
               </Box>
             </DialogTitle>
             
-            <DialogContent>
+            <DialogContent sx={{
+              bgcolor: (theme) => theme.palette.mode === 'dark' ? 'background.paper' : 'background.default'
+            }}>
                           <Stepper activeStep={activeStep} sx={{ mb: 4 }}>
               <Step>
                 <StepLabel>시공 상담 및 사용법 안내</StepLabel>
@@ -980,7 +1211,9 @@ const MyJobs: React.FC = () => {
               </Box>
             </DialogTitle>
             
-            <DialogContent>
+            <DialogContent sx={{
+              bgcolor: (theme) => theme.palette.mode === 'dark' ? 'background.paper' : 'background.default'
+            }}>
               {selectedJob && (
                 <Box>
                   <Typography variant="h5" gutterBottom>
@@ -1197,6 +1430,160 @@ const MyJobs: React.FC = () => {
                 </Box>
               )}
             </DialogContent>
+          </Dialog>
+
+          {/* 채팅 모달 */}
+          <Dialog
+            open={chatDialogOpen}
+            onClose={() => setChatDialogOpen(false)}
+            maxWidth="md"
+            fullWidth
+            disableEnforceFocus
+            disableAutoFocus
+            PaperProps={{
+              sx: {
+                height: '80vh',
+                maxHeight: '80vh'
+              }
+            }}
+          >
+            <DialogTitle>
+              <Box display="flex" alignItems="center" justifyContent="space-between">
+                <Box>
+                  <Typography variant="h6">
+                    시공자와 채팅
+                  </Typography>
+                  {chatJob && (
+                    <Box sx={{ mt: 1 }}>
+                      <Typography variant="body2" color="textSecondary">
+                        {formatJobTitle(chatJob)}-{chatJob.address?.split(' ').slice(0, 2).join(' ')}
+                      </Typography>
+                      <Typography variant="body2" color="textSecondary">
+                        시공자({chatJob.contractorName || '시공자'}, {user?.phone || '연락처 없음'})
+                      </Typography>
+                    </Box>
+                  )}
+                </Box>
+                <Button onClick={() => setChatDialogOpen(false)}>
+                  닫기
+                </Button>
+              </Box>
+            </DialogTitle>
+            
+            <DialogContent sx={{ 
+              p: 0, 
+              display: 'flex', 
+              flexDirection: 'column',
+              bgcolor: (theme) => theme.palette.mode === 'dark' ? 'background.paper' : 'background.default'
+            }}>
+              {chatJob && (
+                <ChatArea 
+                  jobId={chatJob.id}
+                  jobTitle={chatJob.title}
+                  jobAddress={chatJob.address}
+                  contractorName={chatJob.contractorName || '시공자'}
+                  contractorPhone={user?.phone || ''}
+                  isDialog={true}
+                  userRole="contractor"
+                />
+              )}
+            </DialogContent>
+          </Dialog>
+
+          {/* 픽업지연 확인 다이얼로그 */}
+          <Dialog
+            open={pickupDelayDialogOpen}
+            onClose={() => setPickupDelayDialogOpen(false)}
+            maxWidth="sm"
+            fullWidth
+          >
+            <DialogTitle sx={{ 
+              bgcolor: (theme) => theme.palette.mode === 'dark' ? 'warning.dark' : 'warning.light', 
+              color: 'warning.contrastText',
+              display: 'flex',
+              alignItems: 'center',
+              gap: 1
+            }}>
+              ⚠️ 픽업지연 확인
+            </DialogTitle>
+            <DialogContent sx={{ 
+              pt: 3,
+              bgcolor: (theme) => theme.palette.mode === 'dark' ? 'background.paper' : 'background.default'
+            }}>
+              <Typography variant="body1" gutterBottom>
+                제품이 준비되지 않아 픽업을 할 수 없는 상황인가요?
+              </Typography>
+              <Typography variant="body2" color="textSecondary" sx={{ mt: 2 }}>
+                • 이 작업은 되돌릴 수 없습니다.<br/>
+                • 제품 미준비 보상이 지급됩니다.<br/>
+                • 보상 금액은 관리자 설정에 따라 결정됩니다.
+              </Typography>
+            </DialogContent>
+            <DialogActions sx={{ p: 2, gap: 1 }}>
+              <Button 
+                onClick={() => setPickupDelayDialogOpen(false)}
+                variant="outlined"
+                color="inherit"
+              >
+                취소
+              </Button>
+              <Button 
+                onClick={() => handlePickupDelay(pickupDelayJobId)}
+                variant="contained"
+                color="warning"
+                startIcon={<span>⚠️</span>}
+              >
+                픽업지연 확정
+              </Button>
+            </DialogActions>
+          </Dialog>
+
+          {/* 소비자 부재 확인 다이얼로그 */}
+          <Dialog
+            open={customerAbsentDialogOpen}
+            onClose={() => setCustomerAbsentDialogOpen(false)}
+            maxWidth="sm"
+            fullWidth
+          >
+            <DialogTitle sx={{ 
+              bgcolor: (theme) => theme.palette.mode === 'dark' ? 'error.dark' : 'error.light', 
+              color: 'error.contrastText',
+              display: 'flex',
+              alignItems: 'center',
+              gap: 1
+            }}>
+              🏠 소비자 부재 확인
+            </DialogTitle>
+            <DialogContent sx={{ 
+              pt: 3,
+              bgcolor: (theme) => theme.palette.mode === 'dark' ? 'background.paper' : 'background.default'
+            }}>
+              <Typography variant="body1" gutterBottom>
+                소비자가 부재하여 시공을 진행할 수 없는 상황인가요?
+              </Typography>
+              <Typography variant="body2" color="textSecondary" sx={{ mt: 2 }}>
+                • 이 작업은 되돌릴 수 없습니다.<br/>
+                • 소비자 부재 보상이 지급됩니다.<br/>
+                • 보상 금액은 관리자 설정에 따라 결정됩니다.
+              </Typography>
+            </DialogContent>
+            <DialogActions sx={{ p: 2, gap: 1 }}>
+              <Button 
+                onClick={() => setCustomerAbsentDialogOpen(false)}
+                variant="outlined"
+                color="inherit"
+              >
+                취소
+              </Button>
+              <Button 
+                onClick={() => handleCustomerAbsent(customerAbsentJobId)}
+                variant="contained"
+                color="error"
+                startIcon={<span>🏠</span>}
+              >
+                소비자 부재 확정
+              </Button>
+            </DialogActions>
           </Dialog>
 
           <Snackbar

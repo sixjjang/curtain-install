@@ -502,6 +502,11 @@ const JobDetail: React.FC = () => {
               value={consultationNotes}
               onChange={(e) => setConsultationNotes(e.target.value)}
               placeholder="고객과 상담한 내용이나 특이사항을 기록해주세요..."
+              sx={{
+                '& .MuiInputBase-root': {
+                  backgroundColor: (theme) => theme.palette.mode === 'dark' ? 'background.paper' : 'background.paper',
+                }
+              }}
             />
           </Box>
         );
@@ -1426,7 +1431,9 @@ const JobDetail: React.FC = () => {
           </Box>
         </DialogTitle>
         
-        <DialogContent>
+        <DialogContent sx={{
+          bgcolor: (theme) => theme.palette.mode === 'dark' ? 'background.paper' : 'background.default'
+        }}>
           <Stepper activeStep={activeStep} sx={{ mb: 4 }}>
             <Step>
               <StepLabel>시공 상담</StepLabel>
@@ -1488,7 +1495,9 @@ const JobDetail: React.FC = () => {
           </Box>
         </DialogTitle>
         
-        <DialogContent>
+        <DialogContent sx={{
+          bgcolor: (theme) => theme.palette.mode === 'dark' ? 'background.paper' : 'background.default'
+        }}>
           {cancellationInfo && (
             <Box>
               <Alert 
@@ -1515,7 +1524,12 @@ const JobDetail: React.FC = () => {
                 value={cancelReason}
                 onChange={(e) => setCancelReason(e.target.value)}
                 placeholder="취소 사유를 입력해주세요..."
-                sx={{ mb: 2 }}
+                sx={{ 
+                  mb: 2,
+                  '& .MuiInputBase-root': {
+                    backgroundColor: (theme) => theme.palette.mode === 'dark' ? 'background.paper' : 'background.paper',
+                  }
+                }}
               />
             </Box>
           )}

@@ -1,4 +1,4 @@
-import React from 'react';
+import React, { useState, useEffect } from 'react';
 import {
   Box,
   Typography,
@@ -10,76 +10,128 @@ import {
   ListItemAvatar,
   Avatar,
   Chip,
-  Divider
+  Divider,
+  CircularProgress,
+  Alert
 } from '@mui/material';
 import {
   Notifications,
   Work,
   TrendingUp,
-  Info
+  Info,
+  Chat
 } from '@mui/icons-material';
+import { useAuth } from '../../../shared/contexts/AuthContext';
+import { NotificationService } from '../../../shared/services/notificationService';
+import { Notification } from '../../../types';
 
 const NotificationsPage: React.FC = () => {
-  const notifications = [
-    {
-      id: 1,
-      title: '새로운 시공 작업',
-      message: '거실 커튼 시공 작업이 등록되었습니다.',
-      type: 'work',
-      time: '2시간 전',
-      isRead: false
-    },
-    {
-      id: 2,
-      title: '레벨업 축하!',
-      message: 'Lv.3 주니어 시공자로 승급되었습니다!',
-      type: 'level',
-      time: '1일 전',
-      isRead: false
-    },
-    {
-      id: 3,
-      title: '작업 완료',
-      message: '침실 블라인드 설치 작업이 완료되었습니다.',
-      type: 'work',
-      time: '2일 전',
-      isRead: true
-    },
-    {
-      id: 4,
-      title: '시스템 공지',
-      message: '새로운 기능이 추가되었습니다.',
-      type: 'info',
-      time: '3일 전',
-      isRead: true
-    }
-  ];
+  const { user } = useAuth();
+  const [notifications, setNotifications] = useState<Notification[]>([]);
+  const [loading, setLoading] = useState(true);
+  const [error, setError] = useState<string | null>(null);
+
+  // 알림 데이터 로딩
+  useEffect(() => {
+    const loadNotifications = async () => {
+      if (!user?.id) return;
+      
+      try {
+        setLoading(true);
+        setError(null);
+        
+        const userNotifications = await NotificationService.getNotifications(user.id);
+        setNotifications(userNotifications);
+      } catch (error) {
+        console.error('알림 로딩 실패:', error);
+        setError('알림을 불러올 수 없습니다.');
+      } finally {
+        setLoading(false);
+      }
+    };
+
+    loadNotifications();
+  }, [user?.id]);
 
   const getIcon = (type: string) => {
     switch (type) {
-      case 'work': return <Work />;
-      case 'level': return <TrendingUp />;
       case 'info': return <Info />;
+      case 'success': return <TrendingUp />;
+      case 'warning': return <Work />;
+      case 'error': return <Notifications />;
       default: return <Notifications />;
     }
   };
 
   const getColor = (type: string) => {
     switch (type) {
-      case 'work': return 'primary';
-      case 'level': return 'success';
       case 'info': return 'info';
+      case 'success': return 'success';
+      case 'warning': return 'warning';
+      case 'error': return 'error';
       default: return 'default';
     }
   };
 
+  // 시간 포맷팅
+  const formatTime = (timestamp: Date) => {
+    const now = new Date();
+    const time = new Date(timestamp);
+    const diffInMinutes = Math.floor((now.getTime() - time.getTime()) / (1000 * 60));
+    
+    if (diffInMinutes < 1) return '방금 전';
+    if (diffInMinutes < 60) return `${diffInMinutes}분 전`;
+    
+    const diffInHours = Math.floor(diffInMinutes / 60);
+    if (diffInHours < 24) return `${diffInHours}시간 전`;
+    
+    const diffInDays = Math.floor(diffInHours / 24);
+    if (diffInDays < 7) return `${diffInDays}일 전`;
+    
+    return time.toLocaleDateString('ko-KR');
+  };
+
+  if (loading) {
+    return (
+      <Box display="flex" justifyContent="center" alignItems="center" py={4}>
+        <CircularProgress />
+      </Box>
+    );
+  }
+
+  if (error) {
+    return (
+      <Box py={4}>
+        <Alert severity="error">{error}</Alert>
+      </Box>
+    );
+  }
+
   return (
     <Box>
-
-      <Card>
-        <CardContent>
-          <List>
-            {notifications.map((notification, index) => (
+      <Typography variant="h5" gutterBottom>
+        알림
+      </Typography>
+      
+      {notifications.length === 0 ? (
+        <Card>
+          <CardContent>
+            <Box textAlign="center" py={4}>
+              <Notifications sx={{ fontSize: 60, color: 'text.secondary', mb: 2 }} />
+              <Typography variant="h6" color="textSecondary" gutterBottom>
+                알림이 없습니다
+              </Typography>
+              <Typography variant="body2" color="textSecondary">
+                새로운 알림이 오면 여기에 표시됩니다.
+              </Typography>
+            </Box>
+          </CardContent>
+        </Card>
+      ) : (
+        <Card>
+          <CardContent>
+            <List>
+              {notifications.map((notification, index) => (
               <React.Fragment key={notification.id}>
                 <ListItem 
                   sx={{ 
@@ -109,19 +161,20 @@ const NotificationsPage: React.FC = () => {
                         <Typography variant="body2" color="textSecondary" display="block">
                           {notification.message}
                         </Typography>
-                        <Typography variant="caption" color="textSecondary" display="block">
-                          {notification.time}
-                        </Typography>
+                                                 <Typography variant="caption" color="textSecondary" display="block">
+                           {formatTime(notification.createdAt)}
+                         </Typography>
                       </>
                     }
                   />
                 </ListItem>
                 {index < notifications.length - 1 && <Divider />}
               </React.Fragment>
-            ))}
-          </List>
-        </CardContent>
-      </Card>
+                          ))}
+            </List>
+          </CardContent>
+        </Card>
+      )}
     </Box>
   );
 };

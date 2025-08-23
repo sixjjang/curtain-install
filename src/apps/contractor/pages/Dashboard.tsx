@@ -17,7 +17,13 @@ import {
   Alert,
   CircularProgress,
   Skeleton,
-  Divider
+  Divider,
+  IconButton,
+  Paper,
+  Stack,
+  Badge,
+  Tooltip,
+  Rating
 } from '@mui/material';
 import {
   Work,
@@ -28,13 +34,27 @@ import {
   Schedule,
   CheckCircle,
   Pending,
-  Chat
+  Chat,
+  MonetizationOn,
+  Speed,
+  CalendarToday,
+  ArrowForward,
+  Visibility,
+  Assignment,
+  People,
+  EmojiEvents,
+  TrendingDown,
+  AccessTime,
+  CheckCircleOutline,
+  Warning,
+  Info
 } from '@mui/icons-material';
 import { useAuth } from '../../../shared/contexts/AuthContext';
 import { ContractorInfo, ConstructionJob, Notification } from '../../../types';
 import { JobService } from '../../../shared/services/jobService';
 import { NotificationService } from '../../../shared/services/notificationService';
 import { ContractorService } from '../../../shared/services/contractorService';
+import { PointService } from '../../../shared/services/pointService';
 
 const Dashboard: React.FC = () => {
   const { user } = useAuth();
@@ -59,7 +79,15 @@ const Dashboard: React.FC = () => {
     totalEarnings: 0,
     rating: 0,
     level: 1,
-    points: 0
+    points: 0,
+    pendingJobs: 0,
+    inProgressJobs: 0,
+    monthlyEarnings: 0,
+    weeklyEarnings: 0,
+    dailyEarnings: 0,
+    completionRate: 0,
+    averageRating: 0,
+    totalReviews: 0
   });
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
@@ -74,10 +102,11 @@ const Dashboard: React.FC = () => {
         setError(null);
 
         // 병렬로 데이터 로딩
-        const [jobsData, notificationsData, contractorStatsData] = await Promise.allSettled([
+        const [jobsData, notificationsData, contractorStatsData, pointBalance] = await Promise.allSettled([
           JobService.getJobsByContractor(user.id),
           NotificationService.getNotifications(user.id),
-          ContractorService.getContractorStats(user.id)
+          ContractorService.getContractorStats(user.id),
+          PointService.getPointBalance(user.id, 'contractor')
         ]);
 
         // 시공 작업 데이터 처리
@@ -88,6 +117,44 @@ const Dashboard: React.FC = () => {
             .filter(job => job.status === 'assigned' || job.status === 'in_progress')
             .slice(0, 5);
           setScheduledJobs(assignedJobs);
+
+          // 통계 계산
+          const totalJobs = jobs.length;
+          const completedJobs = jobs.filter(job => job.status === 'completed').length;
+          const pendingJobs = jobs.filter(job => job.status === 'pending').length;
+          const inProgressJobs = jobs.filter(job => 
+            job.status === 'assigned' || job.status === 'in_progress' || 
+            job.status === 'product_preparing' || job.status === 'product_ready'
+          ).length;
+
+          // 수익 계산
+          const totalEarnings = jobs
+            .filter(job => job.status === 'completed')
+            .reduce((sum, job) => sum + calculateTotalBudget(job), 0);
+
+          // 월간/주간/일간 수익 계산 (간단한 예시)
+          const now = new Date();
+          const thisMonth = now.getMonth();
+          const thisYear = now.getFullYear();
+          
+          const monthlyEarnings = jobs
+            .filter(job => job.status === 'completed' && 
+              new Date(job.completedDate || job.createdAt).getMonth() === thisMonth &&
+              new Date(job.completedDate || job.createdAt).getFullYear() === thisYear)
+            .reduce((sum, job) => sum + calculateTotalBudget(job), 0);
+
+          const completionRate = totalJobs > 0 ? (completedJobs / totalJobs) * 100 : 0;
+
+          setContractorStats(prev => ({
+            ...prev,
+            totalJobs,
+            completedJobs,
+            totalEarnings,
+            pendingJobs,
+            inProgressJobs,
+            monthlyEarnings,
+            completionRate
+          }));
         }
 
         // 알림 데이터 처리
@@ -98,7 +165,7 @@ const Dashboard: React.FC = () => {
             .filter(notif => !notif.isRead)
             .slice(0, 10);
           setNotifications(unreadNotifications);
-          
+
           // 채팅 알림 처리
           const chatNotifMap: {[jobId: string]: number} = {};
           notifs.forEach(notification => {
@@ -114,11 +181,23 @@ const Dashboard: React.FC = () => {
 
         // 시공자 통계 데이터 처리
         if (contractorStatsData.status === 'fulfilled') {
-          setContractorStats(contractorStatsData.value);
+          const stats = contractorStatsData.value;
+          setContractorStats(prev => ({
+            ...prev,
+            rating: stats.rating || 0,
+            level: stats.level || 1,
+            averageRating: stats.rating || 0, // rating을 averageRating으로 사용
+            totalReviews: 0 // 기본값으로 설정
+          }));
         }
 
-      } catch (err) {
-        console.error('대시보드 데이터 로딩 실패:', err);
+        // 포인트 잔액 처리
+        if (pointBalance.status === 'fulfilled') {
+          setContractorStats(prev => ({ ...prev, points: pointBalance.value }));
+        }
+
+      } catch (error) {
+        console.error('대시보드 데이터 로드 실패:', error);
         setError('데이터를 불러오는 중 오류가 발생했습니다.');
       } finally {
         setLoading(false);
@@ -150,583 +229,611 @@ const Dashboard: React.FC = () => {
     }
   }, [user?.id]);
 
-  const getStatusColor = (status: string) => {
-    switch (status) {
-      case 'pending': return 'warning';
-      case 'assigned': return 'info';
-      case 'in_progress': return 'primary';
-      case 'completed': return 'success';
-      case 'cancelled': return 'error';
-      default: return 'default';
-    }
-  };
-
   const getStatusText = (status: string) => {
     switch (status) {
       case 'pending': return '대기중';
       case 'assigned': return '배정됨';
-      case 'in_progress': return '진행중';
+      case 'product_preparing': return '제품준비중';
+      case 'product_ready': return '제품준비완료';
+      case 'pickup_completed': return '픽업완료';
+      case 'in_progress': return '시공중';
       case 'completed': return '완료';
       case 'cancelled': return '취소됨';
-      default: return '알 수 없음';
+      case 'reschedule_requested': return '일정 재조정 요청';
+      default: return status;
     }
   };
 
-
-
-  // 오늘의 목표 계산
-  const calculateTodayGoals = () => {
-    const today = new Date();
-    const todayJobs = scheduledJobs.filter(job => {
-      if (!job.scheduledDate) return false;
-      const jobDate = new Date(job.scheduledDate);
-      return jobDate.toDateString() === today.toDateString();
-    });
-
-    const completedToday = todayJobs.filter(job => job.status === 'completed').length;
-    const totalToday = todayJobs.length;
-
-    return {
-      completed: completedToday,
-      total: totalToday,
-      progress: totalToday > 0 ? (completedToday / totalToday) * 100 : 0
-    };
+  const getStatusColor = (status: string) => {
+    switch (status) {
+      case 'pending': return 'warning';
+      case 'assigned': return 'info';
+      case 'product_preparing': return 'secondary';
+      case 'product_ready': return 'success';
+      case 'pickup_completed': return 'primary';
+      case 'in_progress': return 'primary';
+      case 'completed': return 'success';
+      case 'cancelled': return 'error';
+      case 'reschedule_requested': return 'warning';
+      default: return 'default';
+    }
   };
 
-  const todayGoals = calculateTodayGoals();
-  
-  // 채팅 알림 총 개수 계산
-  const totalChatNotifications = Object.values(chatNotifications).reduce((sum, count) => sum + count, 0);
-
-  // 동적 인사말 생성 함수
-  const generateGreeting = () => {
-    const now = new Date();
-    const hour = now.getHours();
-    const month = now.getMonth() + 1; // 0-11을 1-12로 변환
-    const todayJobsCount = todayGoals.total;
-    const completedJobsCount = todayGoals.completed;
-    
-    // 시간대별 기본 인사말
-    let timeGreeting = '';
-    if (hour >= 5 && hour < 12) {
-      timeGreeting = '좋은 아침입니다';
-    } else if (hour >= 12 && hour < 18) {
-      timeGreeting = '안녕하세요';
-    } else if (hour >= 18 && hour < 22) {
-      timeGreeting = '좋은 저녁입니다';
-    } else {
-      timeGreeting = '수고하셨습니다';
+  const getStatusIcon = (status: string) => {
+    switch (status) {
+      case 'pending': return <Pending />;
+      case 'assigned': return <Assignment />;
+      case 'product_preparing': return <Schedule />;
+      case 'product_ready': return <CheckCircle />;
+      case 'pickup_completed': return <CheckCircle />;
+      case 'in_progress': return <Work />;
+      case 'completed': return <CheckCircle />;
+      case 'cancelled': return <Pending />;
+      default: return <Work />;
     }
-
-    // 계절별 인사말
-    let seasonGreeting = '';
-    if (month >= 3 && month <= 5) {
-      seasonGreeting = '🌸 봄날의 시공, 기분 좋은 하루 되세요!';
-    } else if (month >= 6 && month <= 8) {
-      seasonGreeting = '☀️ 더운 여름, 시공하실 때 더욱 조심하세요!';
-    } else if (month >= 9 && month <= 11) {
-      seasonGreeting = '🍁 가을의 시공, 상쾌한 하루 되세요!';
-    } else {
-      seasonGreeting = '❄️ 추운 겨울, 시공하실 때 보온에 유의하세요!';
-    }
-
-    // 시공 일정에 따른 인사말
-    let scheduleGreeting = '';
-    if (todayJobsCount === 0) {
-      scheduleGreeting = '오늘은 시공 일정이 없네요. 여유로운 하루 되세요! 😊';
-    } else if (todayJobsCount === 1) {
-      scheduleGreeting = '오늘 시공 1건이 있네요. 차근차근 진행하세요! 💪';
-    } else if (todayJobsCount <= 3) {
-      scheduleGreeting = `오늘 시공 ${todayJobsCount}건이 있네요. 힘내세요! 아자아자! 🔥`;
-    } else if (todayJobsCount <= 5) {
-      scheduleGreeting = `오늘 시공이 ${todayJobsCount}건이나 되네요! 정말 바쁘시겠어요. 화이팅! ⚡`;
-    } else {
-      scheduleGreeting = `오늘 시공이 ${todayJobsCount}건이나 되네요! 정말 대단하세요! 슈퍼맨! 🦸‍♂️`;
-    }
-
-    // 완료된 작업에 따른 격려
-    let completionGreeting = '';
-    if (completedJobsCount > 0) {
-      if (completedJobsCount === todayJobsCount) {
-        completionGreeting = '오늘 모든 시공을 완료하셨네요! 정말 수고하셨습니다! 🎉';
-      } else if (completedJobsCount >= todayJobsCount * 0.7) {
-        completionGreeting = `이미 ${completedJobsCount}건을 완료하셨네요! 거의 다 끝나가요! 🚀`;
-      } else {
-        completionGreeting = `이미 ${completedJobsCount}건을 완료하셨네요! 잘 하고 계세요! 👍`;
-      }
-    }
-
-    // 운전 관련 인사말 (아침이나 오후에만)
-    let drivingGreeting = '';
-    if ((hour >= 6 && hour < 10) || (hour >= 14 && hour < 18)) {
-      drivingGreeting = '🚗 이동하실 때 운전 조심하세요!';
-    }
-
-    // 최종 인사말 조합
-    let finalGreeting = `${timeGreeting}, ${user?.name || '시공자'}님! 👋`;
-    
-    // 추가 메시지들
-    const additionalMessages = [
-      seasonGreeting,
-      scheduleGreeting,
-      completionGreeting,
-      drivingGreeting
-    ].filter(msg => msg !== '');
-
-    return {
-      main: finalGreeting,
-      additional: additionalMessages
-    };
   };
 
-  const greeting = generateGreeting();
+  const formatCurrency = (amount: number) => {
+    return new Intl.NumberFormat('ko-KR').format(amount);
+  };
+
+  const getLevelProgress = () => {
+    const currentLevel = contractorStats.level;
+    const nextLevel = currentLevel + 1;
+    const progress = (currentLevel % 1) * 100; // 레벨 진행률 계산
+    return { currentLevel: Math.floor(currentLevel), nextLevel, progress };
+  };
+
+  const getRecentJobs = () => {
+    return scheduledJobs.slice(0, 3);
+  };
+
+  const getJobsWithChatNotifications = () => {
+    return scheduledJobs.filter(job => chatNotifications[job.id] > 0);
+  };
 
   if (loading) {
     return (
-      <Box>
-        
-        <Grid container spacing={3}>
-          {[1, 2, 3, 4].map((item) => (
-            <Grid item xs={12} sm={6} md={3} key={item}>
-              <Card>
-                <CardContent>
-                  <Box display="flex" alignItems="center">
-                    <Skeleton variant="circular" width={40} height={40} sx={{ mr: 2 }} />
-                    <Box sx={{ flexGrow: 1 }}>
-                      <Skeleton variant="text" width="60%" height={32} />
-                      <Skeleton variant="text" width="80%" height={20} />
-                    </Box>
-                  </Box>
-                </CardContent>
-              </Card>
-            </Grid>
-          ))}
-          
-          <Grid item xs={12} md={8}>
-            <Card>
-              <CardContent>
-                <Skeleton variant="text" width="30%" height={32} sx={{ mb: 2 }} />
-                {[1, 2, 3].map((item) => (
-                  <Skeleton key={item} variant="rectangular" height={80} sx={{ mb: 1, borderRadius: 1 }} />
-                ))}
-              </CardContent>
-            </Card>
-          </Grid>
-          
-          <Grid item xs={12} md={4}>
-            <Card>
-              <CardContent>
-                <Skeleton variant="text" width="40%" height={32} sx={{ mb: 2 }} />
-                {[1, 2, 3].map((item) => (
-                  <Skeleton key={item} variant="rectangular" height={48} sx={{ mb: 1, borderRadius: 1 }} />
-                ))}
-              </CardContent>
-            </Card>
-          </Grid>
-        </Grid>
+      <Box sx={{ display: 'flex', justifyContent: 'center', alignItems: 'center', height: '50vh' }}>
+        <CircularProgress />
       </Box>
     );
   }
 
+  if (error) {
+    return (
+      <Alert severity="error" sx={{ mb: 2 }}>
+        {error}
+      </Alert>
+    );
+  }
+
+  const levelProgress = getLevelProgress();
+
   return (
-    <Box>
-      {/* 동적 인사말 메시지들 */}
-      {greeting.additional.length > 0 && (
-        <Box mb={3}>
-          {greeting.additional.map((message, index) => (
-            <Typography 
-              key={index} 
-              variant="body1" 
-              color="textSecondary" 
-              sx={{ mb: 1 }}
-            >
-              {message}
-            </Typography>
-          ))}
-        </Box>
-      )}
+    <Box sx={{ flexGrow: 1 }}>
+      {/* 환영 메시지 */}
+      <Box sx={{ mb: 3, px: { xs: 1, sm: 2, md: 3 } }}>
+        <Typography variant="h4" gutterBottom>
+          안녕하세요, {contractor?.name || user?.name || '시공자'}님! 👋
+        </Typography>
+        <Typography variant="body1" color="text.secondary">
+          오늘도 안전하고 깔끔한 시공 부탁드립니다. 현재 {contractorStats.inProgressJobs}개의 작업이 진행중입니다.
+        </Typography>
+      </Box>
 
-      {/* 에러 알림 */}
-      {error && (
-        <Alert severity="error" sx={{ mb: 3 }}>
-          {error}
-        </Alert>
-      )}
-
-      {/* 새로운 알림이 있을 때만 표시 */}
-      {notifications.length > 0 && (
-        <Alert severity="info" sx={{ mb: 3 }}>
-          새로운 알림이 {notifications.length}건 있습니다. 확인해보세요!
-        </Alert>
-      )}
-
-      <Grid container spacing={3}>
-        {/* 통계 카드들 */}
-        <Grid item xs={12} sm={6} md={3}>
-          <Card>
-            <CardContent>
-              <Box display="flex" alignItems="center">
-                <Avatar sx={{ bgcolor: 'primary.main', mr: 2 }}>
-                  <Work />
-                </Avatar>
-                <Box>
-                  <Typography variant="h4">{contractorStats.totalJobs}</Typography>
-                  <Typography variant="body2" color="textSecondary">
-                    총 시공 건수
-                  </Typography>
-                </Box>
-              </Box>
-            </CardContent>
-          </Card>
-        </Grid>
-
-        <Grid item xs={12} sm={6} md={3}>
-          <Card>
-            <CardContent>
-              <Box display="flex" alignItems="center">
-                <Avatar sx={{ bgcolor: 'success.main', mr: 2 }}>
-                  <TrendingUp />
-                </Avatar>
-                <Box>
-                  <Typography variant="h4">{contractorStats.level}</Typography>
-                  <Typography variant="body2" color="textSecondary">
-                    현재 레벨
-                  </Typography>
-                </Box>
-              </Box>
-            </CardContent>
-          </Card>
-        </Grid>
-
-        <Grid item xs={12} sm={6} md={3}>
-          <Card>
-            <CardContent>
-              <Box display="flex" alignItems="center">
-                <Avatar sx={{ bgcolor: 'warning.main', mr: 2 }}>
-                  <Star />
-                </Avatar>
-                <Box>
-                  <Typography variant="h4">{Number(contractorStats.rating).toFixed(1)}</Typography>
-                  <Typography variant="body2" color="textSecondary">
-                    평균 평점
-                  </Typography>
-                </Box>
-              </Box>
-            </CardContent>
-          </Card>
-        </Grid>
-
-        <Grid item xs={12} sm={6} md={3}>
-          <Card>
-            <CardContent>
-              <Box display="flex" alignItems="center">
-                <Avatar sx={{ bgcolor: 'info.main', mr: 2 }}>
-                  <Notifications />
-                </Avatar>
-                <Box>
-                  <Typography variant="h4">{notifications.length}</Typography>
-                  <Typography variant="body2" color="textSecondary">
-                    새로운 알림
-                  </Typography>
-                </Box>
-              </Box>
-            </CardContent>
-          </Card>
-        </Grid>
-
-        {/* 채팅 알림 카드 */}
-        <Grid item xs={12} sm={6} md={3}>
-          <Card>
-            <CardContent>
-              <Box display="flex" alignItems="center">
-                <Avatar sx={{ bgcolor: totalChatNotifications > 0 ? 'error.main' : 'grey.500', mr: 2 }}>
-                  <Chat />
-                </Avatar>
-                <Box>
-                  <Typography variant="h4" sx={{ color: totalChatNotifications > 0 ? 'error.main' : 'inherit' }}>
-                    {totalChatNotifications}
-                  </Typography>
-                  <Typography variant="body2" color="textSecondary">
-                    채팅 알림
-                  </Typography>
-                </Box>
-              </Box>
-            </CardContent>
-          </Card>
-        </Grid>
-
-        {/* 최근 작업 목록 */}
-        <Grid item xs={12} md={8}>
-          <Card>
-            <CardContent>
-              <Box display="flex" justifyContent="space-between" alignItems="center" mb={2}>
-                <Typography variant="h6">시공예정작업</Typography>
-                <Button 
-                  variant="outlined" 
-                  size="small"
-                  onClick={() => navigate('/contractor/my-jobs')}
-                >
-                  전체 보기
-                </Button>
-              </Box>
-              
-              {scheduledJobs.length === 0 ? (
-                <Box textAlign="center" py={4}>
-                  <Work sx={{ fontSize: 48, color: 'text.secondary', mb: 2 }} />
-                  <Typography variant="body1" color="textSecondary">
-                    현재 시공 예정인 작업이 없습니다.
-                  </Typography>
-                </Box>
-              ) : (
-                <List>
-                  {scheduledJobs.map((job) => (
-                    <ListItem 
-                      key={job.id}
-                      button
-                      onClick={() => navigate(`/contractor/jobs/${job.id}`)}
-                      sx={{ 
-                        border: 1, 
-                        borderColor: 'divider', 
-                        borderRadius: 1, 
-                        mb: 1,
-                        '&:hover': {
-                          bgcolor: 'action.hover'
-                        }
-                      }}
-                    >
-                      <ListItemAvatar>
-                        <Avatar sx={{ bgcolor: 'primary.main' }}>
-                          <Work />
-                        </Avatar>
-                      </ListItemAvatar>
-                      <Box sx={{ flexGrow: 1 }}>
-                                                 <Box display="flex" alignItems="center" gap={1} mb={1}>
-                           <Typography variant="subtitle1">{job.title}</Typography>
-                           <Chip 
-                             label={getStatusText(job.status)} 
-                             color={getStatusColor(job.status)}
-                             size="small"
-                           />
-                         </Box>
-                        <Box>
-                          <Box display="flex" alignItems="center" gap={1} mb={0.5}>
-                            <LocationOn fontSize="small" color="action" />
-                            <Typography variant="body2">{job.address}</Typography>
-                          </Box>
-                          {job.scheduledDate && (
-                            <Box display="flex" alignItems="center" gap={1} mb={0.5}>
-                              <Schedule fontSize="small" color="action" />
-                              <Typography variant="body2">
-                                시공예정: {new Date(job.scheduledDate).toLocaleDateString('ko-KR', { 
-                                  month: 'short', 
-                                  day: 'numeric',
-                                  weekday: 'short'
-                                })}
-                              </Typography>
-                            </Box>
-                          )}
-                          <Box display="flex" alignItems="center" gap={1}>
-                            <Typography variant="body2" color="textSecondary">
-                              {job.finalAmount 
-                                ? `${job.finalAmount.toLocaleString()}원` 
-                                : calculateTotalBudget(job) > 0 
-                                  ? `${calculateTotalBudget(job).toLocaleString()}원`
-                                  : '예산 미정'
-                              }
-                            </Typography>
-                          </Box>
-                        </Box>
-                      </Box>
-                    </ListItem>
-                  ))}
-                </List>
-              )}
-            </CardContent>
-          </Card>
-        </Grid>
-
-        {/* 채팅 알림이 있는 작업 목록 */}
-        {totalChatNotifications > 0 && (
-          <Grid item xs={12}>
-            <Card>
-              <CardContent>
-                <Typography variant="h6" gutterBottom sx={{ display: 'flex', alignItems: 'center', gap: 1 }}>
-                  <Chat color="error" />
-                  채팅 알림이 있는 작업
-                </Typography>
-                <List>
-                  {scheduledJobs
-                    .filter(job => chatNotifications[job.id] > 0)
-                    .map((job, index) => (
-                      <React.Fragment key={job.id}>
-                        <ListItem 
-                          sx={{ 
-                            cursor: 'pointer',
-                            '&:hover': { bgcolor: 'action.hover' }
-                          }}
-                          onClick={async () => {
-                            // 해당 작업의 채팅 알림을 읽음 처리
-                            if (chatNotifications[job.id] > 0) {
-                              try {
-                                const notifications = await NotificationService.getNotifications(user!.id);
-                                const chatNotificationsForJob = notifications.filter(
-                                  notification => 
-                                    notification.type === 'info' && 
-                                    notification.actionUrl?.includes(`/chat/${job.id}`) &&
-                                    !notification.isRead
-                                );
-                                
-                                await Promise.all(
-                                  chatNotificationsForJob.map(notification => 
-                                    NotificationService.markAsRead(notification.id)
-                                  )
-                                );
-                              } catch (error) {
-                                console.error('채팅 알림 읽음 처리 실패:', error);
-                              }
-                            }
-                            navigate(`/contractor/chat/${job.id}`);
-                          }}
-                        >
-                          <ListItemAvatar>
-                            <Avatar sx={{ bgcolor: 'error.main' }}>
-                              <Chat />
-                            </Avatar>
-                          </ListItemAvatar>
-                          <ListItemText
-                            primary={
-                              <Box display="flex" alignItems="center" gap={1}>
-                                <Typography variant="subtitle1">
-                                  {job.title}
-                                </Typography>
-                                <Chip 
-                                  label={`💬 ${chatNotifications[job.id]}`}
-                                  color="error"
-                                  size="small"
-                                />
-                                <Chip 
-                                  label={getStatusText(job.status)} 
-                                  color={getStatusColor(job.status)} 
-                                  size="small"
-                                />
-                              </Box>
-                            }
-                            secondary={
-                              <>
-                                <Typography variant="body2" color="textSecondary">
-                                  {job.address}
-                                </Typography>
-                                {job.scheduledDate && (
-                                  <Typography variant="body2" color="textSecondary">
-                                    {new Date(job.scheduledDate).toLocaleDateString('ko-KR')} {new Date(job.scheduledDate).toLocaleTimeString('ko-KR', {
-                                      hour: '2-digit',
-                                      minute: '2-digit'
-                                    })}
-                                  </Typography>
-                                )}
-                              </>
-                            }
-                          />
-                        </ListItem>
-                        {index < scheduledJobs.filter(job => chatNotifications[job.id] > 0).length - 1 && <Divider />}
-                      </React.Fragment>
-                    ))}
-                </List>
-              </CardContent>
-            </Card>
+      {/* 빠른 액션 버튼 */}
+      <Paper sx={{ 
+        p: { xs: 1, sm: 2 }, 
+        mb: 3, 
+        mx: { xs: 1, sm: 2, md: 3 },
+        background: 'linear-gradient(135deg, #667eea 0%, #764ba2 100%)' 
+      }}>
+        <Typography variant="h6" sx={{ color: 'white', mb: 2 }}>
+          빠른 액션
+        </Typography>
+        <Grid container spacing={{ xs: 1, sm: 2 }}>
+          <Grid item xs={12} sm={6} md={3}>
+                         <Button
+               fullWidth
+               variant="contained"
+               startIcon={<Work />}
+               onClick={() => navigate('/contractor/jobs')}
+               sx={{ 
+                 bgcolor: 'rgba(255,255,255,0.2)', 
+                 color: 'white',
+                 '&:hover': { bgcolor: 'rgba(255,255,255,0.3)' },
+                 minHeight: { xs: '48px', sm: 'auto' },
+                 fontSize: { xs: '0.875rem', sm: '1rem' }
+               }}
+             >
+               시공건 찾기
+             </Button>
           </Grid>
-        )}
+          <Grid item xs={12} sm={6} md={3}>
+                         <Button
+               fullWidth
+               variant="contained"
+               startIcon={<Assignment />}
+               onClick={() => navigate('/contractor/my-jobs')}
+               sx={{ 
+                 bgcolor: 'rgba(255,255,255,0.2)', 
+                 color: 'white',
+                 '&:hover': { bgcolor: 'rgba(255,255,255,0.3)' },
+                 minHeight: { xs: '48px', sm: 'auto' },
+                 fontSize: { xs: '0.875rem', sm: '1rem' }
+               }}
+             >
+               내 작업
+             </Button>
+          </Grid>
+          <Grid item xs={12} sm={6} md={3}>
+                         <Button
+               fullWidth
+               variant="contained"
+               startIcon={<Chat />}
+               onClick={() => navigate('/contractor/seller-chat')}
+               sx={{ 
+                 bgcolor: 'rgba(255,255,255,0.2)', 
+                 color: 'white',
+                 '&:hover': { bgcolor: 'rgba(255,255,255,0.3)' },
+                 minHeight: { xs: '48px', sm: 'auto' },
+                 fontSize: { xs: '0.875rem', sm: '1rem' }
+               }}
+             >
+               판매자와 채팅
+             </Button>
+          </Grid>
+          <Grid item xs={12} sm={6} md={3}>
+                         <Button
+               fullWidth
+               variant="contained"
+               startIcon={<MonetizationOn />}
+               onClick={() => navigate('/contractor/points')}
+               sx={{ 
+                 bgcolor: 'rgba(255,255,255,0.2)', 
+                 color: 'white',
+                 '&:hover': { bgcolor: 'rgba(255,255,255,0.3)' },
+                 minHeight: { xs: '48px', sm: 'auto' },
+                 fontSize: { xs: '0.875rem', sm: '1rem' }
+               }}
+             >
+               포인트 관리
+             </Button>
+          </Grid>
+        </Grid>
+      </Paper>
 
-        {/* 빠른 액션 */}
-        <Grid item xs={12} md={4}>
-          <Card>
-            <CardContent>
-              <Typography variant="h6" gutterBottom>
-                빠른 액션
-              </Typography>
-              
-              <Box display="flex" flexDirection="column" gap={2}>
-                <Button
-                  variant="contained"
-                  fullWidth
-                  startIcon={<Work />}
-                  onClick={() => navigate('/contractor/jobs')}
-                >
-                  시공건 찾기
-                </Button>
-                
-                <Button
-                  variant="outlined"
-                  fullWidth
-                  startIcon={<TrendingUp />}
-                  onClick={() => navigate('/contractor/level')}
-                >
-                  레벨 현황 확인
-                </Button>
-                
-                <Button
-                  variant="outlined"
-                  fullWidth
-                  startIcon={<Notifications />}
-                  onClick={() => navigate('/contractor/notifications')}
-                >
-                  알림 확인
-                </Button>
+      {/* 수익 대시보드 */}
+      <Grid container spacing={{ xs: 1, sm: 2, md: 3 }} sx={{ mb: 3, px: { xs: 1, sm: 2, md: 3 } }}>
+        <Grid item xs={12} sm={6} md={3}>
+                     <Card sx={{ 
+             background: 'linear-gradient(135deg, #667eea 0%, #764ba2 100%)',
+             color: 'white'
+           }}>
+             <CardContent sx={{ p: { xs: 2, sm: 3 } }}>
+              <Box sx={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between' }}>
+                <Box>
+                  <Typography variant="h4" sx={{ fontWeight: 'bold' }}>
+                    {formatCurrency(contractorStats.totalEarnings)}
+                  </Typography>
+                  <Typography variant="body2" sx={{ opacity: 0.8 }}>
+                    총 수익
+                  </Typography>
+                </Box>
+                <MonetizationOn sx={{ fontSize: 40, opacity: 0.8 }} />
               </Box>
             </CardContent>
           </Card>
-
-          {/* 오늘의 목표 */}
-          <Card sx={{ mt: 2 }}>
-            <CardContent>
-              <Typography variant="h6" gutterBottom>
-                오늘의 목표
-              </Typography>
-              
-              <Box mb={2}>
-                <Box display="flex" justifyContent="space-between" mb={1}>
-                  <Typography variant="body2">시공 완료</Typography>
-                  <Typography variant="body2">
-                    {todayGoals.completed}/{todayGoals.total}건
+        </Grid>
+        
+        <Grid item xs={12} sm={6} md={3}>
+                     <Card sx={{ 
+             background: 'linear-gradient(135deg, #f093fb 0%, #f5576c 100%)',
+             color: 'white'
+           }}>
+             <CardContent sx={{ p: { xs: 2, sm: 3 } }}>
+              <Box sx={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between' }}>
+                <Box>
+                  <Typography variant="h4" sx={{ fontWeight: 'bold' }}>
+                    {formatCurrency(contractorStats.monthlyEarnings)}
+                  </Typography>
+                  <Typography variant="body2" sx={{ opacity: 0.8 }}>
+                    이번 달 수익
                   </Typography>
                 </Box>
-                <LinearProgress 
-                  variant="determinate" 
-                  value={todayGoals.progress} 
-                />
+                <TrendingUp sx={{ fontSize: 40, opacity: 0.8 }} />
               </Box>
-              
-              <Box mb={2}>
-                <Box display="flex" justifyContent="space-between" mb={1}>
-                  <Typography variant="body2">평점 달성</Typography>
-                  <Typography variant="body2">
-                    {Number(contractorStats.rating).toFixed(1)}/5.0점
+            </CardContent>
+          </Card>
+        </Grid>
+        
+        <Grid item xs={12} sm={6} md={3}>
+                     <Card sx={{ 
+             background: 'linear-gradient(135deg, #4facfe 0%, #00f2fe 100%)',
+             color: 'white'
+           }}>
+             <CardContent sx={{ p: { xs: 2, sm: 3 } }}>
+              <Box sx={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between' }}>
+                <Box>
+                  <Typography variant="h4" sx={{ fontWeight: 'bold' }}>
+                    {contractorStats.completedJobs}
+                  </Typography>
+                  <Typography variant="body2" sx={{ opacity: 0.8 }}>
+                    완료된 작업
                   </Typography>
                 </Box>
-                <LinearProgress 
-                  variant="determinate" 
-                  value={(contractorStats.rating / 5) * 100} 
-                  color="success" 
-                />
+                <CheckCircle sx={{ fontSize: 40, opacity: 0.8 }} />
               </Box>
-              
-              <Box>
-                <Box display="flex" justifyContent="space-between" mb={1}>
-                  <Typography variant="body2">포인트</Typography>
-                  <Typography variant="body2">
-                    {contractorStats.points.toLocaleString()}점
+            </CardContent>
+          </Card>
+        </Grid>
+        
+        <Grid item xs={12} sm={6} md={3}>
+                     <Card sx={{ 
+             background: 'linear-gradient(135deg, #43e97b 0%, #38f9d7 100%)',
+             color: 'white'
+           }}>
+             <CardContent sx={{ p: { xs: 2, sm: 3 } }}>
+              <Box sx={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between' }}>
+                <Box>
+                  <Typography variant="h4" sx={{ fontWeight: 'bold' }}>
+                    {formatCurrency(contractorStats.points)}
+                  </Typography>
+                  <Typography variant="body2" sx={{ opacity: 0.8 }}>
+                    포인트 잔액
                   </Typography>
                 </Box>
-                <LinearProgress 
-                  variant="determinate" 
-                  value={Math.min((contractorStats.points / 1000) * 100, 100)} 
-                  color="warning" 
-                />
+                <Star sx={{ fontSize: 40, opacity: 0.8 }} />
               </Box>
             </CardContent>
           </Card>
         </Grid>
       </Grid>
+
+      {/* 성과 지표 및 레벨 진행률 */}
+      <Grid container spacing={{ xs: 1, sm: 2, md: 3 }} sx={{ mb: 3, px: { xs: 1, sm: 2, md: 3 } }}>
+        <Grid item xs={12} md={8}>
+          <Card>
+            <CardContent sx={{ p: { xs: 2, sm: 3 } }}>
+              <Typography variant="h6" gutterBottom>
+                성과 지표
+              </Typography>
+              <Grid container spacing={{ xs: 2, sm: 3 }}>
+                <Grid item xs={12} sm={6}>
+                  <Box sx={{ textAlign: 'center', py: 2 }}>
+                    <Typography variant="h4" color="primary.main" sx={{ fontWeight: 'bold' }}>
+                      {contractorStats.completionRate.toFixed(1)}%
+                    </Typography>
+                    <Typography variant="body2" color="text.secondary">
+                      작업 완료율
+                    </Typography>
+                    <LinearProgress 
+                      variant="determinate" 
+                      value={contractorStats.completionRate}
+                      sx={{ mt: 1, height: 8, borderRadius: 4 }}
+                    />
+                  </Box>
+                </Grid>
+                <Grid item xs={12} sm={6}>
+                  <Box sx={{ textAlign: 'center', py: 2 }}>
+                    <Box sx={{ display: 'flex', alignItems: 'center', justifyContent: 'center', mb: 1 }}>
+                      <Rating value={contractorStats.averageRating} readOnly precision={0.1} />
+                      <Typography variant="h6" sx={{ ml: 1 }}>
+                        {contractorStats.averageRating.toFixed(1)}
+                      </Typography>
+                    </Box>
+                    <Typography variant="body2" color="text.secondary">
+                      평균 평점 ({contractorStats.totalReviews}개 리뷰)
+                    </Typography>
+                  </Box>
+                </Grid>
+              </Grid>
+            </CardContent>
+          </Card>
+        </Grid>
+        
+        <Grid item xs={12} md={4}>
+          <Card 
+            sx={{ 
+              cursor: 'pointer',
+              '&:hover': {
+                boxShadow: 4,
+                transform: 'translateY(-2px)',
+                transition: 'all 0.2s ease'
+              }
+            }}
+            onClick={() => navigate('/contractor/level-progress')}
+          >
+            <CardContent sx={{ p: { xs: 2, sm: 3 } }}>
+              <Box sx={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', mb: 2 }}>
+                <Typography variant="h6">
+                  레벨 진행률
+                </Typography>
+                <Button
+                  size="small"
+                  onClick={(e) => {
+                    e.stopPropagation(); // 이벤트 버블링 방지
+                    navigate('/contractor/level-progress');
+                  }}
+                  endIcon={<ArrowForward />}
+                >
+                  상세보기
+                </Button>
+              </Box>
+              <Box sx={{ textAlign: 'center', py: 2 }}>
+                <Box sx={{ position: 'relative', display: 'inline-block' }}>
+                  <CircularProgress
+                    variant="determinate"
+                    value={levelProgress.progress}
+                    size={80}
+                    thickness={8}
+                    sx={{ color: 'primary.main' }}
+                  />
+                  <Box sx={{
+                    position: 'absolute',
+                    top: '50%',
+                    left: '50%',
+                    transform: 'translate(-50%, -50%)'
+                  }}>
+                    <Typography variant="h6" sx={{ fontWeight: 'bold' }}>
+                      Lv.{levelProgress.currentLevel}
+                    </Typography>
+                  </Box>
+                </Box>
+                <Typography variant="body2" color="text.secondary" sx={{ mt: 2 }}>
+                  다음 레벨까지 {levelProgress.progress.toFixed(1)}%
+                </Typography>
+                <Typography variant="body2" color="text.secondary">
+                  Lv.{levelProgress.nextLevel}까지 남음
+                </Typography>
+              </Box>
+            </CardContent>
+          </Card>
+        </Grid>
+      </Grid>
+
+      {/* 작업 현황 및 알림 */}
+      <Grid container spacing={{ xs: 1, sm: 2, md: 3 }} sx={{ mb: 3, px: { xs: 1, sm: 2, md: 3 } }}>
+        <Grid item xs={12} md={8}>
+          <Card>
+            <CardContent sx={{ p: { xs: 2, sm: 3 } }}>
+              <Box sx={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', mb: 2 }}>
+                <Typography variant="h6">
+                  진행중인 작업
+                </Typography>
+                <Button
+                  size="small"
+                  onClick={() => navigate('/contractor/my-jobs')}
+                  endIcon={<ArrowForward />}
+                >
+                  전체보기
+                </Button>
+              </Box>
+              {getRecentJobs().length > 0 ? (
+                <List>
+                  {getRecentJobs().map((job, index) => (
+                    <React.Fragment key={job.id}>
+                      <ListItem>
+                        <ListItemAvatar>
+                          <Avatar sx={{ bgcolor: `${getStatusColor(job.status)}.main` }}>
+                            {getStatusIcon(job.status)}
+                          </Avatar>
+                        </ListItemAvatar>
+                        <ListItemText
+                          primary={
+                            <Box sx={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
+                              <Typography variant="subtitle2" noWrap>
+                                {job.title || '제목 없음'}
+                              </Typography>
+                              <Chip
+                                label={getStatusText(job.status)}
+                                color={getStatusColor(job.status) as any}
+                                size="small"
+                              />
+                            </Box>
+                          }
+                          secondary={
+                            <Box>
+                              <Typography variant="body2" color="text.secondary">
+                                <LocationOn sx={{ fontSize: 16, verticalAlign: 'middle', mr: 0.5 }} />
+                                {job.address}
+                              </Typography>
+                              <Typography variant="body2" color="text.secondary">
+                                <Schedule sx={{ fontSize: 16, verticalAlign: 'middle', mr: 0.5 }} />
+                                {job.scheduledDate ? new Date(job.scheduledDate).toLocaleDateString() : '일정 미정'}
+                              </Typography>
+                              <Typography variant="body2" color="primary.main" sx={{ fontWeight: 'bold' }}>
+                                예산: {formatCurrency(calculateTotalBudget(job))}원
+                              </Typography>
+                            </Box>
+                          }
+                        />
+                        <IconButton
+                          size="small"
+                          onClick={() => navigate(`/contractor/jobs/${job.id}`)}
+                        >
+                          <Visibility />
+                        </IconButton>
+                      </ListItem>
+                      {index < getRecentJobs().length - 1 && <Divider />}
+                    </React.Fragment>
+                  ))}
+                </List>
+              ) : (
+                <Box sx={{ textAlign: 'center', py: 4 }}>
+                  <Work sx={{ fontSize: 60, color: 'text.secondary', mb: 2 }} />
+                  <Typography variant="body1" color="text.secondary">
+                    진행중인 작업이 없습니다
+                  </Typography>
+                  <Button
+                    variant="outlined"
+                    onClick={() => navigate('/contractor/jobs')}
+                    sx={{ mt: 2 }}
+                  >
+                    시공건 찾기
+                  </Button>
+                </Box>
+              )}
+            </CardContent>
+          </Card>
+        </Grid>
+        
+        <Grid item xs={12} md={4}>
+          <Card 
+            sx={{ 
+              cursor: 'pointer',
+              '&:hover': {
+                boxShadow: 4,
+                transform: 'translateY(-2px)',
+                transition: 'all 0.2s ease'
+              }
+            }}
+            onClick={() => navigate('/contractor/notifications')}
+          >
+            <CardContent sx={{ p: { xs: 2, sm: 3 } }}>
+              <Box sx={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', mb: 2 }}>
+                <Typography variant="h6">
+                  알림 현황
+                </Typography>
+                <Button
+                  size="small"
+                  onClick={(e) => {
+                    e.stopPropagation(); // 이벤트 버블링 방지
+                    navigate('/contractor/notifications');
+                  }}
+                  endIcon={<ArrowForward />}
+                >
+                  전체보기
+                </Button>
+              </Box>
+              <Box sx={{ textAlign: 'center', py: 2 }}>
+                <Badge badgeContent={notifications.length} color="error">
+                  <Notifications sx={{ fontSize: 60, color: 'primary.main' }} />
+                </Badge>
+                <Typography variant="h6" sx={{ mt: 1 }}>
+                  {notifications.length}개
+                </Typography>
+                <Typography variant="body2" color="text.secondary">
+                  읽지 않은 알림
+                </Typography>
+              </Box>
+              {getJobsWithChatNotifications().length > 0 && (
+                <Box sx={{ mt: 2 }}>
+                  <Typography variant="subtitle2" gutterBottom>
+                    채팅 알림
+                  </Typography>
+                  <List dense>
+                    {getJobsWithChatNotifications().slice(0, 3).map((job) => (
+                      <ListItem 
+                        key={job.id} 
+                        sx={{ 
+                          px: 0,
+                          cursor: 'pointer',
+                          '&:hover': {
+                            backgroundColor: 'action.hover'
+                          }
+                        }}
+                        onClick={() => navigate(`/contractor/chat/${job.id}`)}
+                      >
+                        <ListItemAvatar>
+                          <Badge badgeContent={chatNotifications[job.id]} color="error">
+                            <Avatar sx={{ width: 32, height: 32, bgcolor: 'primary.main' }}>
+                              <Chat sx={{ fontSize: 16 }} />
+                            </Avatar>
+                          </Badge>
+                        </ListItemAvatar>
+                        <ListItemText
+                          primary={
+                            <Typography variant="body2" noWrap>
+                              {job.title || '제목 없음'}
+                            </Typography>
+                          }
+                          secondary={
+                            <Typography variant="caption" color="text.secondary">
+                              {chatNotifications[job.id]}개 메시지
+                            </Typography>
+                          }
+                        />
+                        <IconButton
+                          size="small"
+                          onClick={(e) => {
+                            e.stopPropagation(); // 이벤트 버블링 방지
+                            navigate(`/contractor/chat/${job.id}`);
+                          }}
+                        >
+                          <ArrowForward />
+                        </IconButton>
+                      </ListItem>
+                    ))}
+                  </List>
+                </Box>
+              )}
+              <Button
+                fullWidth
+                variant="outlined"
+                onClick={(e) => {
+                  e.stopPropagation(); // 이벤트 버블링 방지
+                  navigate('/contractor/notifications');
+                }}
+                endIcon={<ArrowForward />}
+                sx={{ 
+                  mt: 2,
+                  minHeight: '48px', // 모바일 터치 영역 확보
+                  touchAction: 'manipulation', // 터치 이벤트 최적화
+                  fontSize: '1rem', // 모바일에서 더 큰 폰트
+                  fontWeight: 500
+                }}
+              >
+                알림 확인하기
+              </Button>
+            </CardContent>
+          </Card>
+        </Grid>
+      </Grid>
+
+      {/* 지역별 작업 분포 */}
+      <Card sx={{ mb: 3, mx: { xs: 1, sm: 2, md: 3 } }}>
+        <CardContent sx={{ p: { xs: 2, sm: 3 } }}>
+          <Typography variant="h6" gutterBottom>
+            지역별 작업 분포
+          </Typography>
+          <Grid container spacing={{ xs: 1, sm: 2 }}>
+            {scheduledJobs.length > 0 ? (
+              scheduledJobs.map((job) => (
+                                 <Grid item xs={12} sm={6} md={4} key={job.id}>
+                   <Paper sx={{ p: { xs: 1.5, sm: 2 }, border: 1, borderColor: 'divider' }}>
+                    <Box sx={{ display: 'flex', alignItems: 'center', mb: 1 }}>
+                      <LocationOn sx={{ color: 'primary.main', mr: 1 }} />
+                      <Typography variant="subtitle2">
+                        {job.address?.split(' ').slice(0, 2).join(' ')}
+                      </Typography>
+                    </Box>
+                    <Typography variant="body2" color="text.secondary">
+                      {job.title || '제목 없음'}
+                    </Typography>
+                    <Chip
+                      label={getStatusText(job.status)}
+                      color={getStatusColor(job.status) as any}
+                      size="small"
+                      sx={{ mt: 1 }}
+                    />
+                  </Paper>
+                </Grid>
+              ))
+            ) : (
+              <Grid item xs={12}>
+                <Box sx={{ textAlign: 'center', py: 4 }}>
+                  <LocationOn sx={{ fontSize: 60, color: 'text.secondary', mb: 2 }} />
+                  <Typography variant="body1" color="text.secondary">
+                    지역별 작업 정보가 없습니다
+                  </Typography>
+                </Box>
+              </Grid>
+            )}
+          </Grid>
+        </CardContent>
+      </Card>
     </Box>
   );
 };

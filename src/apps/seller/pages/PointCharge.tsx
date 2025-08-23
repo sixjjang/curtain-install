@@ -25,7 +25,8 @@ import {
   Radio,
   Select,
   MenuItem,
-  InputLabel
+  InputLabel,
+  Paper
 } from '@mui/material';
 import { 
   AccountBalance, 
@@ -35,11 +36,13 @@ import {
   CheckCircle,
   Warning,
   CreditCard,
-  AccountBalanceWallet
+  AccountBalanceWallet,
+  Info
 } from '@mui/icons-material';
 import { useAuth } from '../../../shared/contexts/AuthContext';
 import { PointService } from '../../../shared/services/pointService';
 import { PaymentService } from '../../../shared/services/paymentService';
+import { SystemSettingsService } from '../../../shared/services/systemSettingsService';
 import { PointBalance, PointTransaction } from '../../../types';
 import { useLocation } from 'react-router-dom';
 
@@ -59,6 +62,14 @@ const PointCharge: React.FC = () => {
   const [selectedAmount, setSelectedAmount] = useState<number | null>(null);
   const [paymentMethod, setPaymentMethod] = useState<'simulation' | 'toss_payments'>('simulation');
   const [tossPaymentMethod, setTossPaymentMethod] = useState('card');
+  
+  // 토스페이먼츠 계좌 정보 상태
+  const [tossAccountInfo, setTossAccountInfo] = useState<{
+    bankName: string;
+    accountNumber: string;
+    accountHolder: string;
+    isActive: boolean;
+  } | null>(null);
   
   // 기간별 필터링 상태
   const [selectedPeriod, setSelectedPeriod] = useState<'1month' | '3months' | '6months' | '1year' | 'all'>('all');
@@ -100,6 +111,32 @@ const PointCharge: React.FC = () => {
   const handlePeriodChange = async (newPeriod: '1month' | '3months' | '6months' | '1year' | 'all') => {
     setSelectedPeriod(newPeriod);
     await loadData(newPeriod);
+  };
+
+  // 토스페이먼츠 계좌 정보 로드
+  const loadTossAccountInfo = async () => {
+    try {
+      const accountInfo = await SystemSettingsService.getTossAccount();
+      setTossAccountInfo(accountInfo);
+    } catch (error) {
+      console.error('토스페이먼츠 계좌 정보 로드 실패:', error);
+    }
+  };
+
+  // 결제 수단 변경 시 계좌 정보 로드
+  const handlePaymentMethodChange = async (method: 'simulation' | 'toss_payments') => {
+    setPaymentMethod(method);
+    if (method === 'toss_payments') {
+      await loadTossAccountInfo();
+    }
+  };
+
+  // 토스페이먼츠 결제 수단 변경 시 계좌 정보 로드
+  const handleTossPaymentMethodChange = async (method: string) => {
+    setTossPaymentMethod(method);
+    if (method === 'transfer') {
+      await loadTossAccountInfo();
+    }
   };
 
   useEffect(() => {
@@ -348,6 +385,11 @@ const PointCharge: React.FC = () => {
                                 <Typography variant="subtitle1" component="span">
                                   {transaction.description}
                                 </Typography>
+                                {transaction.jobId && (
+                                  <Typography variant="caption" color="textSecondary">
+                                    작업 ID: {transaction.jobId}
+                                  </Typography>
+                                )}
                                 <Typography 
                                   variant="h6" 
                                   color={transaction.amount > 0 ? 'success.main' : 'error.main'}
@@ -390,7 +432,7 @@ const PointCharge: React.FC = () => {
       </Grid>
 
       {/* 포인트 충전 다이얼로그 */}
-      <Dialog open={chargeDialogOpen} onClose={() => setChargeDialogOpen(false)} maxWidth="sm" fullWidth>
+              <Dialog open={chargeDialogOpen} onClose={() => setChargeDialogOpen(false)} maxWidth="sm" fullWidth disableEnforceFocus disableAutoFocus>
         <DialogTitle>
           <Box display="flex" alignItems="center" gap={1} component="div">
             <Payment color="primary" />
@@ -451,7 +493,7 @@ const PointCharge: React.FC = () => {
             <FormControl component="fieldset" fullWidth>
               <RadioGroup
                 value={paymentMethod}
-                onChange={(e) => setPaymentMethod(e.target.value as 'simulation' | 'toss_payments')}
+                onChange={(e) => handlePaymentMethodChange(e.target.value as 'simulation' | 'toss_payments')}
               >
                 <FormControlLabel
                   value="simulation"
@@ -484,7 +526,7 @@ const PointCharge: React.FC = () => {
                   <InputLabel>결제 방법</InputLabel>
                   <Select
                     value={tossPaymentMethod}
-                    onChange={(e) => setTossPaymentMethod(e.target.value)}
+                    onChange={(e) => handleTossPaymentMethodChange(e.target.value)}
                     label="결제 방법"
                   >
                     <MenuItem value="card">신용카드</MenuItem>
@@ -497,6 +539,50 @@ const PointCharge: React.FC = () => {
                 </FormControl>
               </Box>
             )}
+
+            {/* 토스페이먼츠 계좌 정보 표시 */}
+            {paymentMethod === 'toss_payments' && tossPaymentMethod === 'transfer' && (
+              <Box mt={2}>
+                {tossAccountInfo ? (
+                  <Paper sx={{ p: 2, bgcolor: tossAccountInfo.isActive ? 'info.light' : 'warning.light', border: '1px solid', borderColor: tossAccountInfo.isActive ? 'info.main' : 'warning.main' }}>
+                    <Box display="flex" alignItems="center" gap={1} mb={1}>
+                      <Info color={tossAccountInfo.isActive ? 'info' : 'warning'} />
+                      <Typography variant="subtitle2" fontWeight="bold">
+                        토스페이먼츠 계좌 정보
+                      </Typography>
+                    </Box>
+                    <Typography variant="body2" color="textSecondary">
+                      은행: {tossAccountInfo.bankName}
+                    </Typography>
+                    <Typography variant="body2" color="textSecondary">
+                      계좌번호: {tossAccountInfo.accountNumber}
+                    </Typography>
+                    <Typography variant="body2" color="textSecondary">
+                      예금주: {tossAccountInfo.accountHolder}
+                    </Typography>
+                    <Chip 
+                      label={tossAccountInfo.isActive ? '활성화' : '비활성화'}
+                      color={tossAccountInfo.isActive ? 'success' : 'default'}
+                      size="small"
+                      sx={{ mt: 1 }}
+                    />
+                    {!tossAccountInfo.isActive && (
+                      <Alert severity="warning" sx={{ mt: 1 }}>
+                        <Typography variant="body2">
+                          현재 계좌가 비활성화되어 있습니다. 계좌이체 결제를 사용할 수 없습니다.
+                        </Typography>
+                      </Alert>
+                    )}
+                  </Paper>
+                ) : (
+                  <Alert severity="warning">
+                    <Typography variant="body2">
+                      토스페이먼츠 계좌 정보를 불러올 수 없습니다. 관리자에게 문의해주세요.
+                    </Typography>
+                  </Alert>
+                )}
+              </Box>
+            )}
           </Box>
         </DialogContent>
         <DialogActions>
@@ -506,7 +592,14 @@ const PointCharge: React.FC = () => {
           <Button
             onClick={handleCharge}
             variant="contained"
-            disabled={charging || !chargeAmount || parseInt(chargeAmount) <= 0}
+            disabled={
+              charging || 
+              !chargeAmount || 
+              parseInt(chargeAmount) <= 0 ||
+              (paymentMethod === 'toss_payments' && 
+               tossPaymentMethod === 'transfer' && 
+               (!tossAccountInfo || !tossAccountInfo.isActive))
+            }
             startIcon={charging ? <CircularProgress size={16} /> : <CheckCircle />}
           >
             {charging ? '충전 중...' : '충전하기'}

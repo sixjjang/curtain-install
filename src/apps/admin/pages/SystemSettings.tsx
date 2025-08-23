@@ -20,7 +20,9 @@ import {
   AccessTime,
   Info,
   Build,
-  Warning
+  Warning,
+  AccountBalance,
+  Payment
 } from '@mui/icons-material';
 import { useAuth } from '../../../shared/contexts/AuthContext';
 import { SystemSettingsService } from '../../../shared/services/systemSettingsService';
@@ -44,6 +46,18 @@ const SystemSettings: React.FC = () => {
   const [productNotReadyRate, setProductNotReadyRate] = useState(30);
   const [customerAbsentRate, setCustomerAbsentRate] = useState(100);
   const [scheduleChangeFeeRate, setScheduleChangeFeeRate] = useState(0);
+  
+  // 수수료 설정
+  const [sellerCommissionRate, setSellerCommissionRate] = useState(3);
+  const [contractorCommissionRate, setContractorCommissionRate] = useState(2);
+  
+  // 토스페이먼츠 계좌 설정
+  const [tossAccount, setTossAccount] = useState({
+    bankName: '',
+    accountNumber: '',
+    accountHolder: '',
+    isActive: false
+  });
 
   // 시스템 설정 로드
   const loadSettings = async () => {
@@ -59,6 +73,15 @@ const SystemSettings: React.FC = () => {
       setProductNotReadyRate(systemSettings.compensationPolicy.productNotReadyRate);
       setCustomerAbsentRate(systemSettings.compensationPolicy.customerAbsentRate);
       setScheduleChangeFeeRate(systemSettings.compensationPolicy.scheduleChangeFeeRate);
+      
+      // 수수료 설정 로드
+      setSellerCommissionRate(systemSettings.feeSettings.sellerCommissionRate);
+      setContractorCommissionRate(systemSettings.feeSettings.contractorCommissionRate);
+      
+      // 토스페이먼츠 계좌 설정 로드
+      if (systemSettings.tossAccount) {
+        setTossAccount(systemSettings.tossAccount);
+      }
     } catch (error) {
       console.error('시스템 설정 로드 실패:', error);
       setError('시스템 설정을 불러올 수 없습니다.');
@@ -99,6 +122,27 @@ const SystemSettings: React.FC = () => {
         productNotReadyRate,
         customerAbsentRate,
         scheduleChangeFeeRate,
+        user.id
+      );
+      
+      // 토스페이먼츠 계좌 설정 저장
+      if (tossAccount.bankName && tossAccount.accountNumber && tossAccount.accountHolder) {
+        await SystemSettingsService.updateTossAccount(
+          tossAccount.bankName,
+          tossAccount.accountNumber,
+          tossAccount.accountHolder,
+          tossAccount.isActive,
+          user.id
+        );
+        console.log('✅ 토스페이먼츠 계좌 설정 저장 완료:', tossAccount);
+      } else {
+        console.log('⚠️ 토스페이먼츠 계좌 설정 저장 건너뜀 - 필수 필드 누락');
+      }
+      
+      // 수수료 설정 저장
+      await SystemSettingsService.updateFeeSettings(
+        sellerCommissionRate,
+        contractorCommissionRate,
         user.id
       );
       
@@ -268,14 +312,23 @@ const SystemSettings: React.FC = () => {
 
               {settings && (
                 <Box>
-                  <Paper sx={{ p: 2, mb: 2, bgcolor: 'grey.50' }}>
-                    <Typography variant="body2" color="textSecondary" gutterBottom>
-                      에스크로 자동 지급 시간
-                    </Typography>
-                    <Typography variant="h6" color="primary">
-                      {formatTimeDisplay(settings.escrowAutoReleaseHours)}
-                    </Typography>
-                  </Paper>
+                                     <Paper sx={{ 
+                     p: 2, 
+                     mb: 2, 
+                     border: '1px solid',
+                     borderColor: 'divider',
+                     bgcolor: 'background.paper',
+                     '&:hover': {
+                       bgcolor: 'action.hover'
+                     }
+                   }}>
+                     <Typography variant="body2" color="textSecondary" gutterBottom>
+                       에스크로 자동 지급 시간
+                     </Typography>
+                     <Typography variant="h6" color="primary">
+                       {formatTimeDisplay(settings.escrowAutoReleaseHours)}
+                     </Typography>
+                   </Paper>
 
                   <Divider sx={{ my: 2 }} />
 
@@ -292,6 +345,58 @@ const SystemSettings: React.FC = () => {
                   <Typography variant="body2">
                     {settings.updatedBy === 'system' ? '시스템' : settings.updatedBy}
                   </Typography>
+
+                  {/* 토스페이먼츠 계좌 정보 */}
+                  <Divider sx={{ my: 2 }} />
+                  <Typography variant="body2" color="textSecondary" gutterBottom>
+                    토스페이먼츠 계좌
+                  </Typography>
+                  {settings.tossAccount ? (
+                    <Paper sx={{ 
+                      p: 2, 
+                      mb: 2, 
+                      border: '1px solid',
+                      borderColor: 'divider',
+                      bgcolor: 'background.paper',
+                      '&:hover': {
+                        bgcolor: 'action.hover'
+                      }
+                    }}>
+                      <Typography variant="body2" color="textSecondary" gutterBottom>
+                        {settings.tossAccount.bankName}
+                      </Typography>
+                      <Typography variant="body2" sx={{ fontFamily: 'monospace' }}>
+                        {settings.tossAccount.accountNumber}
+                      </Typography>
+                      <Typography variant="body2" color="textSecondary">
+                        {settings.tossAccount.accountHolder}
+                      </Typography>
+                      <Chip 
+                        label={settings.tossAccount.isActive ? '활성화' : '비활성화'}
+                        color={settings.tossAccount.isActive ? 'success' : 'default'}
+                        size="small"
+                        sx={{ mt: 1 }}
+                      />
+                    </Paper>
+                  ) : (
+                    <Paper sx={{ 
+                      p: 2, 
+                      mb: 2, 
+                      border: '1px solid',
+                      borderColor: 'divider',
+                      bgcolor: 'background.paper',
+                      '&:hover': {
+                        bgcolor: 'action.hover'
+                      }
+                    }}>
+                      <Typography variant="body2" color="textSecondary">
+                        토스페이먼츠 계좌가 설정되지 않았습니다.
+                      </Typography>
+                      <Typography variant="body2" color="textSecondary" sx={{ mt: 1 }}>
+                        아래 토스페이먼츠 계좌 설정 섹션에서 계좌 정보를 입력해주세요.
+                      </Typography>
+                    </Paper>
+                  )}
                 </Box>
               )}
             </CardContent>
@@ -488,6 +593,234 @@ const SystemSettings: React.FC = () => {
           </Card>
         </Grid>
 
+        {/* 수수료 설정 */}
+        <Grid item xs={12} md={8}>
+          <Card>
+            <CardContent>
+              <Typography variant="h6" gutterBottom sx={{ display: 'flex', alignItems: 'center', gap: 1 }}>
+                <Payment />
+                수수료 설정
+              </Typography>
+              
+              <Typography variant="body2" color="textSecondary" sx={{ mb: 3 }}>
+                판매자와 시공자에게 적용되는 수수료율을 설정합니다. 수수료는 각각의 수익에서 차감됩니다.
+              </Typography>
+
+              <Grid container spacing={3}>
+                <Grid item xs={12} md={6}>
+                  <TextField
+                    fullWidth
+                    label="판매자 수수료율 (%)"
+                    type="number"
+                    value={sellerCommissionRate}
+                    onChange={(e) => setSellerCommissionRate(Number(e.target.value))}
+                    inputProps={{
+                      min: 0,
+                      max: 100,
+                      step: 0.1
+                    }}
+                    helperText="판매자 수익에서 차감되는 수수료율 (예: 3% = 100,000원 작업에서 3,000원 차감)"
+                  />
+                </Grid>
+                
+                <Grid item xs={12} md={6}>
+                  <TextField
+                    fullWidth
+                    label="시공자 수수료율 (%)"
+                    type="number"
+                    value={contractorCommissionRate}
+                    onChange={(e) => setContractorCommissionRate(Number(e.target.value))}
+                    inputProps={{
+                      min: 0,
+                      max: 100,
+                      step: 0.1
+                    }}
+                    helperText="시공자 수익에서 차감되는 수수료율 (예: 2% = 97,000원 작업에서 1,940원 차감)"
+                  />
+                </Grid>
+              </Grid>
+
+              <Box sx={{ mt: 3, display: 'flex', gap: 2, flexWrap: 'wrap' }}>
+                <Chip 
+                  label={`판매자 수수료: ${sellerCommissionRate}%`}
+                  color="primary"
+                  variant="outlined"
+                />
+                <Chip 
+                  label={`시공자 수수료: ${contractorCommissionRate}%`}
+                  color="secondary"
+                  variant="outlined"
+                />
+              </Box>
+
+              <Alert severity="info" sx={{ mt: 2 }}>
+                <Typography variant="body2">
+                  <strong>수수료 적용 예시:</strong><br />
+                  • 100,000원 작업의 경우<br />
+                  • 판매자 수수료 {sellerCommissionRate}% 적용: {Math.round(100000 * sellerCommissionRate / 100).toLocaleString()}원 차감<br />
+                  • 시공자 수수료 {contractorCommissionRate}% 적용: {Math.round((100000 - 100000 * sellerCommissionRate / 100) * contractorCommissionRate / 100).toLocaleString()}원 차감
+                </Typography>
+              </Alert>
+
+              <Button
+                variant="contained"
+                startIcon={<Save />}
+                onClick={handleSave}
+                disabled={saving || sellerCommissionRate < 0 || sellerCommissionRate > 100 || contractorCommissionRate < 0 || contractorCommissionRate > 100}
+                fullWidth
+                sx={{ mt: 3 }}
+              >
+                {saving ? '저장 중...' : '수수료 설정 저장'}
+              </Button>
+            </CardContent>
+          </Card>
+        </Grid>
+
+        {/* 토스페이먼츠 계좌 설정 */}
+        <Grid item xs={12} md={8}>
+          <Card>
+            <CardContent>
+              <Typography variant="h6" gutterBottom sx={{ display: 'flex', alignItems: 'center', gap: 1 }}>
+                <Payment />
+                토스페이먼츠 계좌 설정
+              </Typography>
+              
+              <Typography variant="body2" color="textSecondary" sx={{ mb: 3 }}>
+                포인트 인출 승인 시 실제 입금할 관리자의 토스페이먼츠 계좌 정보를 설정합니다.
+              </Typography>
+
+              <Grid container spacing={3}>
+                <Grid item xs={12} md={3}>
+                  <TextField
+                    fullWidth
+                    label="은행명"
+                    value={tossAccount.bankName}
+                    onChange={(e) => setTossAccount(prev => ({ ...prev, bankName: e.target.value }))}
+                    placeholder="예: 신한은행, 국민은행"
+                    required
+                  />
+                </Grid>
+                
+                <Grid item xs={12} md={3}>
+                  <TextField
+                    fullWidth
+                    label="계좌번호"
+                    value={tossAccount.accountNumber}
+                    onChange={(e) => setTossAccount(prev => ({ ...prev, accountNumber: e.target.value }))}
+                    placeholder="계좌번호를 입력하세요"
+                    required
+                  />
+                </Grid>
+                
+                <Grid item xs={12} md={3}>
+                  <TextField
+                    fullWidth
+                    label="예금주명"
+                    value={tossAccount.accountHolder}
+                    onChange={(e) => setTossAccount(prev => ({ ...prev, accountHolder: e.target.value }))}
+                    placeholder="예금주명을 입력하세요"
+                    required
+                  />
+                </Grid>
+                
+                <Grid item xs={12} md={3}>
+                  <Box display="flex" alignItems="center" height="100%">
+                    <Chip 
+                      label={tossAccount.isActive ? '활성화' : '비활성화'}
+                      color={tossAccount.isActive ? 'success' : 'default'}
+                      onClick={() => setTossAccount(prev => ({ ...prev, isActive: !prev.isActive }))}
+                      sx={{ cursor: 'pointer' }}
+                    />
+                    <Typography variant="body2" color="textSecondary" sx={{ ml: 1 }}>
+                      클릭하여 상태 변경
+                    </Typography>
+                  </Box>
+                </Grid>
+              </Grid>
+
+              <Box sx={{ mt: 3, display: 'flex', gap: 2, flexWrap: 'wrap', alignItems: 'center' }}>
+                <Chip 
+                  label={`은행: ${tossAccount.bankName || '미설정'}`}
+                  color="primary"
+                  variant="outlined"
+                />
+                <Chip 
+                  label={`계좌: ${tossAccount.accountNumber || '미설정'}`}
+                  color="secondary"
+                  variant="outlined"
+                />
+                <Chip 
+                  label={`예금주: ${tossAccount.accountHolder || '미설정'}`}
+                  color="info"
+                  variant="outlined"
+                />
+                <Chip 
+                  label={tossAccount.isActive ? '활성화' : '비활성화'}
+                  color={tossAccount.isActive ? 'success' : 'default'}
+                  variant="outlined"
+                />
+              </Box>
+
+              <Alert severity="info" sx={{ mt: 3 }}>
+                <Typography variant="body2">
+                  <strong>토스페이먼츠 계좌 설정 안내:</strong><br />
+                  • 포인트 인출 승인 시 이 계좌에서 실제 입금이 진행됩니다<br />
+                  • 계좌 정보는 안전하게 암호화되어 저장됩니다<br />
+                  • 토스페이먼츠 API 연동을 위해 정확한 정보를 입력해주세요
+                </Typography>
+              </Alert>
+
+              <Box sx={{ mt: 3, display: 'flex', gap: 2 }}>
+                <Button
+                  variant="contained"
+                  startIcon={<Save />}
+                  onClick={handleSave}
+                  disabled={
+                    saving || 
+                    !tossAccount.bankName || 
+                    !tossAccount.accountNumber || 
+                    !tossAccount.accountHolder
+                  }
+                  sx={{ flex: 1 }}
+                >
+                  {saving ? '저장 중...' : '토스페이먼츠 계좌 설정 저장'}
+                </Button>
+                
+                <Button
+                  variant="outlined"
+                  onClick={async () => {
+                    try {
+                      await SystemSettingsService.testTossAccountSettings();
+                      setSuccess('토스페이먼츠 계좌 설정 테스트가 완료되었습니다. 콘솔을 확인해주세요.');
+                    } catch (error) {
+                      setError('테스트 중 오류가 발생했습니다: ' + (error as Error).message);
+                    }
+                  }}
+                  disabled={saving}
+                >
+                  테스트
+                </Button>
+                
+                <Button
+                  variant="outlined"
+                  color="secondary"
+                  onClick={async () => {
+                    try {
+                      await SystemSettingsService.debugFirestoreData();
+                      setSuccess('Firebase Firestore 디버깅이 완료되었습니다. 콘솔을 확인해주세요.');
+                    } catch (error) {
+                      setError('디버깅 중 오류가 발생했습니다: ' + (error as Error).message);
+                    }
+                  }}
+                  disabled={saving}
+                >
+                  디버깅
+                </Button>
+              </Box>
+            </CardContent>
+          </Card>
+        </Grid>
+
         {/* 설정 가이드 */}
         <Grid item xs={12}>
           <Card>
@@ -599,7 +932,15 @@ const SystemSettings: React.FC = () => {
 
                 {/* 향후 추가될 다른 데이터 관리 도구들을 위한 공간 */}
                 <Grid item xs={12} md={6}>
-                  <Paper sx={{ p: 3, border: '1px solid #e0e0e0', bgcolor: 'grey.50' }}>
+                  <Paper sx={{ 
+                    p: 3, 
+                    border: '1px solid', 
+                    borderColor: 'divider',
+                    bgcolor: 'background.paper',
+                    '&:hover': {
+                      bgcolor: 'action.hover'
+                    }
+                  }}>
                     <Typography variant="h6" gutterBottom sx={{ display: 'flex', alignItems: 'center', gap: 1 }}>
                       <Info />
                       향후 추가 예정

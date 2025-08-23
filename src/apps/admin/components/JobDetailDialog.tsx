@@ -75,7 +75,9 @@ const JobDetailDialog: React.FC<JobDetailDialogProps> = ({ open, onClose, job })
       cancelled: 'error',
       product_not_ready: 'error',
       customer_absent: 'error',
-      schedule_changed: 'warning'
+      schedule_changed: 'warning',
+      compensation_completed: 'warning',
+      reschedule_requested: 'warning'
     };
     return statusColors[status];
   };
@@ -92,7 +94,9 @@ const JobDetailDialog: React.FC<JobDetailDialogProps> = ({ open, onClose, job })
       cancelled: '취소',
       product_not_ready: '제품 미준비',
       customer_absent: '소비자 부재',
-      schedule_changed: '일정 변경'
+      schedule_changed: '일정 변경',
+      compensation_completed: '보상완료',
+      reschedule_requested: '일정 재조정 요청'
     };
     return statusLabels[status];
   };
@@ -139,6 +143,8 @@ const JobDetailDialog: React.FC<JobDetailDialogProps> = ({ open, onClose, job })
       onClose={onClose} 
       maxWidth="md" 
       fullWidth
+      disableEnforceFocus
+      disableAutoFocus
     >
       <DialogTitle sx={{ 
         display: 'flex', 

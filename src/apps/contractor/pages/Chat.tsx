@@ -377,6 +377,19 @@ const Chat: React.FC = () => {
                  overflow: 'hidden', 
                  textOverflow: 'ellipsis',
                  whiteSpace: 'nowrap',
+                 fontSize: '0.7rem',
+                 lineHeight: 1.2
+               }}
+             >
+               작업 ID: {selectedJob.id}
+             </Typography>
+             <Typography 
+               variant="caption" 
+               color="textSecondary" 
+               sx={{ 
+                 overflow: 'hidden', 
+                 textOverflow: 'ellipsis',
+                 whiteSpace: 'nowrap',
                  display: 'block',
                  mt: 0.5,
                  fontSize: '0.75rem',
@@ -402,7 +415,7 @@ const Chat: React.FC = () => {
           flexGrow: 1, 
           p: 2, 
           overflow: 'auto',
-          bgcolor: 'grey.50'
+          bgcolor: theme.palette.mode === 'dark' ? 'background.default' : 'grey.50'
         }}>
           {messages.length === 0 ? (
             <Box textAlign="center" py={4}>
@@ -438,7 +451,11 @@ const Chat: React.FC = () => {
                   sx={{
                     p: 1.5,
                     maxWidth: '70%',
-                    backgroundColor: message.senderId === user?.id ? 'primary.main' : 'background.paper',
+                    backgroundColor: message.senderId === user?.id 
+                      ? 'primary.main' 
+                      : theme.palette.mode === 'dark' 
+                        ? 'background.paper' 
+                        : 'background.paper',
                     color: message.senderId === user?.id ? 'white' : 'text.primary',
                     boxShadow: 1,
                     border: message.senderId !== user?.id ? 1 : 0,
@@ -934,7 +951,9 @@ const Chat: React.FC = () => {
             </IconButton>
           </Box>
         </DialogTitle>
-        <DialogContent>
+        <DialogContent sx={{
+          bgcolor: (theme) => theme.palette.mode === 'dark' ? 'background.paper' : 'background.default'
+        }}>
           {imageError && (
             <Alert severity="error" sx={{ mb: 2 }}>
               {imageError}

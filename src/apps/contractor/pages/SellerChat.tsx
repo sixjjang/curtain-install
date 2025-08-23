@@ -153,12 +153,21 @@ const SellerChat: React.FC = () => {
 
   // 메시지 스크롤을 맨 아래로
   const scrollToBottom = () => {
-    messagesEndRef.current?.scrollIntoView({ behavior: 'smooth' });
+    setTimeout(() => {
+      messagesEndRef.current?.scrollIntoView({ behavior: 'smooth' });
+    }, 100);
   };
 
   useEffect(() => {
     scrollToBottom();
   }, [messages]);
+
+  // 선택된 작업이 변경될 때도 스크롤을 맨 아래로
+  useEffect(() => {
+    if (selectedJob && messages.length > 0) {
+      scrollToBottom();
+    }
+  }, [selectedJob]);
 
   // 채팅 메시지 불러오기
   const loadChatMessages = async (jobId: string) => {
@@ -381,36 +390,48 @@ user.profileImage || ''
 
   // 채팅 헤더용 제목 포맷팅 (금액 포함)
   const formatChatHeaderTitle = (job: ConstructionJob): string => {
-    if (job.scheduledDate) {
-      const date = new Date(job.scheduledDate);
-      const month = date.getMonth() + 1;
-      const day = date.getDate();
-      const hours = date.getHours();
-      const minutes = date.getMinutes();
-      const timeStr = `${hours.toString().padStart(2, '0')}:${minutes.toString().padStart(2, '0')}`;
+    try {
+      if (!job) return '작업 정보';
       
-      // 주소에서 시/도 부분만 추출
-      const addressParts = job.address.split(' ');
-      const cityPart = addressParts.slice(0, 2).join(' ');
-      
-      // 작업 내용 추가 (아이템 정보가 있다면)
-      let jobDetails = '';
-      if (job.items && job.items.length > 0) {
-        const itemDescriptions = job.items.map(item => {
-          // name 속성을 기반으로 작업 내용 판단
-          if (item.name.toLowerCase().includes('블라인드')) {
-            return `블라인드 ${item.quantity}창`;
-          } else if (item.name.toLowerCase().includes('커튼')) {
-            return `커튼 ${item.quantity}조`;
-          }
-          return `${item.name} ${item.quantity}개`;
-        });
-        jobDetails = `-${itemDescriptions.join(', ')}`;
+      if (job.scheduledDate) {
+        const date = new Date(job.scheduledDate);
+        const month = date.getMonth() + 1;
+        const day = date.getDate();
+        const hours = date.getHours();
+        const minutes = date.getMinutes();
+        const timeStr = `${hours.toString().padStart(2, '0')}:${minutes.toString().padStart(2, '0')}`;
+        
+        // 주소에서 시/도 부분만 추출 (안전한 처리)
+        const addressParts = job.address ? job.address.split(' ') : [];
+        const cityPart = addressParts.length >= 2 ? addressParts.slice(0, 2).join(' ') : (job.address || '주소 없음');
+        
+        // 작업 내용 추가 (아이템 정보가 있다면)
+        let jobDetails = '';
+        if (job.items && Array.isArray(job.items) && job.items.length > 0) {
+          const itemDescriptions = job.items.map(item => {
+            try {
+              // name 속성을 기반으로 작업 내용 판단
+              if (item.name && item.name.toLowerCase().includes('블라인드')) {
+                return `블라인드 ${item.quantity || 0}창`;
+              } else if (item.name && item.name.toLowerCase().includes('커튼')) {
+                return `커튼 ${item.quantity || 0}조`;
+              }
+              return `${item.name || '작업'} ${item.quantity || 0}개`;
+            } catch (itemError) {
+              console.warn('아이템 처리 중 오류:', itemError);
+              return '작업 1개';
+            }
+          });
+          jobDetails = `-${itemDescriptions.join(', ')}`;
+        }
+        
+        return `${month}/${day} ${timeStr}-${cityPart}${jobDetails}`;
       }
-      
-      return `${month}/${day} ${timeStr}-${cityPart}${jobDetails}`;
+      return job.title || '작업 정보';
+    } catch (error) {
+      console.error('제목 포맷팅 중 오류:', error);
+      return job.title || '작업 정보';
     }
-    return job.title;
   };
 
   // 날짜 포맷팅
@@ -524,21 +545,29 @@ user.profileImage || ''
           >
             <ArrowBack />
           </IconButton>
-          <Box sx={{ flexGrow: 1, minWidth: 0 }}>
-            <Typography 
-              variant="subtitle1" 
-              sx={{ 
-                overflow: 'hidden', 
-                textOverflow: 'ellipsis',
-                whiteSpace: 'nowrap',
-                fontWeight: 600,
-                fontSize: '0.9rem',
-                lineHeight: 1.2,
-                mb: 0.5
-              }}
-            >
-              {selectedJob.title || formatChatHeaderTitle(selectedJob)}
-            </Typography>
+                     <Box sx={{ flexGrow: 1, minWidth: 0 }}>
+             <Box display="flex" alignItems="center" gap={1} mb={0.5}>
+               <Typography 
+                 variant="subtitle1" 
+                 sx={{ 
+                   overflow: 'hidden', 
+                   textOverflow: 'ellipsis',
+                   whiteSpace: 'nowrap',
+                   fontWeight: 600,
+                   fontSize: '0.9rem',
+                   lineHeight: 1.2,
+                   flexGrow: 1
+                 }}
+               >
+                 {selectedJob ? formatChatHeaderTitle(selectedJob) : '작업 정보'}
+               </Typography>
+               <Chip 
+                 label={selectedJob ? getStatusText(selectedJob.status) : '상태 없음'} 
+                 color={selectedJob ? getStatusColor(selectedJob.status) : 'default'} 
+                 size="small"
+                 sx={{ flexShrink: 0 }}
+               />
+             </Box>
             <Typography 
               variant="caption" 
               color="textSecondary" 
@@ -552,10 +581,11 @@ user.profileImage || ''
                 mb: 0.5
               }}
             >
-              {selectedJob.address.length > 25 
-                ? `${selectedJob.address.substring(0, 25)}...` 
-                : selectedJob.address
-              }
+              {selectedJob?.address ? (
+                selectedJob.address.length > 25 
+                  ? `${selectedJob.address.substring(0, 25)}...` 
+                  : selectedJob.address
+              ) : '주소 정보 없음'}
             </Typography>
             {sellerInfo && (
               <Typography 
@@ -575,14 +605,8 @@ user.profileImage || ''
                   : sellerInfo.name || sellerInfo.email
                 }
               </Typography>
-            )}
-          </Box>
-          <Chip 
-            label={getStatusText(selectedJob.status)} 
-            color={getStatusColor(selectedJob.status)} 
-            size="small"
-            sx={{ flexShrink: 0 }}
-          />
+                         )}
+           </Box>
         </Box>
 
         {/* 메시지 목록 */}
@@ -901,56 +925,59 @@ user.profileImage || ''
           <CardContent sx={{ flexGrow: 1, display: 'flex', flexDirection: 'column', p: 0 }}>
             {selectedJob ? (
               <>
-                {/* 채팅 헤더 */}
-                <Box sx={{ p: 2, pr: 3, borderBottom: 1, borderColor: 'divider' }}>
-                  <Box display="flex" justifyContent="space-between" alignItems="flex-start" gap={2}>
-                    <Box sx={{ flexGrow: 1, minWidth: 0 }}>
-                      <Typography 
-                        variant="h6" 
-                        sx={{ 
-                          overflow: 'hidden', 
-                          textOverflow: 'ellipsis',
-                          whiteSpace: 'nowrap',
-                          mb: 0.5
-                        }}
-                      >
-                        {formatChatHeaderTitle(selectedJob)}
-                      </Typography>
-                      <Typography 
-                        variant="body2" 
-                        color="textSecondary"
-                        sx={{ 
-                          overflow: 'hidden', 
-                          textOverflow: 'ellipsis',
-                          whiteSpace: 'nowrap',
-                          mb: 0.5
-                        }}
-                      >
-                        {selectedJob.address}
-                        {customerInfo && (
-                          <span> ({customerInfo.phone})</span>
-                        )}
-                      </Typography>
-                      {sellerInfo && (
-                        <Typography 
-                          variant="body2" 
-                          color="textSecondary"
-                          sx={{ 
-                            overflow: 'hidden', 
-                            textOverflow: 'ellipsis',
-                            whiteSpace: 'nowrap',
-                            mb: 1
-                          }}
-                        >
-                          판매자 ({sellerInfo.phone})
-                        </Typography>
-                      )}
-                      <Chip 
-                        label={getStatusText(selectedJob.status)} 
-                        color={getStatusColor(selectedJob.status)} 
-                        size="small"
-                      />
-                    </Box>
+                                 {/* 채팅 헤더 */}
+                 <Box sx={{ p: 2, pr: 3, borderBottom: 1, borderColor: 'divider' }}>
+                   <Box display="flex" justifyContent="space-between" alignItems="flex-start" gap={2}>
+                     <Box sx={{ flexGrow: 1, minWidth: 0 }}>
+                       <Box display="flex" alignItems="center" gap={1} mb={0.5}>
+                         <Typography 
+                           variant="h6" 
+                           sx={{ 
+                             overflow: 'hidden', 
+                             textOverflow: 'ellipsis',
+                             whiteSpace: 'nowrap',
+                             flexGrow: 1
+                           }}
+                         >
+                           {selectedJob ? formatChatHeaderTitle(selectedJob) : '작업 정보'}
+                         </Typography>
+                         <Chip 
+                           label={selectedJob ? getStatusText(selectedJob.status) : '상태 없음'} 
+                           color={selectedJob ? getStatusColor(selectedJob.status) : 'default'} 
+                           size="small"
+                           sx={{ flexShrink: 0 }}
+                         />
+                       </Box>
+                       <Typography 
+                         variant="body2" 
+                         color="textSecondary"
+                         sx={{ 
+                           overflow: 'hidden', 
+                           textOverflow: 'ellipsis',
+                           whiteSpace: 'nowrap',
+                           mb: 0.5
+                         }}
+                       >
+                         {selectedJob?.address || '주소 정보 없음'}
+                         {customerInfo && (
+                           <span> ({customerInfo.phone})</span>
+                         )}
+                       </Typography>
+                       {sellerInfo && (
+                         <Typography 
+                           variant="body2" 
+                           color="textSecondary"
+                           sx={{ 
+                             overflow: 'hidden', 
+                             textOverflow: 'ellipsis',
+                             whiteSpace: 'nowrap',
+                             mb: 1
+                           }}
+                         >
+                           판매자 ({sellerInfo.phone})
+                         </Typography>
+                       )}
+                     </Box>
                     <Button 
                       variant="outlined" 
                       size="small"
@@ -1147,7 +1174,9 @@ user.profileImage || ''
           </Box>
         </DialogTitle>
         
-        <DialogContent>
+        <DialogContent sx={{
+          bgcolor: (theme) => theme.palette.mode === 'dark' ? 'background.paper' : 'background.default'
+        }}>
           {detailJob && (
             <Box>
               <Typography variant="h5" gutterBottom>
@@ -1169,7 +1198,7 @@ user.profileImage || ''
                     <Person color="action" />
                     고객 정보
                   </Typography>
-                  <Box sx={{ ml: 3, p: 2, bgcolor: 'grey.50', borderRadius: 1 }}>
+                  <Box sx={{ ml: 3, p: 2, bgcolor: (theme) => theme.palette.mode === 'dark' ? 'grey.800' : 'grey.50', borderRadius: 1 }}>
                     <Typography variant="body2" sx={{ mb: 1 }}>
                       <strong>이름:</strong> {customerInfo.name}
                     </Typography>
@@ -1197,7 +1226,7 @@ user.profileImage || ''
                     <Schedule color="action" />
                     시공일시
                   </Typography>
-                  <Box sx={{ ml: 3, p: 2, bgcolor: 'grey.50', borderRadius: 1 }}>
+                  <Box sx={{ ml: 3, p: 2, bgcolor: (theme) => theme.palette.mode === 'dark' ? 'grey.800' : 'grey.50', borderRadius: 1 }}>
                     <Typography variant="body2">
                       {formatDateTime(detailJob.scheduledDate)}
                     </Typography>
@@ -1212,7 +1241,7 @@ user.profileImage || ''
                     <Schedule color="action" />
                     준비일시
                   </Typography>
-                  <Box sx={{ ml: 3, p: 2, bgcolor: 'grey.50', borderRadius: 1 }}>
+                  <Box sx={{ ml: 3, p: 2, bgcolor: (theme) => theme.palette.mode === 'dark' ? 'grey.800' : 'grey.50', borderRadius: 1 }}>
                     <Typography variant="body2">
                       {formatDateTime(new Date(detailJob.pickupInfo.scheduledDateTime))}
                     </Typography>
@@ -1381,7 +1410,9 @@ user.profileImage || ''
             </IconButton>
           </Box>
         </DialogTitle>
-        <DialogContent>
+        <DialogContent sx={{
+          bgcolor: (theme) => theme.palette.mode === 'dark' ? 'background.paper' : 'background.default'
+        }}>
           {imageError && (
             <Alert severity="error" sx={{ mb: 2 }}>
               {imageError}

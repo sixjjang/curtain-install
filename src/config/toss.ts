@@ -1,4 +1,14 @@
-// 토스페이먼츠 API 설정
+// 토스페이먼츠 설정
+export const TOSS_PAYMENTS_CLIENT_KEY = process.env.REACT_APP_TOSS_PAYMENTS_CLIENT_KEY || 'test_ck_D5GePWvyJnrK0W0k6q8gLzN97Eoq';
+export const TOSS_PAYMENTS_SECRET_KEY = process.env.REACT_APP_TOSS_PAYMENTS_SECRET_KEY || 'test_sk_D4yKeq5bgrpKRd0JYbLVGX0lzW6Y';
+
+// 은행 이체 시뮬레이션 모드 (개발/테스트 환경에서 사용)
+export const ENABLE_BANK_TRANSFER_SIMULATION = process.env.REACT_APP_ENABLE_BANK_TRANSFER_SIMULATION === 'true' || process.env.NODE_ENV === 'development';
+
+// 실제 은행 API 사용 여부
+export const USE_REAL_BANK_API = process.env.REACT_APP_USE_REAL_BANK_API === 'true' && !ENABLE_BANK_TRANSFER_SIMULATION;
+
+// 토스페이먼츠 API 엔드포인트
 export const TOSS_PAYMENTS_CONFIG = {
   // 실제 토스페이먼츠 API 키로 교체하세요
   SECRET_KEY: process.env.REACT_APP_TOSS_SECRET_KEY || 'YOUR_TOSS_SECRET_KEY_HERE',

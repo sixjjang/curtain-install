@@ -1,4 +1,4 @@
-import React, { useState, useEffect } from 'react';
+import React, { useState, useEffect, useRef } from 'react';
 import { useParams, useNavigate } from 'react-router-dom';
 import {
   Box,
@@ -44,12 +44,24 @@ const Chat: React.FC = () => {
   const [chatRoomId, setChatRoomId] = useState<string>('');
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string>('');
+  const messagesEndRef = useRef<HTMLDivElement>(null);
 
   useEffect(() => {
     if (jobId) {
       loadJobAndChat();
     }
   }, [jobId]);
+
+  // 메시지 스크롤을 맨 아래로
+  const scrollToBottom = () => {
+    setTimeout(() => {
+      messagesEndRef.current?.scrollIntoView({ behavior: 'smooth' });
+    }, 100);
+  };
+
+  useEffect(() => {
+    scrollToBottom();
+  }, [messages]);
 
   const loadJobAndChat = async () => {
     try {
@@ -218,6 +230,9 @@ const Chat: React.FC = () => {
           <Typography variant="h6" gutterBottom>
             {job.title}
           </Typography>
+          <Typography variant="caption" color="textSecondary" gutterBottom>
+            작업 ID: {job.id}
+          </Typography>
           <Typography variant="body2" color="textSecondary" gutterBottom>
             주소: {job.address}
           </Typography>
@@ -329,6 +344,7 @@ const Chat: React.FC = () => {
                   ))}
                 </List>
               )}
+              <div ref={messagesEndRef} />
             </Box>
           </Box>
         </CardContent>

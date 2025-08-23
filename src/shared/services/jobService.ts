@@ -283,7 +283,9 @@ export class JobService {
         cancelled: 0,
         product_not_ready: 0,
         customer_absent: 0,
-        schedule_changed: 0
+        schedule_changed: 0,
+        compensation_completed: 0,
+        reschedule_requested: 0
       };
       
       jobs.forEach(job => {
@@ -711,31 +713,20 @@ export class JobService {
         // 자동 메시지 실패는 작업 상태 변경을 막지 않음
       }
 
-      // 시공 완료 시 에스크로 타이머 시작 (설정된 시간 후 자동 지급)
+      // 시공 완료 시 즉시 에스크로 포인트 지급
       if (status === 'completed') {
         try {
           const { PointService } = await import('./pointService');
-          const { SystemSettingsService } = await import('./systemSettingsService');
           const jobData = await this.getJobById(jobId);
           
           if (jobData && jobData.contractorId) {
-            // 시스템 설정에서 자동 지급 시간 조회
-            const autoReleaseHours = await SystemSettingsService.getEscrowAutoReleaseHours();
-            
-            // 설정된 시간 후 자동 지급을 위한 타이머 설정
-            setTimeout(async () => {
-              try {
-                await PointService.releaseEscrowToContractor(jobId, jobData.contractorId!);
-                console.log(`✅ ${autoReleaseHours}시간 경과 후 에스크로 포인트 자동 지급 완료: ${jobId}`);
-              } catch (autoReleaseError) {
-                console.error('❌ 자동 에스크로 지급 실패:', autoReleaseError);
-              }
-            }, autoReleaseHours * 60 * 60 * 1000); // 설정된 시간
-            
-            console.log(`⏰ 에스크로 자동 지급 타이머 설정 완료: ${jobId} (${autoReleaseHours}시간 후)`);
+            // 즉시 에스크로 포인트 지급
+            await PointService.releaseEscrowToContractor(jobId, jobData.contractorId);
+            console.log(`✅ 시공 완료 - 에스크로 포인트 즉시 지급 완료: ${jobId}`);
           }
         } catch (escrowError) {
-          console.warn('⚠️ 에스크로 타이머 설정 실패:', escrowError);
+          console.error('❌ 에스크로 포인트 지급 실패:', escrowError);
+          // 에스크로 지급 실패해도 작업 완료는 계속 진행
         }
 
         // 시공 완료 시 만족도 조사 알림 생성
@@ -844,21 +835,7 @@ export class JobService {
     }
   }
 
-  // 작업 전체 업데이트 (수정용)
-  static async updateJob(jobId: string, jobData: Partial<ConstructionJob>): Promise<void> {
-    try {
-      const jobRef = doc(db, 'constructionJobs', jobId);
-      await updateDoc(jobRef, {
-        ...jobData,
-        updatedAt: new Date()
-      });
-      
-      console.log(`작업 ${jobId}가 업데이트되었습니다.`);
-    } catch (error) {
-      console.error('작업 업데이트 실패:', error);
-      throw new Error('작업을 업데이트할 수 없습니다.');
-    }
-  }
+
 
   // 새 작업 생성 (에스크로 시스템 포함)
   static async createJob(jobData: Omit<ConstructionJob, 'id' | 'createdAt' | 'updatedAt'>): Promise<string> {
@@ -999,6 +976,88 @@ export class JobService {
   // getJob 별칭 (getJobById와 동일)
   static async getJob(jobId: string): Promise<ConstructionJob> {
     return this.getJobById(jobId);
+  }
+
+  // 작업 업데이트 (관리자용)
+  static async updateJob(jobId: string, updatedJobData: Partial<ConstructionJob>): Promise<void> {
+    try {
+      // 1. 기존 작업 정보 조회
+      const existingJob = await this.getJobById(jobId);
+      
+      if (!existingJob) {
+        throw new Error('작업을 찾을 수 없습니다.');
+      }
+      
+      // 2. 업데이트할 데이터 준비 (중요한 필드들만 업데이트)
+      const updateData: any = {
+        updatedAt: new Date()
+      };
+      
+      // 기본 정보 업데이트
+      if (updatedJobData.title !== undefined) updateData.title = updatedJobData.title;
+      if (updatedJobData.description !== undefined) updateData.description = updatedJobData.description;
+      if (updatedJobData.address !== undefined) updateData.address = updatedJobData.address;
+      
+      // 상태 업데이트
+      if (updatedJobData.status !== undefined) updateData.status = updatedJobData.status;
+      
+      // 일정 업데이트
+      if (updatedJobData.scheduledDate !== undefined) updateData.scheduledDate = updatedJobData.scheduledDate;
+      if (updatedJobData.preparationDate !== undefined) updateData.preparationDate = updatedJobData.preparationDate;
+      if (updatedJobData.pickupScheduledDate !== undefined) updateData.pickupScheduledDate = updatedJobData.pickupScheduledDate;
+      
+      // 사용자 정보 업데이트
+      if (updatedJobData.sellerId !== undefined) updateData.sellerId = updatedJobData.sellerId;
+      if (updatedJobData.contractorId !== undefined) updateData.contractorId = updatedJobData.contractorId;
+      if (updatedJobData.customerName !== undefined) updateData.customerName = updatedJobData.customerName;
+      if (updatedJobData.customerPhone !== undefined) updateData.customerPhone = updatedJobData.customerPhone;
+      
+      // 금액 정보 업데이트
+      if (updatedJobData.travelFee !== undefined) updateData.travelFee = updatedJobData.travelFee;
+      if (updatedJobData.finalAmount !== undefined) updateData.finalAmount = updatedJobData.finalAmount;
+      if (updatedJobData.escrowAmount !== undefined) updateData.escrowAmount = updatedJobData.escrowAmount;
+      
+      // 픽업 정보 업데이트
+      if (updatedJobData.pickupCompanyName !== undefined) updateData.pickupCompanyName = updatedJobData.pickupCompanyName;
+      if (updatedJobData.pickupPhone !== undefined) updateData.pickupPhone = updatedJobData.pickupPhone;
+      if (updatedJobData.pickupAddress !== undefined) updateData.pickupAddress = updatedJobData.pickupAddress;
+      
+      // 3. 상태 변경에 따른 추가 처리
+      if (updatedJobData.status && updatedJobData.status !== existingJob.status) {
+        // 상태 변경 시 진행 기록 추가
+        const progressStep = {
+          status: updatedJobData.status,
+          timestamp: new Date(),
+          note: `관리자에 의해 상태가 ${existingJob.status}에서 ${updatedJobData.status}로 변경됨`
+        };
+        
+        updateData.progressHistory = [
+          ...(existingJob.progressHistory || []),
+          progressStep
+        ];
+        
+        // 완료 상태로 변경 시 완료일 설정
+        if (updatedJobData.status === 'completed') {
+          updateData.completedDate = new Date();
+        }
+        
+        // 취소 상태로 변경 시 취소일 설정
+        if (updatedJobData.status === 'cancelled') {
+          updateData.cancelledAt = new Date();
+        }
+      }
+      
+      // 4. Firestore 업데이트
+      const jobRef = doc(db, 'constructionJobs', jobId);
+      await updateDoc(jobRef, updateData);
+      
+      console.log(`✅ 작업 업데이트 완료: ${jobId}`);
+      console.log('업데이트된 필드:', Object.keys(updateData));
+      
+    } catch (error) {
+      console.error('작업 업데이트 실패:', error);
+      throw new Error('작업을 업데이트할 수 없습니다.');
+    }
   }
 
   // 작업 삭제
@@ -1457,6 +1516,226 @@ export class JobService {
       console.log(`작업 ${jobId}가 취소되었습니다.`);
     } catch (error) {
       console.error('작업 취소 실패:', error);
+      throw error;
+    }
+  }
+
+  // 제품 미준비 보상 처리
+  static async processProductNotReadyCompensation(jobId: string, contractorId: string): Promise<void> {
+    try {
+      const jobRef = doc(db, 'constructionJobs', jobId);
+      const jobDoc = await getDoc(jobRef);
+      
+      if (!jobDoc.exists()) {
+        throw new Error('작업을 찾을 수 없습니다.');
+      }
+
+      const jobData = jobDoc.data();
+      
+      // 제품준비완료 상태에서만 처리 가능
+      if (jobData.status !== 'product_ready') {
+        throw new Error('제품준비완료 상태의 작업만 처리할 수 있습니다.');
+      }
+
+      // 시공자가 본인의 작업인지 확인
+      if (jobData.contractorId !== contractorId) {
+        throw new Error('본인의 작업만 처리할 수 있습니다.');
+      }
+
+      // 보상 정책 조회
+      const { SystemSettingsService } = await import('./systemSettingsService');
+      const compensationPolicy = await SystemSettingsService.getCompensationPolicy();
+      
+      // 기본 출장비 계산 (작업 항목에서 기본출장비 찾기)
+      const travelFeeItem = jobData.items?.find((item: any) => item.name === '기본출장비');
+      const travelFee = travelFeeItem ? travelFeeItem.totalPrice : 0;
+      
+      if (travelFee === 0) {
+        throw new Error('기본 출장비를 찾을 수 없습니다.');
+      }
+
+      // 보상 금액 계산
+      const compensationAmount = Math.round(travelFee * (compensationPolicy.productNotReadyRate / 100));
+      
+      if (compensationAmount <= 0) {
+        throw new Error('보상 금액이 0원입니다.');
+      }
+
+      // 포인트 지급
+      const { PointService } = await import('./pointService');
+      await PointService.addCompensationPoints(
+        contractorId,
+        'contractor',
+        compensationAmount,
+        'product_not_ready',
+        `제품 미준비 보상 (작업: ${jobId})`,
+        jobId
+      );
+
+      // 작업 상태를 보상완료로 변경
+      const compensationStep = {
+        status: 'compensation_completed',
+        timestamp: new Date(),
+        note: `제품 미준비 보상 지급 완료 (${compensationAmount}포인트)`
+      };
+
+      await updateDoc(jobRef, {
+        status: 'reschedule_requested',
+        updatedAt: new Date(),
+        progressHistory: [...(jobData.progressHistory || []), compensationStep],
+        compensationInfo: {
+          type: 'product_not_ready',
+          amount: compensationAmount,
+          rate: compensationPolicy.productNotReadyRate,
+          processedAt: new Date(),
+          processedBy: contractorId
+        },
+        rescheduleInfo: {
+          type: 'product_not_ready',
+          requestedAt: new Date(),
+          requestedBy: contractorId
+        }
+      });
+
+      console.log(`✅ 작업 ${jobId}의 제품 미준비 보상 처리 완료: ${compensationAmount}포인트`);
+    } catch (error) {
+      console.error('제품 미준비 보상 처리 실패:', error);
+      throw error;
+    }
+  }
+
+  // 소비자 부재 보상 처리
+  static async processCustomerAbsentCompensation(jobId: string, contractorId: string): Promise<void> {
+    try {
+      const jobRef = doc(db, 'constructionJobs', jobId);
+      const jobDoc = await getDoc(jobRef);
+      
+      if (!jobDoc.exists()) {
+        throw new Error('작업을 찾을 수 없습니다.');
+      }
+
+      const jobData = jobDoc.data();
+      
+      // 픽업완료 상태에서만 처리 가능
+      if (jobData.status !== 'pickup_completed') {
+        throw new Error('픽업완료 상태의 작업만 처리할 수 있습니다.');
+      }
+
+      // 시공자가 본인의 작업인지 확인
+      if (jobData.contractorId !== contractorId) {
+        throw new Error('본인의 작업만 처리할 수 있습니다.');
+      }
+
+      // 보상 정책 조회
+      const { SystemSettingsService } = await import('./systemSettingsService');
+      const compensationPolicy = await SystemSettingsService.getCompensationPolicy();
+      
+      // 기본 출장비 계산 (작업 항목에서 기본출장비 찾기)
+      const travelFeeItem = jobData.items?.find((item: any) => item.name === '기본출장비');
+      const travelFee = travelFeeItem ? travelFeeItem.totalPrice : 0;
+      
+      if (travelFee === 0) {
+        throw new Error('기본 출장비를 찾을 수 없습니다.');
+      }
+
+      // 보상 금액 계산
+      const compensationAmount = Math.round(travelFee * (compensationPolicy.customerAbsentRate / 100));
+      
+      if (compensationAmount <= 0) {
+        throw new Error('보상 금액이 0원입니다.');
+      }
+
+      // 포인트 지급
+      const { PointService } = await import('./pointService');
+      await PointService.addCompensationPoints(
+        contractorId,
+        'contractor',
+        compensationAmount,
+        'customer_absent',
+        `소비자 부재 보상 (작업: ${jobId})`,
+        jobId
+      );
+
+      // 작업 상태를 보상완료로 변경
+      const compensationStep = {
+        status: 'compensation_completed',
+        timestamp: new Date(),
+        note: `소비자 부재 보상 지급 완료 (${compensationAmount}포인트)`
+      };
+
+      await updateDoc(jobRef, {
+        status: 'reschedule_requested',
+        updatedAt: new Date(),
+        progressHistory: [...(jobData.progressHistory || []), compensationStep],
+        compensationInfo: {
+          type: 'customer_absent',
+          amount: compensationAmount,
+          rate: compensationPolicy.customerAbsentRate,
+          processedAt: new Date(),
+          processedBy: contractorId
+        },
+        rescheduleInfo: {
+          type: 'customer_absent',
+          requestedAt: new Date(),
+          requestedBy: contractorId
+        }
+      });
+
+      console.log(`✅ 작업 ${jobId}의 소비자 부재 보상 처리 완료: ${compensationAmount}포인트`);
+    } catch (error) {
+      console.error('소비자 부재 보상 처리 실패:', error);
+      throw error;
+    }
+  }
+
+  // 일정 재조정 처리 (판매자가 새로운 일정으로 수정)
+  static async processReschedule(
+    jobId: string, 
+    newScheduledDate: Date, 
+    sellerId: string
+  ): Promise<void> {
+    try {
+      // 1. 작업 정보 조회
+      const job = await this.getJobById(jobId);
+      if (!job) {
+        throw new Error('작업을 찾을 수 없습니다.');
+      }
+
+      // 2. 판매자 확인
+      if (job.sellerId !== sellerId) {
+        throw new Error('해당 작업의 판매자가 아닙니다.');
+      }
+
+      // 3. 상태 확인
+      if (job.status !== 'reschedule_requested') {
+        throw new Error('일정 재조정 요청 상태에서만 일정을 수정할 수 있습니다.');
+      }
+
+      // 4. 작업 상태 업데이트
+      const jobRef = doc(db, 'constructionJobs', jobId);
+      await updateDoc(jobRef, {
+        status: 'assigned',
+        scheduledDate: newScheduledDate,
+        rescheduleInfo: {
+          ...job.rescheduleInfo,
+          newScheduledDate: newScheduledDate,
+          confirmedAt: new Date(),
+          confirmedBy: sellerId
+        },
+        updatedAt: serverTimestamp()
+      });
+
+      // 5. 자동 채팅 메시지 전송
+      try {
+        const { ChatService } = await import('./chatService');
+        await ChatService.sendRescheduleMessage(jobId, newScheduledDate, job.rescheduleInfo?.type || 'unknown');
+      } catch (error) {
+        console.error('자동 메시지 전송 실패:', error);
+      }
+
+      console.log(`✅ 일정 재조정 완료: ${jobId} (새 일정: ${newScheduledDate.toLocaleDateString()})`);
+    } catch (error) {
+      console.error('일정 재조정 처리 실패:', error);
       throw error;
     }
   }
