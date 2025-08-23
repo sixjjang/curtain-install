@@ -655,11 +655,6 @@ const PricingManagement: React.FC = () => {
 
   return (
     <Box>
-             <Box display="flex" justifyContent="space-between" alignItems="center" mb={3}>
-         <Typography variant="h4">
-           시공단가 관리
-         </Typography>
-       </Box>
 
       {message && (
         <Alert 

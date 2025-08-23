@@ -207,10 +207,6 @@ const ContractorList: React.FC = () => {
 
   return (
     <Box>
-      <Typography variant="h4" gutterBottom>
-        시공자 목록
-      </Typography>
-      
       <Typography variant="body2" color="textSecondary" mb={3}>
         총 {filteredAndSortedContractors.length}명의 시공자가 있습니다.
       </Typography>

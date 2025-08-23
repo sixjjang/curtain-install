@@ -31,10 +31,13 @@ import {
   Logout,
   Warning,
   Block,
-  Chat
+  Chat,
+  Brightness4,
+  Brightness7
 } from '@mui/icons-material';
 import { useNavigate, useLocation } from 'react-router-dom';
 import { useAuth } from '../../../shared/contexts/AuthContext';
+import { useTheme as useCustomTheme } from '../../../shared/contexts/ThemeContext';
 import { NotificationService } from '../../../shared/services/notificationService';
 
 const drawerWidth = 240;
@@ -50,6 +53,7 @@ const SellerLayout: React.FC<SellerLayoutProps> = ({ children }) => {
   const navigate = useNavigate();
   const location = useLocation();
   const { user, logout } = useAuth();
+  const { mode, toggleTheme } = useCustomTheme();
 
   const menuItems = [
     { text: '대시보드', icon: <Dashboard />, path: '/seller' },
@@ -97,14 +101,50 @@ const SellerLayout: React.FC<SellerLayoutProps> = ({ children }) => {
     <div>
       <Toolbar>
         <Box>
-          <Typography variant="h6" noWrap component="div">
-            {user?.seller?.companyName || '판매자 대시보드'}
+          <Typography 
+            variant="h6" 
+            noWrap 
+            component="div" 
+            sx={{ 
+              fontWeight: 'bold', 
+              color: 'primary.main',
+              background: 'linear-gradient(45deg, #1976d2, #42a5f5, #1976d2)',
+              backgroundSize: '200% 200%',
+              WebkitBackgroundClip: 'text',
+              WebkitTextFillColor: 'transparent',
+              backgroundClip: 'text',
+              animation: 'shimmer 3s ease-in-out infinite, float 4s ease-in-out infinite',
+              textShadow: '0 0 20px rgba(25, 118, 210, 0.3)',
+              position: 'relative',
+              '&::before': {
+                content: '""',
+                position: 'absolute',
+                top: 0,
+                left: 0,
+                right: 0,
+                bottom: 0,
+                background: 'linear-gradient(45deg, transparent, rgba(25, 118, 210, 0.1), transparent)',
+                borderRadius: '4px',
+                animation: 'glow 2s ease-in-out infinite alternate',
+                zIndex: -1
+              },
+              '@keyframes shimmer': {
+                '0%': { backgroundPosition: '0% 50%' },
+                '50%': { backgroundPosition: '100% 50%' },
+                '100%': { backgroundPosition: '0% 50%' }
+              },
+              '@keyframes float': {
+                '0%, 100%': { transform: 'translateY(0px)' },
+                '50%': { transform: 'translateY(-2px)' }
+              },
+              '@keyframes glow': {
+                '0%': { opacity: 0.3 },
+                '100%': { opacity: 0.8 }
+              }
+            }}
+          >
+            {user?.companyName || user?.name || '판매자'}
           </Typography>
-          {user?.seller?.companyName && (
-            <Typography variant="caption" color="textSecondary" noWrap>
-              판매자 대시보드
-            </Typography>
-          )}
         </Box>
       </Toolbar>
       <Divider />
@@ -162,8 +202,19 @@ const SellerLayout: React.FC<SellerLayoutProps> = ({ children }) => {
             <MenuIcon />
           </IconButton>
           <Typography variant="h6" noWrap component="div" sx={{ flexGrow: 1 }}>
-            {menuItems.find(item => item.path === location.pathname)?.text || '판매자 대시보드'}
+            {menuItems.find(item => item.path === location.pathname)?.text || 
+             (user?.seller?.companyName ? `${user.seller.companyName} 대시보드` : '판매자 대시보드')}
           </Typography>
+          
+          {/* 테마 토글 버튼 */}
+          <IconButton
+            color="inherit"
+            onClick={toggleTheme}
+            sx={{ mr: 1 }}
+            aria-label="테마 변경"
+          >
+            {mode === 'dark' ? <Brightness7 /> : <Brightness4 />}
+          </IconButton>
           
           {/* 알림 아이콘 */}
           <IconButton

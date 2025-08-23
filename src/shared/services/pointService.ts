@@ -106,11 +106,22 @@ export class PointService {
   // 에스크로 포인트 차감 (시공의뢰 시)
   static async escrowPoints(jobId: string, sellerId: string, amount: number): Promise<string> {
     try {
-      // 1. 판매자 포인트 차감
+      console.log('🔍 에스크로 포인트 차감 시작:', { jobId, sellerId, amount });
+      
+      // 1. 판매자 포인트 차감 (최신 잔액 확인)
       const sellerBalance = await this.getPointBalance(sellerId, 'seller');
+      console.log('🔍 에스크로 차감 전 잔액 확인:', { sellerBalance, requiredAmount: amount });
+      
       if (sellerBalance < amount) {
+        console.error('❌ 에스크로 차감 실패 - 잔액 부족:', { 
+          currentBalance: sellerBalance, 
+          requiredAmount: amount, 
+          shortage: amount - sellerBalance 
+        });
         throw new Error('포인트 잔액이 부족합니다.');
       }
+      
+      console.log('✅ 에스크로 차감 가능 - 잔액 충분');
 
       // 2. 시스템 설정에서 자동 지급 시간 조회
       const { SystemSettingsService } = await import('./systemSettingsService');
@@ -298,11 +309,17 @@ export class PointService {
   // 거래 내역 조회
   static async getTransactionHistory(userId: string, userRole: 'seller' | 'contractor'): Promise<PointTransaction[]> {
     try {
+      // TODO: Firebase Console에서 다음 인덱스를 생성하여 성능 최적화
+      // 컬렉션: pointTransactions
+      // 필드: userId (Ascending), userRole (Ascending), createdAt (Descending)
+      // 
+      // Firebase Console > Firestore Database > Indexes > Composite 탭에서 생성
+      // 또는 오류 메시지의 링크를 클릭하여 자동 생성
+      
+      // 인덱스 오류를 방지하기 위해 단순한 쿼리 사용
       const q = query(
         collection(db, 'pointTransactions'),
-        where('userId', '==', userId),
-        where('userRole', '==', userRole),
-        orderBy('createdAt', 'desc')
+        where('userId', '==', userId)
       );
       
       const querySnapshot = await getDocs(q);
@@ -310,22 +327,28 @@ export class PointService {
       
       querySnapshot.forEach((doc) => {
         const data = doc.data();
-        transactions.push({
-          id: doc.id,
-          userId: data.userId,
-          userRole: data.userRole,
-          type: data.type,
-          amount: data.amount,
-          balance: data.balance,
-          description: data.description,
-          jobId: data.jobId,
-          status: data.status,
-          createdAt: data.createdAt?.toDate() || new Date(),
-          completedAt: data.completedAt?.toDate(),
-          adminId: data.adminId,
-          notes: data.notes
-        });
+        // 클라이언트에서 userRole 필터링
+        if (data.userRole === userRole) {
+          transactions.push({
+            id: doc.id,
+            userId: data.userId,
+            userRole: data.userRole,
+            type: data.type,
+            amount: data.amount,
+            balance: data.balance,
+            description: data.description,
+            jobId: data.jobId,
+            status: data.status,
+            createdAt: data.createdAt?.toDate() || new Date(),
+            completedAt: data.completedAt?.toDate(),
+            adminId: data.adminId,
+            notes: data.notes
+          });
+        }
       });
+      
+      // 클라이언트에서 정렬 (최신순)
+      transactions.sort((a, b) => b.createdAt.getTime() - a.createdAt.getTime());
       
       return transactions;
     } catch (error: any) {

@@ -113,11 +113,7 @@ const Analytics: React.FC = () => {
 
   return (
     <Box>
-      <Box display="flex" justifyContent="space-between" alignItems="center" mb={3}>
-        <Typography variant="h4" gutterBottom>
-          플랫폼 분석
-        </Typography>
-        
+      <Box display="flex" justifyContent="flex-end" alignItems="center" mb={3}>
         {/* 기간 필터링 */}
         <ToggleButtonGroup
           value={selectedPeriod}

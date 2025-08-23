@@ -138,19 +138,39 @@ const MyJobsCalendarView: React.FC<MyJobsCalendarViewProps> = ({ myJobs }) => {
           <Typography variant="h6" gutterBottom>범례</Typography>
           <Box display="flex" gap={2} flexWrap="wrap">
             <Box display="flex" alignItems="center" gap={1}>
-              <Box sx={{ width: 20, height: 20, backgroundColor: '#ffcc80', borderRadius: 1 }} />
+              <Box sx={{ 
+                width: 20, 
+                height: 20, 
+                backgroundColor: (theme) => theme.palette.mode === 'light' ? '#ffcc80' : '#ffb74d', 
+                borderRadius: 1 
+              }} />
               <Typography variant="body2">내 작업 (배정됨/준비중)</Typography>
             </Box>
             <Box display="flex" alignItems="center" gap={1}>
-              <Box sx={{ width: 20, height: 20, backgroundColor: '#a5d6a7', borderRadius: 1 }} />
+              <Box sx={{ 
+                width: 20, 
+                height: 20, 
+                backgroundColor: (theme) => theme.palette.mode === 'light' ? '#a5d6a7' : '#66bb6a', 
+                borderRadius: 1 
+              }} />
               <Typography variant="body2">제품준비완료</Typography>
             </Box>
             <Box display="flex" alignItems="center" gap={1}>
-              <Box sx={{ width: 20, height: 20, backgroundColor: '#90caf9', borderRadius: 1 }} />
+              <Box sx={{ 
+                width: 20, 
+                height: 20, 
+                backgroundColor: (theme) => theme.palette.mode === 'light' ? '#90caf9' : '#42a5f5', 
+                borderRadius: 1 
+              }} />
               <Typography variant="body2">진행중/픽업완료</Typography>
             </Box>
             <Box display="flex" alignItems="center" gap={1}>
-              <Box sx={{ width: 20, height: 20, backgroundColor: '#f5f5f5', borderRadius: 1 }} />
+              <Box sx={{ 
+                width: 20, 
+                height: 20, 
+                backgroundColor: (theme) => theme.palette.mode === 'light' ? '#f5f5f5' : '#424242', 
+                borderRadius: 1 
+              }} />
               <Typography variant="body2">완료</Typography>
             </Box>
           </Box>
@@ -221,12 +241,19 @@ const MyJobsCalendarView: React.FC<MyJobsCalendarViewProps> = ({ myJobs }) => {
                       sx={{
                         mt: 0.5,
                         p: { xs: 0.25, sm: 0.5 },
-                        backgroundColor: job.status === 'completed' ? '#f5f5f5' : 
-                                         job.status === 'assigned' ? '#ffcc80' :
-                                         job.status === 'product_preparing' ? '#ffcc80' :
-                                         job.status === 'product_ready' ? '#a5d6a7' :
-                                         job.status === 'pickup_completed' ? '#90caf9' :
-                                         job.status === 'in_progress' ? '#90caf9' : '#fafafa',
+                        backgroundColor: job.status === 'completed' ? 
+                          (theme) => theme.palette.mode === 'light' ? '#f5f5f5' : '#424242' : 
+                                         job.status === 'assigned' ? 
+                          (theme) => theme.palette.mode === 'light' ? '#ffcc80' : '#ffb74d' :
+                                         job.status === 'product_preparing' ? 
+                          (theme) => theme.palette.mode === 'light' ? '#ffcc80' : '#ffb74d' :
+                                         job.status === 'product_ready' ? 
+                          (theme) => theme.palette.mode === 'light' ? '#a5d6a7' : '#66bb6a' :
+                                         job.status === 'pickup_completed' ? 
+                          (theme) => theme.palette.mode === 'light' ? '#90caf9' : '#42a5f5' :
+                                         job.status === 'in_progress' ? 
+                          (theme) => theme.palette.mode === 'light' ? '#90caf9' : '#42a5f5' : 
+                          (theme) => theme.palette.mode === 'light' ? '#fafafa' : '#2d2d2d',
                         borderRadius: 1,
                         fontSize: { xs: '0.65rem', sm: '0.75rem' },
                         overflow: 'hidden',
@@ -296,7 +323,9 @@ const MyJobsCalendarView: React.FC<MyJobsCalendarViewProps> = ({ myJobs }) => {
                             p: 2, 
                             border: job.status === 'completed' ? '1px solid #4caf50' : '1px solid #1976d2', 
                             borderRadius: 1, 
-                            backgroundColor: job.status === 'completed' ? '#e8f5e8' : '#e3f2fd'
+                            backgroundColor: job.status === 'completed' ? 
+                              (theme) => theme.palette.mode === 'light' ? '#e8f5e8' : '#1b5e20' : 
+                              (theme) => theme.palette.mode === 'light' ? '#e3f2fd' : '#0d47a1'
                           }}>
                             <Box display="flex" justifyContent="space-between" alignItems="flex-start" mb={1}>
                                                              <Typography variant="h6" sx={{ color: job.status === 'completed' ? '#2e7d32' : '#0d47a1' }}>

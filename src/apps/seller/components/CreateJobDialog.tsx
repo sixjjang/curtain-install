@@ -297,6 +297,7 @@ const CreateJobDialog: React.FC<CreateJobDialogProps> = ({
     shortage: number;
   } | null>(null);
   const [error, setError] = useState('');
+  const [successMessage, setSuccessMessage] = useState('');
   const [pricingItems, setPricingItems] = useState<PricingItem[]>([]);
   const [pricingOptions, setPricingOptions] = useState<PricingOption[]>([]);
   const [selectedOptions, setSelectedOptions] = useState<string[]>([]);
@@ -325,6 +326,16 @@ const CreateJobDialog: React.FC<CreateJobDialogProps> = ({
   const [exampleDialogOpen, setExampleDialogOpen] = useState(false);
   const [editingExample, setEditingExample] = useState<{ id: number; title: string; content: string } | null>(null);
   const [newExample, setNewExample] = useState({ title: '', content: '' });
+
+  // 임시저장 상태
+  const [tempSavedData, setTempSavedData] = useState<{
+    formData: any;
+    customerInfo: any;
+    items: JobItem[];
+    pickupInfo: any;
+    workInstructions: WorkInstruction[];
+    selectedOptions: string[];
+  } | null>(null);
 
   // 품목 목록 가져오기
   React.useEffect(() => {
@@ -617,24 +628,42 @@ const CreateJobDialog: React.FC<CreateJobDialogProps> = ({
 
   // 포인트 잔액 검증
   const validatePointBalance = async () => {
-    if (!user?.id) return;
+    if (!user?.id) {
+      console.log('🔍 포인트 검증 실패: 사용자 ID 없음');
+      return false;
+    }
     
     const totalBudget = calculateTotalBudget(); // 총예산과 동일한 값 사용
-    console.log('🔍 포인트 잔액 검증 - 총예산과 동일한 값 사용:', { totalBudget });
+    console.log('🔍 포인트 잔액 검증 시작:', { 
+      userId: user.id, 
+      totalBudget, 
+      currentPointBalance: pointBalance 
+    });
     
     if (totalBudget > 0) {
       try {
         const validation = await PointService.validatePointBalance(user.id, totalBudget);
         console.log('🔍 포인트 잔액 검증 결과:', validation);
         setPointValidation(validation);
+        
+        if (!validation.isValid) {
+          console.warn('⚠️ 포인트 잔액 부족:', {
+            currentBalance: validation.currentBalance,
+            requiredAmount: validation.requiredAmount,
+            shortage: validation.shortage
+          });
+        }
+        
         return validation.isValid;
       } catch (error) {
-        console.error('포인트 잔액 검증 실패:', error);
+        console.error('❌ 포인트 잔액 검증 실패:', error);
         setPointValidation(null);
         return false;
       }
+    } else {
+      console.log('🔍 총예산이 0이므로 검증 통과');
+      return true;
     }
-    return true;
   };
 
   // 자동 제목 생성
@@ -872,13 +901,30 @@ const CreateJobDialog: React.FC<CreateJobDialogProps> = ({
         uploadedBy: file.uploadedBy
       }));
 
-      // 포인트 잔액 검증
+      // 포인트 잔액 검증 (최신 잔액으로 재확인)
+      console.log('🔍 작업 등록 전 포인트 검증 시작');
+      console.log('🔍 현재 pointBalance 상태:', pointBalance);
+      console.log('🔍 필요 금액 (totalBudget):', totalBudget);
+      
+      // 최신 잔액을 다시 조회
+      const currentBalance = await PointService.getPointBalance(user.id, 'seller');
+      console.log('🔍 최신 잔액 조회 결과:', currentBalance);
+      
+      // 상태 업데이트
+      setPointBalance(currentBalance);
+      
       const isValidBalance = await validatePointBalance();
+      console.log('🔍 포인트 검증 결과:', isValidBalance);
+      
       if (!isValidBalance) {
-        setError(`포인트 잔액이 부족합니다. 현재 잔액: ${pointBalance.toLocaleString()}포인트, 필요 금액: ${totalBudget.toLocaleString()}포인트`);
+        const errorMessage = `포인트 잔액이 부족합니다. 현재 잔액: ${currentBalance.toLocaleString()}포인트, 필요 금액: ${totalBudget.toLocaleString()}포인트`;
+        console.error('❌ 포인트 잔액 부족:', errorMessage);
+        setError(errorMessage);
         setLoading(false);
         return;
       }
+      
+      console.log('✅ 포인트 검증 통과');
 
       console.log('작업 데이터 생성:', {
         formData: formData,
@@ -895,7 +941,7 @@ const CreateJobDialog: React.FC<CreateJobDialogProps> = ({
         coordinates: { lat: 37.5665, lng: 126.9780 }, // 서울 시청 좌표 (기본값)
         budget: {
           min: totalBudget,
-          max: totalBudget + Math.round(totalBudget * 0.1) // 10% 여유
+          max: totalBudget // 에스크로 차감을 위해 min과 동일하게 설정
         },
         items: items || [],
         status: 'pending' as const,
@@ -925,6 +971,8 @@ const CreateJobDialog: React.FC<CreateJobDialogProps> = ({
         });
         
         alert('작업이 성공적으로 수정되었습니다.');
+        // 임시저장 데이터 삭제
+        clearTempData();
       } else {
         // 새 작업 생성
         await JobService.createJob(jobData);
@@ -958,6 +1006,9 @@ const CreateJobDialog: React.FC<CreateJobDialogProps> = ({
         
         // 기본출장비 재설정
         await resetTravelFee();
+        
+        // 임시저장 데이터 삭제
+        clearTempData();
       }
       
       onJobCreated();
@@ -995,6 +1046,8 @@ const CreateJobDialog: React.FC<CreateJobDialogProps> = ({
     setSelectedCategory('');
     setSelectedOptions([]);
     setError('');
+    // 임시저장 데이터 삭제
+    clearTempData();
     onClose();
   };
 
@@ -1075,8 +1128,41 @@ const CreateJobDialog: React.FC<CreateJobDialogProps> = ({
     setNewExample({ title: '', content: '' });
   };
 
+  // 임시저장 및 복원 함수들
+  const saveTempData = () => {
+    const tempData = {
+      formData,
+      customerInfo,
+      items,
+      pickupInfo,
+      workInstructions,
+      selectedOptions
+    };
+    setTempSavedData(tempData);
+    console.log('✅ 임시저장 완료:', tempData);
+  };
+
+  const restoreTempData = () => {
+    if (tempSavedData) {
+      setFormData(tempSavedData.formData);
+      setCustomerInfo(tempSavedData.customerInfo);
+      setItems(tempSavedData.items);
+      setPickupInfo(tempSavedData.pickupInfo);
+      setWorkInstructions(tempSavedData.workInstructions);
+      setSelectedOptions(tempSavedData.selectedOptions);
+      console.log('✅ 임시저장된 데이터 복원 완료');
+    }
+  };
+
+  const clearTempData = () => {
+    setTempSavedData(null);
+    console.log('✅ 임시저장 데이터 삭제 완료');
+  };
+
   // 포인트 충전 관련 함수들
   const handleChargeDialogOpen = () => {
+    // 포인트 충전 전에 현재 입력 내용을 임시저장
+    saveTempData();
     setChargeDialogOpen(true);
     setChargeAmount('');
     setSelectedAmount(null);
@@ -1137,23 +1223,48 @@ const CreateJobDialog: React.FC<CreateJobDialogProps> = ({
       }
       
       if (paymentResult.success) {
-        if (paymentResult.redirectUrl) {
-          // 결제 페이지로 리다이렉트 (실제 결제)
+        if (paymentMethod === 'simulation') {
+          // 시뮬레이션 모드: 바로 포인트 충전 처리
+          try {
+            // 포인트 충전 처리
+            await PointService.chargePoints(user.id, 'seller', amount);
+            
+            // 포인트 잔액 새로고침 (Firebase 데이터 일관성을 위해 잠시 대기)
+            console.log('🔍 포인트 충전 완료, 잔액 확인 대기 중...');
+            await new Promise(resolve => setTimeout(resolve, 2000)); // 2초 대기
+            
+            const newBalance = await PointService.getPointBalance(user.id, 'seller');
+            console.log('🔍 포인트 충전 후 잔액:', newBalance);
+            setPointBalance(newBalance);
+            
+            // 포인트 검증 다시 수행
+            const validationResult = await validatePointBalance();
+            console.log('🔍 포인트 충전 후 검증 결과:', validationResult);
+            
+            // 충전 다이얼로그 닫기 (새작업등록 모달은 그대로 유지)
+            handleChargeDialogClose();
+            
+            // 임시저장된 데이터 복원
+            restoreTempData();
+            
+            // 충전 완료 메시지 표시
+            setSuccessMessage(`${amount.toLocaleString()}포인트가 성공적으로 충전되었습니다. 입력하신 내용이 복원되었습니다. 잠시 후 작업 등록을 시도해주세요.`);
+            
+            // 3초 후 성공 메시지 자동 제거
+            setTimeout(() => {
+              setSuccessMessage('');
+            }, 3000);
+            
+            setError('');
+          } catch (chargeError) {
+            console.error('포인트 충전 처리 실패:', chargeError);
+            setError('포인트 충전 처리에 실패했습니다.');
+          }
+        } else if (paymentResult.redirectUrl) {
+          // 실제 결제: 결제 페이지로 리다이렉트
           window.location.href = paymentResult.redirectUrl;
         } else {
-          // 시뮬레이션 결제 완료
-          // 포인트 잔액 새로고침
-          const newBalance = await PointService.getPointBalance(user.id, 'seller');
-          setPointBalance(newBalance);
-          
-          // 포인트 검증 다시 수행
-          await validatePointBalance();
-          
-          // 충전 다이얼로그 닫기
-          handleChargeDialogClose();
-          
-          setError('');
-          // 성공 메시지는 포인트 검증 결과에서 표시됨
+          throw new Error('결제 처리에 실패했습니다.');
         }
       } else {
         throw new Error(paymentResult.error || '결제 요청에 실패했습니다.');
@@ -1209,6 +1320,12 @@ const CreateJobDialog: React.FC<CreateJobDialogProps> = ({
         {error && (
           <Alert severity="error" sx={{ mb: 2 }}>
             {error}
+          </Alert>
+        )}
+        
+        {successMessage && (
+          <Alert severity="success" sx={{ mb: 2 }}>
+            {successMessage}
           </Alert>
         )}
 
@@ -1456,17 +1573,20 @@ const CreateJobDialog: React.FC<CreateJobDialogProps> = ({
                              alignItems: 'center',
                              p: 1,
                              border: selectedOptions.includes(option.id) 
-                               ? '2px solid #1976d2' 
-                               : '1px solid #e0e0e0',
+                               ? '2px solid' 
+                               : '1px solid',
+                             borderColor: selectedOptions.includes(option.id) 
+                               ? 'primary.main' 
+                               : 'divider',
                              borderRadius: 1,
                              backgroundColor: selectedOptions.includes(option.id) 
-                               ? '#e3f2fd' 
-                               : 'white',
+                               ? (theme) => theme.palette.mode === 'light' ? '#e3f2fd' : '#1a237e'
+                               : 'background.paper',
                              cursor: 'pointer',
                              '&:hover': {
                                backgroundColor: selectedOptions.includes(option.id) 
-                                 ? '#bbdefb' 
-                                 : '#f5f5f5'
+                                 ? (theme) => theme.palette.mode === 'light' ? '#bbdefb' : '#283593'
+                                 : (theme) => theme.palette.mode === 'light' ? '#f5f5f5' : '#2d2d2d'
                              }
                            }}
                            onClick={() => handleOptionChange(option.id)}
@@ -1522,7 +1642,9 @@ const CreateJobDialog: React.FC<CreateJobDialogProps> = ({
                       mb: 1,
                       border: '1px solid #e0e0e0',
                       borderRadius: 1,
-                      backgroundColor: item.name === '기본출장비' ? '#f5f5f5' : 'white'
+                      backgroundColor: item.name === '기본출장비' ? 
+                        (theme) => theme.palette.mode === 'light' ? '#f5f5f5' : '#2d2d2d' : 
+                        (theme) => theme.palette.mode === 'light' ? 'white' : '#1e1e1e'
                     }}
                   >
                                          <Box sx={{ flex: 1 }}>
@@ -1753,9 +1875,10 @@ const CreateJobDialog: React.FC<CreateJobDialogProps> = ({
                         justifyContent: 'space-between',
                         p: 2,
                         mb: 1,
-                        border: '1px solid #e0e0e0',
+                        border: '1px solid',
+                        borderColor: 'divider',
                         borderRadius: 1,
-                        backgroundColor: 'white'
+                        backgroundColor: 'background.paper'
                       }}
                     >
                       <Box sx={{ display: 'flex', alignItems: 'center', flex: 1 }}>
@@ -1824,7 +1947,12 @@ const CreateJobDialog: React.FC<CreateJobDialogProps> = ({
               <Typography variant="body2" color="textSecondary" sx={{ mb: 2 }}>
                 프로필에 저장된 픽업 정보가 자동으로 입력됩니다. 필요시 수정하세요.
               </Typography>
-              <Box sx={{ p: 2, border: '1px solid #e0e0e0', borderRadius: 1, bgcolor: '#f9f9f9' }}>
+              <Box sx={{ 
+                p: 2, 
+                border: '1px solid #e0e0e0', 
+                borderRadius: 1, 
+                bgcolor: (theme) => theme.palette.mode === 'light' ? '#f9f9f9' : '#2d2d2d' 
+              }}>
                 <Grid container spacing={2}>
                   <Grid item xs={12} sm={6}>
                     <TextField
@@ -1930,6 +2058,14 @@ const CreateJobDialog: React.FC<CreateJobDialogProps> = ({
           포인트 부족으로 작업을 등록할 수 없습니다. 충전 후 다시 시도해주세요.
         </Typography>
         
+        {/* 임시저장 안내 */}
+        <Alert severity="info" sx={{ mb: 3 }}>
+          <Typography variant="body2">
+            💾 <strong>입력하신 내용이 자동으로 임시저장되었습니다.</strong><br />
+            포인트 충전 완료 후 입력하신 내용이 그대로 복원됩니다.
+          </Typography>
+        </Alert>
+        
         {/* 충전 금액 옵션 */}
         <Grid container spacing={2} mb={3}>
           {chargeOptions.map((option) => (
@@ -1960,7 +2096,12 @@ const CreateJobDialog: React.FC<CreateJobDialogProps> = ({
           InputProps={{
             endAdornment: <Typography variant="caption">포인트</Typography>
           }}
-          sx={{ mb: 3 }}
+          sx={{ 
+            mb: 3,
+            '& .MuiInputBase-root': {
+              backgroundColor: 'background.paper'
+            }
+          }}
         />
 
         {/* 결제 수단 선택 */}

@@ -243,9 +243,6 @@ const Dashboard: React.FC = () => {
   if (loading) {
     return (
       <Box>
-        <Typography variant="h4" gutterBottom>
-          안녕하세요, {user?.name || '시공자'}님! 👋
-        </Typography>
         
         <Grid container spacing={3}>
           {[1, 2, 3, 4].map((item) => (
@@ -292,10 +289,6 @@ const Dashboard: React.FC = () => {
 
   return (
     <Box>
-      <Typography variant="h4" gutterBottom>
-        {greeting.main}
-      </Typography>
-      
       {/* 동적 인사말 메시지들 */}
       {greeting.additional.length > 0 && (
         <Box mb={3}>

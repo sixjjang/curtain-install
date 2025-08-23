@@ -209,10 +209,7 @@ const PointCharge: React.FC = () => {
 
   return (
     <Box>
-      <Box display="flex" justifyContent="space-between" alignItems="center" mb={3}>
-        <Typography variant="h4">
-          포인트 관리
-        </Typography>
+      <Box display="flex" justifyContent="flex-end" alignItems="center" mb={3}>
         <Button 
           variant="contained" 
           startIcon={<Add />}

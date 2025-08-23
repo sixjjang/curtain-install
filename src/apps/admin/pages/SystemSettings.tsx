@@ -18,10 +18,13 @@ import {
   Save,
   Refresh,
   AccessTime,
-  Info
+  Info,
+  Build,
+  Warning
 } from '@mui/icons-material';
 import { useAuth } from '../../../shared/contexts/AuthContext';
 import { SystemSettingsService } from '../../../shared/services/systemSettingsService';
+import { JobService } from '../../../shared/services/jobService';
 import { SystemSettings as SystemSettingsType } from '../../../types';
 
 const SystemSettings: React.FC = () => {
@@ -31,6 +34,7 @@ const SystemSettings: React.FC = () => {
   const [saving, setSaving] = useState(false);
   const [error, setError] = useState('');
   const [success, setSuccess] = useState('');
+  const [fixingProgress, setFixingProgress] = useState(false);
   
   // 폼 데이터
   const [escrowHours, setEscrowHours] = useState(48);
@@ -110,6 +114,29 @@ const SystemSettings: React.FC = () => {
     }
   };
 
+  // progressHistory 타임스탬프 수정
+  const handleFixProgressHistory = async () => {
+    if (!user?.id) {
+      setError('로그인이 필요합니다.');
+      return;
+    }
+
+    try {
+      setFixingProgress(true);
+      setError('');
+      setSuccess('');
+
+      await JobService.fixProgressHistoryTimestamps();
+      
+      setSuccess('모든 작업의 진행 기록 타임스탬프가 성공적으로 수정되었습니다.');
+    } catch (error) {
+      console.error('progressHistory 수정 실패:', error);
+      setError('진행 기록 수정에 실패했습니다: ' + (error as Error).message);
+    } finally {
+      setFixingProgress(false);
+    }
+  };
+
   // 시간 단위 변환 함수들
   const hoursToDays = (hours: number) => {
     return (hours / 24).toFixed(1);
@@ -139,11 +166,7 @@ const SystemSettings: React.FC = () => {
 
   return (
     <Box>
-      <Box display="flex" justifyContent="space-between" alignItems="center" mb={3}>
-        <Typography variant="h4" sx={{ display: 'flex', alignItems: 'center', gap: 1 }}>
-          <Settings />
-          시스템 설정
-        </Typography>
+      <Box display="flex" justifyContent="flex-end" alignItems="center" mb={3}>
         <Button
           variant="outlined"
           startIcon={<Refresh />}
@@ -521,6 +544,75 @@ const SystemSettings: React.FC = () => {
                     • 너무 짧은 시간은 분쟁 해결 시간이 부족할 수 있습니다<br />
                     • 너무 긴 시간은 시공자의 자금 회전에 영향을 줄 수 있습니다
                   </Typography>
+                </Grid>
+              </Grid>
+            </CardContent>
+          </Card>
+        </Grid>
+
+        {/* 데이터 관리 섹션 */}
+        <Grid item xs={12}>
+          <Card>
+            <CardContent>
+              <Typography variant="h6" gutterBottom sx={{ display: 'flex', alignItems: 'center', gap: 1 }}>
+                <Build />
+                데이터 관리
+              </Typography>
+              
+              <Typography variant="body2" color="textSecondary" sx={{ mb: 3 }}>
+                시스템 데이터의 문제를 해결하고 최적화하는 도구입니다.
+              </Typography>
+
+              <Grid container spacing={3}>
+                {/* progressHistory 수정 */}
+                <Grid item xs={12} md={6}>
+                  <Paper sx={{ p: 3, border: '1px solid #e0e0e0' }}>
+                    <Typography variant="h6" gutterBottom sx={{ display: 'flex', alignItems: 'center', gap: 1 }}>
+                      <AccessTime />
+                      작업 진행 기록 시간 수정
+                    </Typography>
+                    
+                    <Typography variant="body2" color="textSecondary" sx={{ mb: 2 }}>
+                      동일한 시간으로 기록된 작업 진행 기록을 각각 다른 시간으로 수정합니다.
+                      이 작업은 모든 작업의 progressHistory를 검사하고 필요한 경우 수정합니다.
+                    </Typography>
+
+                    <Alert severity="warning" sx={{ mb: 2 }}>
+                      <Typography variant="body2">
+                        <strong>주의:</strong> 이 작업은 모든 작업 데이터를 수정할 수 있습니다. 
+                        실행 전에 반드시 백업을 확인하세요.
+                      </Typography>
+                    </Alert>
+
+                    <Button
+                      variant="contained"
+                      color="primary"
+                      startIcon={fixingProgress ? <CircularProgress size={20} /> : <Build />}
+                      onClick={handleFixProgressHistory}
+                      disabled={fixingProgress}
+                      fullWidth
+                    >
+                      {fixingProgress ? '수정 중...' : '진행 기록 시간 수정'}
+                    </Button>
+                  </Paper>
+                </Grid>
+
+                {/* 향후 추가될 다른 데이터 관리 도구들을 위한 공간 */}
+                <Grid item xs={12} md={6}>
+                  <Paper sx={{ p: 3, border: '1px solid #e0e0e0', bgcolor: 'grey.50' }}>
+                    <Typography variant="h6" gutterBottom sx={{ display: 'flex', alignItems: 'center', gap: 1 }}>
+                      <Info />
+                      향후 추가 예정
+                    </Typography>
+                    
+                    <Typography variant="body2" color="textSecondary">
+                      향후 다른 데이터 관리 도구들이 이곳에 추가될 예정입니다.
+                      <br />• 데이터베이스 최적화
+                      <br />• 파일 정리
+                      <br />• 캐시 관리
+                      <br />• 백업 관리
+                    </Typography>
+                  </Paper>
                 </Grid>
               </Grid>
             </CardContent>

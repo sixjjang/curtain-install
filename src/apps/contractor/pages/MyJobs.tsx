@@ -366,7 +366,7 @@ const MyJobs: React.FC = () => {
                   border: '2px dashed #ccc',
                   borderRadius: 1,
                   p: 1,
-                  backgroundColor: '#fafafa'
+                  backgroundColor: (theme) => theme.palette.mode === 'light' ? '#fafafa' : '#2d2d2d'
                 }}
               >
                 <canvas
@@ -577,9 +577,6 @@ const MyJobs: React.FC = () => {
   if (loading) {
     return (
       <Box>
-        <Typography variant="h4" gutterBottom>
-          나의 작업
-        </Typography>
         <Typography>로딩 중...</Typography>
       </Box>
     );
@@ -589,9 +586,6 @@ const MyJobs: React.FC = () => {
     <Box>
       <Box display="flex" justifyContent="space-between" alignItems="center" mb={3}>
         <Box>
-          <Typography variant="h4" gutterBottom>
-            나의 작업
-          </Typography>
           <Typography variant="body2" color="textSecondary">
             📋 배정된 작업: 모든 진행 중인 작업을 한눈에 확인할 수 있습니다
           </Typography>
@@ -1071,7 +1065,12 @@ const MyJobs: React.FC = () => {
                         <LocalShipping color="action" />
                         픽업 정보
                       </Typography>
-                      <Box sx={{ ml: 3, p: 2, bgcolor: 'grey.50', borderRadius: 1 }}>
+                      <Box sx={{ 
+                        ml: 3, 
+                        p: 2, 
+                        bgcolor: (theme) => theme.palette.mode === 'light' ? 'grey.50' : 'grey.800', 
+                        borderRadius: 1 
+                      }}>
                         {selectedJob.pickupInfo.companyName && (
                           <Typography variant="body2" sx={{ mb: 1 }}>
                             <strong>상호:</strong> {selectedJob.pickupInfo.companyName}
@@ -1103,7 +1102,11 @@ const MyJobs: React.FC = () => {
                         <Description color="action" />
                         작업지시서 파일
                       </Typography>
-                      <Box sx={{ ml: 3, bgcolor: 'grey.50', borderRadius: 1 }}>
+                      <Box sx={{ 
+                        ml: 3, 
+                        bgcolor: (theme) => theme.palette.mode === 'light' ? 'grey.50' : 'grey.800', 
+                        borderRadius: 1 
+                      }}>
                         {selectedJob.workInstructions.map((file, index) => (
                           <Box key={file.id} sx={{ p: 2, borderBottom: index < selectedJob.workInstructions!.length - 1 ? 1 : 0, borderColor: 'divider' }}>
                             <Typography variant="body2" sx={{ mb: 1 }}>
@@ -1136,7 +1139,12 @@ const MyJobs: React.FC = () => {
                         <Info color="action" />
                         작업 설명
                       </Typography>
-                      <Box sx={{ ml: 3, p: 2, bgcolor: 'grey.50', borderRadius: 1 }}>
+                      <Box sx={{ 
+                        ml: 3, 
+                        p: 2, 
+                        bgcolor: (theme) => theme.palette.mode === 'light' ? 'grey.50' : 'grey.800', 
+                        borderRadius: 1 
+                      }}>
                         <Typography variant="body2">
                           {selectedJob.description}
                         </Typography>

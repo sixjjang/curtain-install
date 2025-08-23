@@ -31,9 +31,12 @@ import {
   Notifications as NotificationsIcon,
   Logout,
   Warning,
-  Block
+  Block,
+  Brightness4,
+  Brightness7
 } from '@mui/icons-material';
 import { useAuth } from '../../../shared/contexts/AuthContext';
+import { useTheme as useCustomTheme } from '../../../shared/contexts/ThemeContext';
 import { ContractorInfo } from '../../../types';
 
 const drawerWidth = 240;
@@ -48,6 +51,7 @@ const ContractorLayout: React.FC<ContractorLayoutProps> = ({ children }) => {
   const { user, logout } = useAuth();
   const navigate = useNavigate();
   const location = useLocation();
+  const { mode, toggleTheme } = useCustomTheme();
 
   // user가 null일 수 있으므로 안전하게 접근
   const contractor = user?.contractor;
@@ -86,13 +90,11 @@ const ContractorLayout: React.FC<ContractorLayoutProps> = ({ children }) => {
     <Box>
       <Box sx={{ p: 2, textAlign: 'center' }}>
         <Typography variant="h6" color="primary">
-          {contractor?.businessName || contractor?.name || '시공자 대시보드'}
+          {contractor?.businessName || `${user?.name || '시공자'}님의 공간`}
         </Typography>
-        {contractor?.businessName && (
-          <Typography variant="caption" color="textSecondary">
-            시공자 대시보드
-          </Typography>
-        )}
+        <Typography variant="caption" color="textSecondary">
+          {contractor?.businessName ? '전문가의 손길' : '시공자 대시보드'}
+        </Typography>
         {contractor && (
           <Box sx={{ mt: 2 }}>
             <Avatar sx={{ width: 56, height: 56, mx: 'auto', mb: 1 }}>
@@ -124,6 +126,7 @@ const ContractorLayout: React.FC<ContractorLayoutProps> = ({ children }) => {
                   return;
                 }
                 navigate(item.path);
+                setMobileOpen(false); // 모바일에서 메뉴 클릭 시 드로어 닫기
               }}
               selected={location.pathname === item.path}
               sx={{
@@ -164,10 +167,18 @@ const ContractorLayout: React.FC<ContractorLayoutProps> = ({ children }) => {
             <MenuIcon />
           </IconButton>
           <Typography variant="h6" noWrap component="div" sx={{ flexGrow: 1 }}>
-            전문가의 손길
+            {contractor?.businessName ? `${contractor.businessName} 대시보드` : '시공자 대시보드'}
           </Typography>
           
           <Box sx={{ display: 'flex', alignItems: 'center', gap: 2 }}>
+            {/* 테마 토글 버튼 */}
+            <IconButton
+              color="inherit"
+              onClick={toggleTheme}
+              aria-label="테마 변경"
+            >
+              {mode === 'dark' ? <Brightness7 /> : <Brightness4 />}
+            </IconButton>
             <IconButton
               color="inherit"
               onClick={() => {

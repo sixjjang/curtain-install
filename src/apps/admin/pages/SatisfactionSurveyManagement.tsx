@@ -141,10 +141,6 @@ const SatisfactionSurveyManagement: React.FC = () => {
 
   return (
     <Box sx={{ p: 3 }}>
-      <Typography variant="h4" gutterBottom>
-        만족도 조사 관리
-      </Typography>
-      
       <Typography variant="body1" color="textSecondary" sx={{ mb: 3 }}>
         시공 완료 후 판매자에게 전송되는 만족도 조사 알림을 관리합니다.
       </Typography>

@@ -85,7 +85,7 @@ const SellerApp: React.FC = () => {
       return canAccessFeature('/payment-fail') ? <PaymentFail /> : <Profile />;
     }
     if (location.pathname.startsWith('/seller/chat/')) {
-      return canAccessFeature('/chat') ? <Chat /> : <Profile />;
+      return canAccessFeature('/chat') ? <ContractorChat /> : <Profile />;
     }
     if (location.pathname === '/seller/contractor-chat') {
       return canAccessFeature('/contractor-chat') ? <ContractorChat /> : <Profile />;

@@ -257,10 +257,7 @@ const JobManagement: React.FC = () => {
 
   return (
     <Box>
-      <Box display="flex" justifyContent="space-between" alignItems="center" mb={3}>
-        <Typography variant="h4" gutterBottom>
-          작업 관리
-        </Typography>
+      <Box display="flex" justifyContent="flex-end" alignItems="center" mb={3}>
         <Box>
           <Button
             variant="outlined"
@@ -376,7 +373,9 @@ const JobManagement: React.FC = () => {
           
           <Grid container spacing={3}>
             <Grid item xs={12} md={4}>
-              <Card sx={{ backgroundColor: '#ffebee' }}>
+              <Card sx={{ 
+                backgroundColor: (theme) => theme.palette.mode === 'light' ? '#ffebee' : '#2d1b1b' 
+              }}>
                 <CardContent>
                   <Typography variant="h6" gutterBottom>
                     총 취소 건수
@@ -389,7 +388,9 @@ const JobManagement: React.FC = () => {
             </Grid>
             
             <Grid item xs={12} md={4}>
-              <Card sx={{ backgroundColor: '#fff3e0' }}>
+              <Card sx={{ 
+                backgroundColor: (theme) => theme.palette.mode === 'light' ? '#fff3e0' : '#2d2b1b' 
+              }}>
                 <CardContent>
                   <Typography variant="h6" gutterBottom>
                     오늘 취소 건수
@@ -402,7 +403,9 @@ const JobManagement: React.FC = () => {
             </Grid>
             
             <Grid item xs={12} md={4}>
-              <Card sx={{ backgroundColor: '#e8f5e8' }}>
+              <Card sx={{ 
+                backgroundColor: (theme) => theme.palette.mode === 'light' ? '#e8f5e8' : '#1b2d1b' 
+              }}>
                 <CardContent>
                   <Typography variant="h6" gutterBottom>
                     취소율
@@ -431,7 +434,9 @@ const JobManagement: React.FC = () => {
                         p: 2, 
                         border: '1px solid #e0e0e0', 
                         borderRadius: 1,
-                        backgroundColor: index === 0 ? '#fff3e0' : '#fafafa'
+                        backgroundColor: index === 0 ? 
+                          (theme) => theme.palette.mode === 'light' ? '#fff3e0' : '#2d2b1b' : 
+                          (theme) => theme.palette.mode === 'light' ? '#fafafa' : '#2d2d2d'
                       }}>
                         <Box display="flex" justifyContent="space-between" alignItems="center">
                           <Box>

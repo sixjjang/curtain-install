@@ -1,8 +1,8 @@
 import React, { useEffect } from 'react';
 import { BrowserRouter as Router, Routes, Route, Navigate } from 'react-router-dom';
-import { ThemeProvider, createTheme } from '@mui/material/styles';
 import CssBaseline from '@mui/material/CssBaseline';
 import { AuthProvider } from './shared/contexts/AuthContext';
+import { ThemeProvider } from './shared/contexts/ThemeContext';
 import { testFirebaseConnection } from './firebase/config';
 
 // 앱 컴포넌트들
@@ -29,23 +29,7 @@ import StorageTest from './shared/components/StorageTest';
 import FirebaseStorageGuide from './shared/components/FirebaseStorageGuide';
 
 
-// 테마 설정
-const theme = createTheme({
-  palette: {
-    primary: {
-      main: '#1976d2',
-    },
-    secondary: {
-      main: '#dc004e',
-    },
-    background: {
-      default: '#f5f5f5',
-    },
-  },
-  typography: {
-    fontFamily: '"Noto Sans KR", "Roboto", "Helvetica", "Arial", sans-serif',
-  },
-});
+// 기존 테마 설정 제거 - ThemeContext에서 관리
 
 function App() {
   // Firebase 연결 테스트
@@ -63,7 +47,7 @@ function App() {
   }, []);
 
   return (
-    <ThemeProvider theme={theme}>
+    <ThemeProvider>
       <CssBaseline />
       <AuthProvider>
         <Router>

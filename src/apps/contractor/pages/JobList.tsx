@@ -520,11 +520,6 @@ const JobList: React.FC = () => {
                 
                 return (
                   <Box>
-                    <Box display="flex" justifyContent="space-between" alignItems="center" mb={2}>
-                      <Typography variant="h4" sx={{ fontSize: { xs: '1.5rem', sm: '2rem' } }}>
-                        시공건 찾기
-                      </Typography>
-                    </Box>
                     
                     {/* 지역 필터 */}
                     <Card sx={{ mb: 2 }}>
@@ -973,7 +968,12 @@ const JobList: React.FC = () => {
                       <strong>{selectedJobForCancel.title}</strong> 작업을 취소하시겠습니까?
                     </Typography>
                     
-                    <Box sx={{ mb: 3, p: 2, backgroundColor: '#fff3e0', borderRadius: 1 }}>
+                    <Box sx={{ 
+                      mb: 3, 
+                      p: 2, 
+                      backgroundColor: (theme) => theme.palette.mode === 'light' ? '#fff3e0' : '#2d2d2d', 
+                      borderRadius: 1 
+                    }}>
                       <Typography variant="body2" gutterBottom>
                         <strong>취소 정보:</strong>
                       </Typography>
@@ -1124,7 +1124,7 @@ const JobList: React.FC = () => {
                     borderRadius: 1, 
                     mb: 1,
                     '&:hover': {
-                      backgroundColor: '#f5f5f5'
+                      backgroundColor: (theme) => theme.palette.mode === 'light' ? '#f5f5f5' : '#2d2d2d'
                     }
                   }}
                 >

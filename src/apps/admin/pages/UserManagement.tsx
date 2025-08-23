@@ -309,10 +309,6 @@ const UserManagement: React.FC = () => {
 
   return (
     <Box>
-      <Typography variant="h4" gutterBottom>
-        사용자 관리
-      </Typography>
-
       {/* 통계 카드 */}
       <Grid container spacing={3} sx={{ mb: 3 }}>
         <Grid item xs={12} md={2}>
@@ -538,9 +534,12 @@ const UserManagement: React.FC = () => {
                   <TableRow 
                     key={user.id}
                     sx={{
-                      backgroundColor: user.approvalStatus === 'pending' ? '#fff3e0' : 'inherit',
+                      backgroundColor: user.approvalStatus === 'pending' ? 
+                        (theme) => theme.palette.mode === 'light' ? '#fff3e0' : '#2d2b1b' : 'inherit',
                       '&:hover': {
-                        backgroundColor: user.approvalStatus === 'pending' ? '#ffe0b2' : '#f5f5f5'
+                        backgroundColor: user.approvalStatus === 'pending' ? 
+                          (theme) => theme.palette.mode === 'light' ? '#ffe0b2' : '#3d2b1b' : 
+                          (theme) => theme.palette.mode === 'light' ? '#f5f5f5' : '#2d2d2d'
                       }
                     }}
                   >

@@ -392,7 +392,7 @@ const JobDetailDialog: React.FC<JobDetailDialogProps> = ({ open, onClose, job })
                           borderRadius: 1,
                           backgroundColor: 'white',
                           '&:hover': {
-                            backgroundColor: '#f5f5f5'
+                            backgroundColor: (theme) => theme.palette.mode === 'light' ? '#f5f5f5' : '#2d2d2d'
                           }
                         }}
                       >
@@ -468,7 +468,9 @@ const JobDetailDialog: React.FC<JobDetailDialogProps> = ({ open, onClose, job })
                           mb: 1, 
                           border: '1px solid #f0f0f0', 
                           borderRadius: 1,
-                          bgcolor: index === job.progressHistory!.length - 1 ? '#f8f9fa' : 'white'
+                          bgcolor: index === job.progressHistory!.length - 1 ? 
+                            (theme) => theme.palette.mode === 'light' ? '#f8f9fa' : '#2d2d2d' : 
+                            (theme) => theme.palette.mode === 'light' ? 'white' : '#1e1e1e'
                         }}
                       >
                         <Box sx={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', mb: 1 }}>

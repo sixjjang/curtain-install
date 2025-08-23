@@ -1,5 +1,5 @@
 import React, { useState, useEffect } from 'react';
-import { useParams } from 'react-router-dom';
+import { useParams, useNavigate } from 'react-router-dom';
 import {
   Box,
   Typography,
@@ -15,9 +15,13 @@ import {
   Chip,
   Alert,
   CircularProgress,
-  Avatar
+  Avatar,
+  IconButton,
+  useTheme,
+  useMediaQuery,
+  Skeleton
 } from '@mui/material';
-import { Send, Chat as ChatIcon } from '@mui/icons-material';
+import { Send, Chat as ChatIcon, List as ListIcon, ArrowBack, VisibilityOff, Visibility as VisibilityOn, LocationOn, AttachMoney, Work } from '@mui/icons-material';
 import { useAuth } from '../../../shared/contexts/AuthContext';
 import { ChatService } from '../../../shared/services/chatService';
 import { JobService } from '../../../shared/services/jobService';
@@ -26,6 +30,9 @@ import { ConstructionJob } from '../../../types';
 const Chat: React.FC = () => {
   const { jobId } = useParams<{ jobId: string }>();
   const { user } = useAuth();
+  const theme = useTheme();
+  const isMobile = useMediaQuery(theme.breakpoints.down('md'));
+  const navigate = useNavigate();
 
   // 총 예산 계산 함수
   const calculateTotalBudget = (job: ConstructionJob): number => {
@@ -53,23 +60,29 @@ const Chat: React.FC = () => {
     }
     return job.title;
   };
+  
   const [jobs, setJobs] = useState<ConstructionJob[]>([]);
   const [selectedJob, setSelectedJob] = useState<ConstructionJob | null>(null);
   const [messages, setMessages] = useState<any[]>([]);
   const [newMessage, setNewMessage] = useState('');
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState('');
+  const [showChat, setShowChat] = useState(false); // 모바일에서 채팅창 표시 여부
+  const [hideCompleted, setHideCompleted] = useState(true); // 완료된 작업 숨김 여부
 
   useEffect(() => {
     loadMyJobs();
-  }, [user]);
+  }, [user, hideCompleted]);
 
   useEffect(() => {
     if (selectedJob) {
       loadChatMessages(selectedJob.id);
       subscribeToChat(selectedJob.id);
+      if (isMobile) {
+        setShowChat(true); // 모바일에서 작업 선택 시 채팅창 표시
+      }
     }
-  }, [selectedJob]);
+  }, [selectedJob, isMobile]);
 
   const loadMyJobs = async () => {
     if (!user?.id) return;
@@ -88,6 +101,14 @@ const Chat: React.FC = () => {
         const targetJob = myJobs.find(job => job.id === jobId);
         if (targetJob) {
           setSelectedJob(targetJob);
+        }
+      } else if (myJobs.length > 0 && !selectedJob) {
+        // 첫 번째 작업을 자동 선택 (완료된 작업이 숨겨져 있다면 완료되지 않은 첫 번째 작업 선택)
+        const availableJobs = hideCompleted ? myJobs.filter(job => job.status !== 'completed') : myJobs;
+        if (availableJobs.length > 0) {
+          setSelectedJob(availableJobs[0]);
+        } else if (myJobs.length > 0) {
+          setSelectedJob(myJobs[0]);
         }
       }
     } catch (error) {
@@ -174,21 +195,331 @@ const Chat: React.FC = () => {
     }
   };
 
+  const handleJobSelect = (job: ConstructionJob) => {
+    setSelectedJob(job);
+  };
+
+  const handleBackToList = () => {
+    setShowChat(false);
+  };
+
+  // 완료된 작업 필터링
+  const filteredJobs = hideCompleted ? jobs.filter(job => job.status !== 'completed') : jobs;
+
   if (loading) {
     return (
-      <Box display="flex" justifyContent="center" py={4}>
-        <CircularProgress />
+      <Box sx={{ p: 2 }}>
+        {[1, 2, 3].map((index) => (
+          <Card key={index} sx={{ mb: 2, borderRadius: 2 }}>
+            <CardContent sx={{ p: 2 }}>
+              <Box display="flex" justifyContent="space-between" mb={1}>
+                <Skeleton variant="text" width="60%" height={24} />
+                <Skeleton variant="rectangular" width={60} height={24} sx={{ borderRadius: 1 }} />
+              </Box>
+              <Skeleton variant="text" width="80%" height={20} />
+              <Skeleton variant="text" width="40%" height={20} />
+            </CardContent>
+          </Card>
+        ))}
       </Box>
     );
   }
 
+  // 모바일에서 채팅창 표시
+  if (isMobile && showChat && selectedJob) {
+    return (
+      <Box sx={{ height: '100vh', display: 'flex', flexDirection: 'column' }}>
+        {/* 채팅 헤더 */}
+        <Box sx={{ 
+          position: 'sticky',
+          top: 0,
+          zIndex: 10,
+          p: 2, 
+          borderBottom: 1, 
+          borderColor: 'divider',
+          bgcolor: 'background.paper',
+          backdropFilter: 'blur(10px)',
+          display: 'flex',
+          alignItems: 'center',
+          gap: 2
+        }}>
+          <IconButton 
+            onClick={handleBackToList}
+            sx={{ flexShrink: 0 }}
+            aria-label="목록으로 돌아가기"
+          >
+            <ArrowBack />
+          </IconButton>
+                     <Box sx={{ flexGrow: 1, minWidth: 0 }}>
+             <Typography 
+               variant="subtitle1" 
+               sx={{ 
+                 overflow: 'hidden', 
+                 textOverflow: 'ellipsis',
+                 whiteSpace: 'nowrap',
+                 fontWeight: 600,
+                 fontSize: '0.9rem',
+                 lineHeight: 1.2
+               }}
+             >
+               {selectedJob.title || formatJobTitle(selectedJob)}
+             </Typography>
+             <Typography 
+               variant="caption" 
+               color="textSecondary" 
+               sx={{ 
+                 overflow: 'hidden', 
+                 textOverflow: 'ellipsis',
+                 whiteSpace: 'nowrap',
+                 display: 'block',
+                 mt: 0.5,
+                 fontSize: '0.75rem',
+                 lineHeight: 1.2
+               }}
+             >
+               {selectedJob.address.length > 30 
+                 ? `${selectedJob.address.substring(0, 30)}...` 
+                 : selectedJob.address
+               }
+             </Typography>
+           </Box>
+          <Chip 
+            label={getStatusText(selectedJob.status)} 
+            color={getStatusColor(selectedJob.status)} 
+            size="small"
+            sx={{ flexShrink: 0 }}
+          />
+        </Box>
+
+        {/* 메시지 목록 */}
+        <Box sx={{ 
+          flexGrow: 1, 
+          p: 2, 
+          overflow: 'auto',
+          bgcolor: 'grey.50'
+        }}>
+          {messages.length === 0 ? (
+            <Box textAlign="center" py={4}>
+              <Typography color="textSecondary">
+                아직 메시지가 없습니다.
+              </Typography>
+              <Typography variant="body2" color="textSecondary">
+                판매자와 첫 메시지를 시작해보세요!
+              </Typography>
+            </Box>
+          ) : (
+            messages.map((message, index) => (
+              <Box
+                key={message.id || index}
+                sx={{
+                  display: 'flex',
+                  justifyContent: message.senderId === user?.id ? 'flex-end' : 'flex-start',
+                  mb: 2,
+                  alignItems: 'flex-end',
+                  gap: 1
+                }}
+              >
+                {message.senderId !== user?.id && (
+                  <Avatar
+                    sx={{ width: 32, height: 32, bgcolor: 'secondary.main' }}
+                    src={message.senderProfileImage || undefined}
+                  >
+                    {message.senderName?.charAt(0) || 'U'}
+                  </Avatar>
+                )}
+                
+                <Paper
+                  sx={{
+                    p: 1.5,
+                    maxWidth: '70%',
+                    backgroundColor: message.senderId === user?.id ? 'primary.main' : 'white',
+                    color: message.senderId === user?.id ? 'white' : 'text.primary',
+                    boxShadow: 1
+                  }}
+                >
+                  <Typography variant="body2" sx={{ wordBreak: 'break-word' }}>
+                    {message.content}
+                  </Typography>
+                  <Typography 
+                    variant="caption" 
+                    sx={{ 
+                      display: 'block', 
+                      mt: 0.5,
+                      opacity: 0.7
+                    }}
+                  >
+                    {formatTime(message.createdAt)}
+                  </Typography>
+                </Paper>
+                
+                {message.senderId === user?.id && (
+                  <Avatar
+                    sx={{ width: 32, height: 32, bgcolor: 'primary.main' }}
+                    src={user?.profileImage || undefined}
+                  >
+                    {user?.name?.charAt(0) || 'U'}
+                  </Avatar>
+                )}
+              </Box>
+            ))
+          )}
+        </Box>
+
+        {/* 메시지 입력 */}
+        <Box sx={{ 
+          p: 2, 
+          borderTop: 1, 
+          borderColor: 'divider',
+          bgcolor: 'background.paper'
+        }}>
+          <Box display="flex" gap={1}>
+            <TextField
+              fullWidth
+              multiline
+              maxRows={3}
+              placeholder="판매자에게 메시지를 보내세요..."
+              value={newMessage}
+              onChange={(e) => setNewMessage(e.target.value)}
+              onKeyPress={handleKeyPress}
+              size="small"
+            />
+            <Button
+              variant="contained"
+              onClick={handleSendMessage}
+              disabled={!newMessage.trim()}
+              sx={{ minWidth: 'auto', px: 2 }}
+            >
+              <Send />
+            </Button>
+          </Box>
+        </Box>
+      </Box>
+    );
+  }
+
+  // 모바일에서 작업 목록 표시
+  if (isMobile) {
+    return (
+      <Box>
+
+        {error && (
+          <Alert severity="error" sx={{ mb: 2, mx: 2 }}>
+            {error}
+          </Alert>
+        )}
+
+        <Box sx={{ p: 2 }}>
+          <Box display="flex" justifyContent="space-between" alignItems="center" mb={2}>
+            <Typography variant="h6">
+              내 시공 작업
+            </Typography>
+            <Button
+              variant="outlined"
+              size="small"
+              startIcon={hideCompleted ? <VisibilityOff /> : <VisibilityOn />}
+              onClick={() => setHideCompleted(!hideCompleted)}
+            >
+              {hideCompleted ? '완료된 작업 표시' : '완료된 작업 숨김'}
+            </Button>
+          </Box>
+          <List>
+            {filteredJobs.length === 0 ? (
+              <Box sx={{ 
+                textAlign: 'center', 
+                py: 8, 
+                px: 3,
+                display: 'flex',
+                flexDirection: 'column',
+                alignItems: 'center',
+                gap: 2
+              }}>
+                <Box sx={{ 
+                  width: 80, 
+                  height: 80, 
+                  borderRadius: '50%', 
+                  bgcolor: 'grey.100',
+                  display: 'flex',
+                  alignItems: 'center',
+                  justifyContent: 'center',
+                  mb: 2
+                }}>
+                  <ChatIcon sx={{ fontSize: 40, color: 'text.secondary' }} />
+                </Box>
+                <Typography variant="h6" color="textSecondary" gutterBottom>
+                  배정된 작업이 없습니다
+                </Typography>
+                <Typography variant="body2" color="textSecondary" sx={{ mb: 3, textAlign: 'center' }}>
+                  판매자로부터 작업을 배정받으면 채팅할 수 있습니다.
+                </Typography>
+                <Button 
+                  variant="outlined" 
+                  onClick={() => navigate('/contractor/jobs')}
+                  startIcon={<Work />}
+                >
+                  시공건 찾기
+                </Button>
+              </Box>
+            ) : (
+                             filteredJobs.map((job) => (
+                 <Card 
+                   key={job.id}
+                   sx={{ 
+                     mb: 2, 
+                     cursor: 'pointer',
+                     borderRadius: 2,
+                     boxShadow: '0 2px 8px rgba(0,0,0,0.1)',
+                     '&:hover': { 
+                       transform: 'translateY(-2px)',
+                       boxShadow: '0 4px 12px rgba(0,0,0,0.15)',
+                       transition: 'all 0.2s ease'
+                     }
+                   }}
+                   onClick={() => handleJobSelect(job)}
+                 >
+                   <CardContent sx={{ p: 2 }}>
+                     <Box display="flex" justifyContent="space-between" alignItems="flex-start" mb={1}>
+                       <Typography variant="h6" sx={{ fontWeight: 600, flex: 1 }}>
+                         {formatJobTitle(job)}
+                       </Typography>
+                       <Chip 
+                         label={getStatusText(job.status)} 
+                         color={getStatusColor(job.status)} 
+                         size="small"
+                         sx={{ ml: 1, flexShrink: 0 }}
+                       />
+                     </Box>
+                     
+                     <Box display="flex" alignItems="center" gap={1} mb={1}>
+                       <LocationOn sx={{ fontSize: 16, color: 'text.secondary' }} />
+                       <Typography variant="body2" color="textSecondary" sx={{ flex: 1 }}>
+                         {job.address}
+                       </Typography>
+                     </Box>
+                     
+                     <Box display="flex" alignItems="center" gap={1}>
+                       <AttachMoney sx={{ fontSize: 16, color: 'primary.main' }} />
+                       <Typography variant="body2" color="primary.main" fontWeight={600}>
+                         {job.finalAmount 
+                           ? `${job.finalAmount.toLocaleString()}원` 
+                           : calculateTotalBudget(job) > 0 
+                             ? `${calculateTotalBudget(job).toLocaleString()}원`
+                             : '예산 미정'
+                         }
+                       </Typography>
+                     </Box>
+                   </CardContent>
+                 </Card>
+               ))
+            )}
+          </List>
+        </Box>
+      </Box>
+    );
+  }
+
+  // 데스크톱 레이아웃 (기존과 동일)
   return (
     <Box>
-      <Typography variant="h4" gutterBottom sx={{ display: 'flex', alignItems: 'center', gap: 1 }}>
-        <ChatIcon />
-        판매자와 채팅
-      </Typography>
-
       {error && (
         <Alert severity="error" sx={{ mb: 2 }}>
           {error}
@@ -199,11 +530,21 @@ const Chat: React.FC = () => {
         {/* 작업 목록 */}
         <Card sx={{ width: 300, flexShrink: 0 }}>
           <CardContent>
-            <Typography variant="h6" gutterBottom>
-              내 시공 작업
-            </Typography>
+            <Box display="flex" justifyContent="space-between" alignItems="center" mb={2}>
+              <Typography variant="h6">
+                내 시공 작업
+              </Typography>
+              <Button
+                variant="outlined"
+                size="small"
+                startIcon={hideCompleted ? <VisibilityOff /> : <VisibilityOn />}
+                onClick={() => setHideCompleted(!hideCompleted)}
+              >
+                {hideCompleted ? '완료된 작업 표시' : '완료된 작업 숨김'}
+              </Button>
+            </Box>
             <List sx={{ maxHeight: 'calc(100vh - 300px)', overflow: 'auto' }}>
-              {jobs.length === 0 ? (
+              {filteredJobs.length === 0 ? (
                 <ListItem>
                   <ListItemText 
                     primary="배정된 작업이 없습니다." 
@@ -211,7 +552,7 @@ const Chat: React.FC = () => {
                   />
                 </ListItem>
               ) : (
-                jobs.map((job) => (
+                filteredJobs.map((job) => (
                   <ListItem 
                     key={job.id}
                     button

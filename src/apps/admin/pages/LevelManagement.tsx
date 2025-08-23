@@ -215,9 +215,6 @@ const LevelManagement: React.FC = () => {
   if (loading) {
     return (
       <Box>
-        <Typography variant="h4" gutterBottom>
-          시공자 레벨 관리
-        </Typography>
         <Typography>로딩 중...</Typography>
       </Box>
     );
@@ -225,10 +222,7 @@ const LevelManagement: React.FC = () => {
 
   return (
     <Box>
-      <Box display="flex" justifyContent="space-between" alignItems="center" mb={3}>
-        <Typography variant="h4">
-          시공자 레벨 관리
-        </Typography>
+      <Box display="flex" justifyContent="flex-end" alignItems="center" mb={3}>
         <Box display="flex" gap={2}>
           <Button
             variant="outlined"

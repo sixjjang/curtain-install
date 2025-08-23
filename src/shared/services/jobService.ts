@@ -999,6 +999,115 @@ export class JobService {
     }
   }
 
+  // progressHistory 타임스탬프 수정 (동일한 시간 문제 해결)
+  static async fixProgressHistoryTimestamps(): Promise<void> {
+    try {
+      console.log('🔧 progressHistory 타임스탬프 수정 시작...');
+      
+      const allJobs = await this.getAllJobs();
+      let fixedCount = 0;
+      
+      for (const job of allJobs) {
+        if (!job.progressHistory || job.progressHistory.length <= 1) {
+          continue; // 진행 기록이 없거나 1개만 있는 경우 건너뛰기
+        }
+        
+        // 동일한 시간을 가진 항목들이 있는지 확인
+        const timestamps = job.progressHistory.map(step => step.timestamp.getTime());
+        const uniqueTimestamps = new Set(timestamps);
+        
+        if (timestamps.length > uniqueTimestamps.size) {
+          // 동일한 시간이 있는 경우 수정
+          console.log(`🔧 작업 ${job.id}의 progressHistory 시간 수정 중...`);
+          
+          const fixedProgressHistory = job.progressHistory.map((step, index) => {
+            if (index === 0) {
+              // 첫 번째 항목은 그대로 유지
+              return step;
+            }
+            
+            // 이후 항목들은 이전 항목보다 몇 분 후로 설정
+            const baseTime = new Date(job.createdAt);
+            const minutesToAdd = index * 30; // 각 상태마다 30분씩 차이
+            const newTimestamp = new Date(baseTime.getTime() + (minutesToAdd * 60 * 1000));
+            
+            return {
+              ...step,
+              timestamp: newTimestamp
+            };
+          });
+          
+          // 업데이트
+          const jobRef = doc(db, 'constructionJobs', job.id);
+          await updateDoc(jobRef, {
+            progressHistory: fixedProgressHistory,
+            updatedAt: new Date()
+          });
+          
+          fixedCount++;
+          console.log(`✅ 작업 ${job.id}의 progressHistory 수정 완료`);
+        }
+      }
+      
+      console.log(`✅ ${fixedCount}개 작업의 progressHistory 타임스탬프가 수정되었습니다.`);
+    } catch (error) {
+      console.error('❌ progressHistory 타임스탬프 수정 실패:', error);
+      throw new Error('progressHistory 타임스탬프를 수정할 수 없습니다.');
+    }
+  }
+
+  // 특정 작업의 progressHistory 타임스탬프 수정
+  static async fixSingleJobProgressHistory(jobId: string): Promise<void> {
+    try {
+      console.log(`🔧 작업 ${jobId}의 progressHistory 타임스탬프 수정 시작...`);
+      
+      const job = await this.getJobById(jobId);
+      
+      if (!job.progressHistory || job.progressHistory.length <= 1) {
+        console.log('수정할 progressHistory가 없습니다.');
+        return;
+      }
+      
+      // 동일한 시간을 가진 항목들이 있는지 확인
+      const timestamps = job.progressHistory.map(step => step.timestamp.getTime());
+      const uniqueTimestamps = new Set(timestamps);
+      
+      if (timestamps.length > uniqueTimestamps.size) {
+        // 동일한 시간이 있는 경우 수정
+        const fixedProgressHistory = job.progressHistory.map((step, index) => {
+          if (index === 0) {
+            // 첫 번째 항목은 그대로 유지
+            return step;
+          }
+          
+          // 이후 항목들은 이전 항목보다 몇 분 후로 설정
+          const baseTime = new Date(job.createdAt);
+          const minutesToAdd = index * 30; // 각 상태마다 30분씩 차이
+          const newTimestamp = new Date(baseTime.getTime() + (minutesToAdd * 60 * 1000));
+          
+          return {
+            ...step,
+            timestamp: newTimestamp
+          };
+        });
+        
+        // 업데이트
+        const jobRef = doc(db, 'constructionJobs', jobId);
+        await updateDoc(jobRef, {
+          progressHistory: fixedProgressHistory,
+          updatedAt: new Date()
+        });
+        
+        console.log(`✅ 작업 ${jobId}의 progressHistory 수정 완료`);
+      } else {
+        console.log('이미 올바른 타임스탬프를 가지고 있습니다.');
+      }
+    } catch (error) {
+      console.error(`❌ 작업 ${jobId}의 progressHistory 타임스탬프 수정 실패:`, error);
+      throw new Error('progressHistory 타임스탬프를 수정할 수 없습니다.');
+    }
+  }
+
   // 작업 취소
   static async cancelJob(jobId: string): Promise<void> {
     try {

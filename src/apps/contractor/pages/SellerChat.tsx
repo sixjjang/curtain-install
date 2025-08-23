@@ -18,7 +18,10 @@ import {
   Dialog,
   DialogTitle,
   DialogContent,
-  DialogActions
+  DialogActions,
+  IconButton,
+  useTheme,
+  useMediaQuery
 } from '@mui/material';
 import { 
   Send as SendIcon,
@@ -31,7 +34,10 @@ import {
   LocalShipping,
   Description,
   Visibility,
-  Info
+  Info,
+  ArrowBack,
+  VisibilityOff,
+  Visibility as VisibilityOn
 } from '@mui/icons-material';
 import { useAuth } from '../../../shared/contexts/AuthContext';
 import { ChatService } from '../../../shared/services/chatService';
@@ -41,12 +47,17 @@ import { ConstructionJob } from '../../../types';
 
 const SellerChat: React.FC = () => {
   const { user } = useAuth();
+  const theme = useTheme();
+  const isMobile = useMediaQuery(theme.breakpoints.down('md'));
+  
   const [jobs, setJobs] = useState<ConstructionJob[]>([]);
   const [selectedJob, setSelectedJob] = useState<ConstructionJob | null>(null);
   const [messages, setMessages] = useState<any[]>([]);
   const [newMessage, setNewMessage] = useState('');
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState<string | null>(null);
+  const [showChat, setShowChat] = useState(false); // 모바일에서 채팅창 표시 여부
+  const [hideCompleted, setHideCompleted] = useState(true); // 완료된 작업 숨김 여부
   const messagesEndRef = useRef<HTMLDivElement>(null);
   
   // 상세보기 다이얼로그 관련 상태
@@ -58,32 +69,65 @@ const SellerChat: React.FC = () => {
   // 시공건 목록 불러오기
   useEffect(() => {
     const loadJobs = async () => {
-      if (!user?.id) return;
+      console.log('🔄 SellerChat - loadJobs 시작, user:', user?.id);
+      
+      if (!user?.id) {
+        console.log('❌ SellerChat - 사용자 정보 없음');
+        setLoading(false);
+        setError('로그인이 필요합니다.');
+        return;
+      }
       
       try {
         setLoading(true);
-        const allJobs = await JobService.getAllJobs();
+        setError(null);
+        console.log('📝 SellerChat - 작업 목록 로딩 시작');
+        
+        // 타임아웃 설정 (10초)
+        const timeoutPromise = new Promise((_, reject) =>
+          setTimeout(() => reject(new Error('요청 시간이 초과되었습니다.')), 10000)
+        );
+        
+        const jobsPromise = JobService.getAllJobs();
+        const allJobs = await Promise.race([jobsPromise, timeoutPromise]) as any[];
+        
+        console.log('📋 SellerChat - 전체 작업 수:', allJobs.length);
+        
         // 시공자가 배정된 작업들만 필터링
         const myJobs = allJobs.filter(job => 
           job.contractorId === user.id && 
           ['assigned', 'product_preparing', 'product_ready', 'pickup_completed', 'in_progress', 'completed'].includes(job.status)
         );
+        
+        console.log('👤 SellerChat - 내 작업 수:', myJobs.length);
+        
         setJobs(myJobs);
         
-        // 첫 번째 작업을 자동 선택
+        // 첫 번째 작업을 자동 선택 (완료된 작업이 숨겨져 있다면 완료되지 않은 첫 번째 작업 선택)
         if (myJobs.length > 0 && !selectedJob) {
-          setSelectedJob(myJobs[0]);
+          const availableJobs = hideCompleted ? myJobs.filter(job => job.status !== 'completed') : myJobs;
+          if (availableJobs.length > 0) {
+            setSelectedJob(availableJobs[0]);
+            console.log('✅ SellerChat - 첫 번째 작업 선택:', availableJobs[0].id);
+          } else if (myJobs.length > 0) {
+            setSelectedJob(myJobs[0]);
+            console.log('✅ SellerChat - 첫 번째 작업 선택 (완료된 작업):', myJobs[0].id);
+          }
         }
+        
+        console.log('✅ SellerChat - 작업 목록 로딩 완료');
       } catch (error) {
-        console.error('시공건 목록 불러오기 실패:', error);
-        setError('시공건 목록을 불러올 수 없습니다.');
+        console.error('❌ SellerChat - 시공건 목록 불러오기 실패:', error);
+        const errorMessage = error instanceof Error ? error.message : '시공건 목록을 불러올 수 없습니다.';
+        setError(errorMessage);
       } finally {
+        console.log('🏁 SellerChat - 로딩 상태 해제');
         setLoading(false);
       }
     };
 
     loadJobs();
-  }, [user]);
+  }, [user, hideCompleted]);
 
   // 선택된 시공건이 변경될 때 메시지 불러오기
   useEffect(() => {
@@ -91,8 +135,11 @@ const SellerChat: React.FC = () => {
       loadChatMessages(selectedJob.id);
       subscribeToChat(selectedJob.id);
       loadJobDetails(selectedJob.id);
+      if (isMobile) {
+        setShowChat(true); // 모바일에서 작업 선택 시 채팅창 표시
+      }
     }
-  }, [selectedJob]);
+  }, [selectedJob, isMobile]);
 
   // 메시지 스크롤을 맨 아래로
   const scrollToBottom = () => {
@@ -321,21 +368,316 @@ user.profileImage || ''
     }
   };
 
+  const handleJobSelect = (job: ConstructionJob) => {
+    setSelectedJob(job);
+  };
+
+  const handleBackToList = () => {
+    setShowChat(false);
+  };
+
+  // 완료된 작업 필터링
+  const filteredJobs = hideCompleted ? jobs.filter(job => job.status !== 'completed') : jobs;
+
   if (loading) {
     return (
-      <Box display="flex" justifyContent="center" py={4}>
+      <Box display="flex" flexDirection="column" justifyContent="center" alignItems="center" py={4}>
         <CircularProgress />
+        <Typography variant="body2" color="textSecondary" sx={{ mt: 2 }}>
+          시공건 목록을 불러오는 중...
+        </Typography>
       </Box>
     );
   }
 
+  if (error) {
+    return (
+      <Box display="flex" flexDirection="column" justifyContent="center" alignItems="center" py={4}>
+        <Alert severity="error" sx={{ mb: 2, maxWidth: 400 }}>
+          {error}
+        </Alert>
+        <Button 
+          variant="contained" 
+          onClick={() => window.location.reload()}
+        >
+          페이지 새로고침
+        </Button>
+      </Box>
+    );
+  }
+
+  // 모바일에서 채팅창 표시
+  if (isMobile && showChat && selectedJob) {
+    return (
+      <Box sx={{ height: '100vh', display: 'flex', flexDirection: 'column' }}>
+        {/* 채팅 헤더 */}
+        <Box sx={{ 
+          position: 'sticky',
+          top: 0,
+          zIndex: 10,
+          p: 2, 
+          borderBottom: 1, 
+          borderColor: 'divider',
+          bgcolor: 'background.paper',
+          backdropFilter: 'blur(10px)',
+          display: 'flex',
+          alignItems: 'center',
+          gap: 2
+        }}>
+          <IconButton 
+            onClick={handleBackToList}
+            sx={{ flexShrink: 0 }}
+            aria-label="목록으로 돌아가기"
+          >
+            <ArrowBack />
+          </IconButton>
+          <Box sx={{ flexGrow: 1, minWidth: 0 }}>
+            <Typography 
+              variant="subtitle1" 
+              sx={{ 
+                overflow: 'hidden', 
+                textOverflow: 'ellipsis',
+                whiteSpace: 'nowrap',
+                fontWeight: 600,
+                fontSize: '0.9rem',
+                lineHeight: 1.2
+              }}
+            >
+              {selectedJob.title || formatChatHeaderTitle(selectedJob)}
+            </Typography>
+            <Typography 
+              variant="caption" 
+              color="textSecondary" 
+              sx={{ 
+                overflow: 'hidden', 
+                textOverflow: 'ellipsis',
+                whiteSpace: 'nowrap',
+                display: 'block',
+                mt: 0.5,
+                fontSize: '0.75rem',
+                lineHeight: 1.2
+              }}
+            >
+              {selectedJob.address.length > 25 
+                ? `${selectedJob.address.substring(0, 25)}...` 
+                : selectedJob.address
+              }
+            </Typography>
+            {sellerInfo && (
+              <Typography 
+                variant="caption" 
+                color="textSecondary" 
+                sx={{ 
+                  overflow: 'hidden', 
+                  textOverflow: 'ellipsis',
+                  whiteSpace: 'nowrap',
+                  display: 'block',
+                  fontSize: '0.7rem',
+                  lineHeight: 1.2
+                }}
+              >
+                판매자: {(sellerInfo.name || sellerInfo.email || '').length > 20 
+                  ? `${(sellerInfo.name || sellerInfo.email || '').substring(0, 20)}...` 
+                  : sellerInfo.name || sellerInfo.email
+                }
+              </Typography>
+            )}
+          </Box>
+          <Chip 
+            label={getStatusText(selectedJob.status)} 
+            color={getStatusColor(selectedJob.status)} 
+            size="small"
+            sx={{ flexShrink: 0 }}
+          />
+        </Box>
+
+        {/* 메시지 목록 */}
+        <Box sx={{ 
+          flexGrow: 1, 
+          p: 2, 
+          overflow: 'auto',
+          bgcolor: 'grey.50'
+        }}>
+          {messages.length === 0 ? (
+            <Box textAlign="center" py={4}>
+              <Typography color="textSecondary">
+                아직 메시지가 없습니다.
+              </Typography>
+              <Typography variant="body2" color="textSecondary">
+                판매자와 첫 메시지를 시작해보세요!
+              </Typography>
+            </Box>
+          ) : (
+            messages.map((message, index) => (
+              <Box
+                key={message.id || index}
+                sx={{
+                  display: 'flex',
+                  justifyContent: message.senderId === user?.id ? 'flex-end' : 'flex-start',
+                  mb: 2,
+                  alignItems: 'flex-end',
+                  gap: 1
+                }}
+              >
+                {message.senderId !== user?.id && (
+                  <Avatar
+                    sx={{ width: 32, height: 32, bgcolor: 'secondary.main' }}
+                    src={message.senderProfileImage || undefined}
+                  >
+                    {message.senderName?.charAt(0) || 'U'}
+                  </Avatar>
+                )}
+                
+                <Paper
+                  sx={{
+                    p: 1.5,
+                    maxWidth: '70%',
+                    backgroundColor: message.senderId === user?.id ? 'primary.main' : 'white',
+                    color: message.senderId === user?.id ? 'white' : 'text.primary',
+                    boxShadow: 1,
+                    borderRadius: 2
+                  }}
+                >
+                  <Typography variant="body2" sx={{ wordBreak: 'break-word' }}>
+                    {message.content}
+                  </Typography>
+                  <Typography 
+                    variant="caption" 
+                    sx={{ 
+                      display: 'block', 
+                      mt: 0.5,
+                      opacity: 0.7
+                    }}
+                  >
+                    {formatTime(message.timestamp || message.createdAt)}
+                  </Typography>
+                </Paper>
+                
+                {message.senderId === user?.id && (
+                  <Avatar
+                    sx={{ width: 32, height: 32, bgcolor: 'primary.main' }}
+                    src={user?.profileImage || undefined}
+                  >
+                    {user?.name?.charAt(0) || 'U'}
+                  </Avatar>
+                )}
+              </Box>
+            ))
+          )}
+          <div ref={messagesEndRef} />
+        </Box>
+
+        {/* 메시지 입력 */}
+        <Box sx={{ 
+          p: 2, 
+          borderTop: 1, 
+          borderColor: 'divider',
+          bgcolor: 'background.paper'
+        }}>
+          <Box display="flex" gap={1}>
+            <TextField
+              fullWidth
+              multiline
+              maxRows={3}
+              placeholder="판매자에게 메시지를 보내세요..."
+              value={newMessage}
+              onChange={(e) => setNewMessage(e.target.value)}
+              onKeyPress={handleKeyPress}
+              size="small"
+            />
+            <Button
+              variant="contained"
+              onClick={handleSendMessage}
+              disabled={!newMessage.trim()}
+              sx={{ minWidth: 'auto', px: 2 }}
+            >
+              <SendIcon />
+            </Button>
+          </Box>
+        </Box>
+      </Box>
+    );
+  }
+
+  // 모바일에서 작업 목록 표시
+  if (isMobile) {
+    return (
+      <Box>
+
+        {error && (
+          <Alert severity="error" sx={{ mb: 2, mx: 2 }}>
+            {error}
+          </Alert>
+        )}
+
+        <Box sx={{ p: 2 }}>
+          <Box display="flex" justifyContent="space-between" alignItems="center" mb={2}>
+            <Typography variant="h6">
+              내 시공 작업
+            </Typography>
+            <Button
+              variant="outlined"
+              size="small"
+              startIcon={hideCompleted ? <VisibilityOff /> : <VisibilityOn />}
+              onClick={() => setHideCompleted(!hideCompleted)}
+            >
+              {hideCompleted ? '완료된 작업 표시' : '완료된 작업 숨김'}
+            </Button>
+          </Box>
+          <List>
+            {filteredJobs.length === 0 ? (
+              <ListItem>
+                <ListItemText 
+                  primary="배정된 작업이 없습니다." 
+                  secondary="판매자로부터 작업을 배정받으면 채팅할 수 있습니다."
+                />
+              </ListItem>
+            ) : (
+              filteredJobs.map((job) => (
+                <Card 
+                  key={job.id}
+                  sx={{ 
+                    mb: 2, 
+                    cursor: 'pointer',
+                    '&:hover': { bgcolor: 'action.hover' }
+                  }}
+                  onClick={() => handleJobSelect(job)}
+                >
+                  <CardContent>
+                    <Box display="flex" justifyContent="space-between" alignItems="flex-start" mb={1}>
+                      <Typography variant="subtitle1" sx={{ fontWeight: 'medium' }}>
+                        {formatJobTitle(job)}
+                      </Typography>
+                      <Chip 
+                        label={getStatusText(job.status)} 
+                        color={getStatusColor(job.status)} 
+                        size="small"
+                      />
+                    </Box>
+                    <Typography variant="body2" color="textSecondary" gutterBottom>
+                      {job.address}
+                    </Typography>
+                    <Typography variant="caption" color="textSecondary">
+                      총금액: {job.finalAmount 
+                        ? `${job.finalAmount.toLocaleString()}원` 
+                        : calculateTotalPrice(job) > 0 
+                          ? `${calculateTotalPrice(job).toLocaleString()}원`
+                          : '예산 미정'
+                      }
+                    </Typography>
+                  </CardContent>
+                </Card>
+              ))
+            )}
+          </List>
+        </Box>
+      </Box>
+    );
+  }
+
+  // 데스크톱 레이아웃 (기존과 동일)
   return (
     <Box>
-      <Typography variant="h4" gutterBottom sx={{ display: 'flex', alignItems: 'center', gap: 1 }}>
-        <ChatIcon />
-        판매자와 채팅
-      </Typography>
-
       {error && (
         <Alert severity="error" sx={{ mb: 2 }}>
           {error}
@@ -346,11 +688,21 @@ user.profileImage || ''
         {/* 시공건 목록 */}
         <Card sx={{ width: 300, flexShrink: 0 }}>
           <CardContent>
-            <Typography variant="h6" gutterBottom>
-              내 시공 작업
-            </Typography>
+            <Box display="flex" justifyContent="space-between" alignItems="center" mb={2}>
+              <Typography variant="h6">
+                내 시공 작업
+              </Typography>
+              <Button
+                variant="outlined"
+                size="small"
+                startIcon={hideCompleted ? <VisibilityOff /> : <VisibilityOn />}
+                onClick={() => setHideCompleted(!hideCompleted)}
+              >
+                {hideCompleted ? '완료된 작업 표시' : '완료된 작업 숨김'}
+              </Button>
+            </Box>
             <List sx={{ maxHeight: 'calc(100vh - 300px)', overflow: 'auto' }}>
-              {jobs.length === 0 ? (
+              {filteredJobs.length === 0 ? (
                 <ListItem>
                   <ListItemText 
                     primary="배정된 작업이 없습니다." 
@@ -358,7 +710,7 @@ user.profileImage || ''
                   />
                 </ListItem>
               ) : (
-                jobs.map((job) => (
+                filteredJobs.map((job) => (
                   <ListItem 
                     key={job.id}
                     button
@@ -709,7 +1061,12 @@ user.profileImage || ''
                     <LocalShipping color="action" />
                     픽업 정보
                   </Typography>
-                  <Box sx={{ ml: 3, p: 2, bgcolor: 'grey.50', borderRadius: 1 }}>
+                  <Box sx={{ 
+                    ml: 3, 
+                    p: 2, 
+                    bgcolor: (theme) => theme.palette.mode === 'light' ? 'grey.50' : 'grey.800', 
+                    borderRadius: 1 
+                  }}>
                     {detailJob.pickupInfo.companyName && (
                       <Typography variant="body2" sx={{ mb: 1 }}>
                         <strong>상호:</strong> {detailJob.pickupInfo.companyName}
@@ -741,7 +1098,11 @@ user.profileImage || ''
                     <Description color="action" />
                     작업지시서 파일
                   </Typography>
-                  <Box sx={{ ml: 3, bgcolor: 'grey.50', borderRadius: 1 }}>
+                  <Box sx={{ 
+                    ml: 3, 
+                    bgcolor: (theme) => theme.palette.mode === 'light' ? 'grey.50' : 'grey.800', 
+                    borderRadius: 1 
+                  }}>
                     {detailJob.workInstructions.map((file, index) => (
                       <Box key={file.id} sx={{ p: 2, borderBottom: index < detailJob.workInstructions!.length - 1 ? 1 : 0, borderColor: 'divider' }}>
                         <Typography variant="body2" sx={{ mb: 1 }}>
@@ -774,7 +1135,12 @@ user.profileImage || ''
                     <Info color="action" />
                     작업 설명
                   </Typography>
-                  <Box sx={{ ml: 3, p: 2, bgcolor: 'grey.50', borderRadius: 1 }}>
+                  <Box sx={{ 
+                    ml: 3, 
+                    p: 2, 
+                    bgcolor: (theme) => theme.palette.mode === 'light' ? 'grey.50' : 'grey.800', 
+                    borderRadius: 1 
+                  }}>
                     <Typography variant="body2">
                       {detailJob.description}
                     </Typography>

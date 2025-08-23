@@ -152,12 +152,6 @@ const CalendarView: React.FC = () => {
 
   return (
     <Box>
-      <Box display="flex" justifyContent="space-between" alignItems="center" mb={3}>
-        <Typography variant="h4" sx={{ display: 'flex', alignItems: 'center', gap: 1 }}>
-          <Schedule />
-          스케줄 보기
-        </Typography>
-      </Box>
 
       {error && (
         <Alert severity="error" sx={{ mb: 2 }}>
@@ -174,7 +168,10 @@ const CalendarView: React.FC = () => {
       <Grid container spacing={3}>
         {/* 대기중인 작업 목록 */}
         <Grid item xs={12}>
-          <Card sx={{ border: '2px solid #ff9800', backgroundColor: '#fff8e1' }}>
+          <Card sx={{ 
+            border: '2px solid #ff9800', 
+            backgroundColor: (theme) => theme.palette.mode === 'light' ? '#fff8e1' : '#2d2d2d'
+          }}>
             <CardContent>
               <Typography variant="h6" gutterBottom sx={{ display: 'flex', alignItems: 'center', gap: 1, color: '#e65100' }}>
                 <Work />
@@ -249,7 +246,10 @@ const CalendarView: React.FC = () => {
 
         {/* 내 작업 목록 */}
         <Grid item xs={12}>
-          <Card sx={{ border: '2px solid #1976d2', backgroundColor: '#e3f2fd' }}>
+          <Card sx={{ 
+            border: '2px solid #1976d2', 
+            backgroundColor: (theme) => theme.palette.mode === 'light' ? '#e3f2fd' : '#1e3a5f'
+          }}>
             <CardContent>
               <Typography variant="h6" gutterBottom sx={{ display: 'flex', alignItems: 'center', gap: 1, color: '#0d47a1' }}>
                 <CalendarMonth />

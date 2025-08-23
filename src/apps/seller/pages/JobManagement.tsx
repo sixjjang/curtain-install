@@ -41,14 +41,17 @@ import {
   Delete,
   Edit,
   Event,
-  AttachFile
+  AttachFile,
+  Close
 } from '@mui/icons-material';
 import { useAuth } from '../../../shared/contexts/AuthContext';
 import { JobService } from '../../../shared/services/jobService';
 import { CustomerService } from '../../../shared/services/customerService';
 import { SellerService } from '../../../shared/services/sellerService';
+
 import { ConstructionJob } from '../../../types';
 import CreateJobDialog from '../components/CreateJobDialog';
+import ChatArea from '../components/ChatArea';
 import ExcelJobUpload from './ExcelJobUpload';
 import { useNavigate } from 'react-router-dom';
 import { NotificationService } from '../../../shared/services/notificationService';
@@ -88,6 +91,9 @@ const JobManagement: React.FC = () => {
   const [selectedJob, setSelectedJob] = useState<ConstructionJob | null>(null);
   const [editDialogOpen, setEditDialogOpen] = useState(false);
   const [jobToEdit, setJobToEdit] = useState<ConstructionJob | null>(null);
+  const [chatDialogOpen, setChatDialogOpen] = useState(false);
+  const [chatJob, setChatJob] = useState<ConstructionJob | null>(null);
+
   const [customerInfo, setCustomerInfo] = useState<any>(null);
   const [contractorInfo, setContractorInfo] = useState<any>(null);
   const [jobs, setJobs] = useState<ConstructionJob[]>([]);
@@ -506,9 +512,6 @@ const JobManagement: React.FC = () => {
     <Box>
       <Box display="flex" justifyContent="space-between" alignItems="center" mb={3}>
         <Box>
-          <Typography variant="h4">
-            시공 작업 관리
-          </Typography>
           <Typography variant="body2" color="textSecondary" sx={{ mt: 1 }}>
             현재 포인트 잔액: <strong>{pointBalance.toLocaleString()}포인트</strong>
           </Typography>
@@ -764,7 +767,9 @@ const JobManagement: React.FC = () => {
                                     console.error('채팅 알림 읽음 처리 실패:', error);
                                   }
                                 }
-                                navigate(`/seller/chat/${job.id}`);
+                                // 채팅 모달 열기
+                                setChatJob(job);
+                                setChatDialogOpen(true);
                               }}
                               sx={{
                                 ...(chatNotifications[job.id] > 0 && {
@@ -1112,7 +1117,12 @@ const JobManagement: React.FC = () => {
                         픽업 정보
                       </Typography>
                     </Box>
-                    <Box sx={{ ml: 3, p: 2, bgcolor: 'grey.50', borderRadius: 1 }}>
+                    <Box sx={{ 
+                      ml: 3, 
+                      p: 2, 
+                      bgcolor: (theme) => theme.palette.mode === 'light' ? 'grey.50' : 'grey.800', 
+                      borderRadius: 1 
+                    }}>
                       {selectedJob.pickupInfo.companyName && (
                         <Typography variant="body2" sx={{ mb: 1 }}>
                           <strong>회사명:</strong> {selectedJob.pickupInfo.companyName}
@@ -1393,7 +1403,12 @@ const JobManagement: React.FC = () => {
                         고객 정보
                       </Typography>
                     </Box>
-                    <Box sx={{ ml: 3, p: 2, bgcolor: 'grey.50', borderRadius: 1 }}>
+                    <Box sx={{ 
+                      ml: 3, 
+                      p: 2, 
+                      bgcolor: (theme) => theme.palette.mode === 'light' ? 'grey.50' : 'grey.800', 
+                      borderRadius: 1 
+                    }}>
                       <Typography variant="body2" sx={{ mb: 1 }}>
                         <strong>이름:</strong> {customerInfo.name}
                       </Typography>
@@ -1428,7 +1443,8 @@ const JobManagement: React.FC = () => {
                   startIcon={<Chat />}
                   onClick={() => {
                     handleDetailClose();
-                    navigate(`/seller/chat/${selectedJob.id}`);
+                    setChatJob(selectedJob);
+                    setChatDialogOpen(true);
                   }}
                 >
                   채팅하기
@@ -1442,9 +1458,51 @@ const JobManagement: React.FC = () => {
         )}
       </Dialog>
 
+      {/* 채팅 모달 */}
+      <Dialog
+        open={chatDialogOpen}
+        onClose={() => setChatDialogOpen(false)}
+        maxWidth="md"
+        fullWidth
+        PaperProps={{
+          sx: {
+            height: '80vh',
+            maxHeight: '80vh'
+          }
+        }}
+      >
+        <DialogTitle sx={{ 
+          pb: 1, 
+          borderBottom: '1px solid',
+          borderColor: 'divider',
+          display: 'flex',
+          justifyContent: 'space-between',
+          alignItems: 'center'
+        }}>
+          <Typography variant="h6">
+            시공자와 채팅
+          </Typography>
+          <IconButton
+            onClick={() => setChatDialogOpen(false)}
+            size="small"
+          >
+            <Close />
+          </IconButton>
+        </DialogTitle>
+        <DialogContent sx={{ p: 0, display: 'flex', flexDirection: 'column' }}>
+          {chatJob && (
+            <ChatArea 
+              selectedJob={chatJob} 
+              isModal={true}
+            />
+          )}
+        </DialogContent>
+      </Dialog>
 
     </Box>
   );
 };
+
+
 
 export default JobManagement;

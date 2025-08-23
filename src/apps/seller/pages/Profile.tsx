@@ -26,7 +26,7 @@ import {
   Info as InfoIcon
 } from '@mui/icons-material';
 import { useAuth } from '../../../shared/contexts/AuthContext';
-import { SellerPickupInfo } from '../../../types';
+import { SellerPickupInfo, User } from '../../../types';
 import { SellerService, SellerBasicInfo } from '../../../shared/services/sellerService';
 import { StorageService } from '../../../shared/services/storageService';
 import { 
@@ -258,34 +258,34 @@ const Profile: React.FC = () => {
         console.log('🔍 판매자 프로필 정보 불러오기 시작:', user.id);
         console.log('🔍 현재 user 객체:', user);
         
-        // 기본 정보 불러오기 (sellers 컬렉션)
-        const savedBasicInfo = await SellerService.getBasicInfo(user.id);
-        if (savedBasicInfo) {
-          console.log('✅ 저장된 판매자 정보 (sellers 컬렉션):', savedBasicInfo);
-          setBasicInfo(savedBasicInfo);
-          if (savedBasicInfo.profileImage) {
-            setProfileImage(savedBasicInfo.profileImage);
-          }
-        } else {
-          console.log('⚠️ 저장된 판매자 정보 없음 (sellers 컬렉션), users 컬렉션에서 확인');
-          // users 컬렉션에서 판매자 정보 확인 (User 객체의 직접 필드에서)
-          console.log('✅ users 컬렉션의 판매자 정보 (직접 필드):', {
-            companyName: user.companyName,
-            businessNumber: user.businessNumber,
-            businessAddress: user.businessAddress
-          });
-          setBasicInfo({
-            name: user.name || '',
-            companyName: user.companyName || '',
-            businessNumber: user.businessNumber || '',
-            address: user.businessAddress || '',
-            phone: user.phone || '',
-            email: user.email || '',
-            profileImage: user.profileImage || ''
-          });
+        // users 컬렉션에서 직접 정보 사용 (sellers 컬렉션 대신)
+        console.log('✅ users 컬렉션의 판매자 정보 (직접 필드):', {
+          name: user.name,
+          companyName: user.companyName,
+          businessNumber: user.businessNumber,
+          businessAddress: user.businessAddress,
+          phone: user.phone,
+          email: user.email,
+          profileImage: user.profileImage
+        });
+        
+        // 기본 정보 설정 (User 객체의 직접 필드에서)
+        setBasicInfo({
+          name: user.name || '',
+          companyName: user.companyName || '',
+          businessNumber: user.businessNumber || '',
+          address: user.businessAddress || '',
+          phone: user.phone || '',
+          email: user.email || '',
+          profileImage: user.profileImage || ''
+        });
+        
+        // 프로필 이미지 설정
+        if (user.profileImage) {
+          setProfileImage(user.profileImage);
         }
         
-        // 픽업 정보 불러오기
+        // 픽업 정보 불러오기 (sellers 컬렉션에서)
         const savedPickupInfo = await SellerService.getPickupInfo(user.id);
         if (savedPickupInfo) {
           console.log('✅ 저장된 픽업 정보:', savedPickupInfo);
@@ -330,11 +330,20 @@ const Profile: React.FC = () => {
 
     try {
       setLoading(true);
-      const basicInfoWithImage = {
-        ...basicInfo,
+      
+      // AuthContext의 updateUser를 사용하여 users 컬렉션에 저장
+      const updateData: Partial<User> = {
+        name: basicInfo.name,
+        companyName: basicInfo.companyName,
+        businessNumber: basicInfo.businessNumber,
+        businessAddress: basicInfo.address,
+        phone: basicInfo.phone,
+        email: basicInfo.email,
         ...(profileImage && { profileImage }) // profileImage가 있을 때만 포함
       };
-      await SellerService.saveBasicInfo(user.id, basicInfoWithImage);
+      
+      console.log('🔍 기본 정보 저장 시작:', updateData);
+      await updateUser(updateData);
       
       setIsEditing(false);
       setSnackbar({
@@ -392,13 +401,10 @@ const Profile: React.FC = () => {
     <Box sx={{ 
       padding: '20px',
       minHeight: '500px',
-      backgroundColor: '#f8f9fa',
+      backgroundColor: 'background.paper',
       borderRadius: '8px',
       boxShadow: '0 2px 4px rgba(0,0,0,0.1)'
     }}>
-      <Typography variant="h4" gutterBottom>
-        판매자 프로필
-      </Typography>
       {(() => { console.log('🔍 Profile 컴포넌트 - 판매자 프로필 제목 렌더링'); return null; })()}
       
 
@@ -445,7 +451,11 @@ const Profile: React.FC = () => {
               <Typography variant="h5" gutterBottom>
                 {basicInfo.name}
               </Typography>
-              <Chip label="평점 4.8/5.0" color="primary" sx={{ mb: 2 }} />
+              <Chip 
+                label={user?.seller?.rating && user.seller.rating > 0 ? `평점 ${user.seller.rating.toFixed(1)}/5.0` : '평점 없음'} 
+                color={user?.seller?.rating && user.seller.rating > 0 ? "primary" : "default"} 
+                sx={{ mb: 2 }} 
+              />
               <Typography variant="body2" color="textSecondary">
                 {basicInfo.companyName}
               </Typography>
@@ -650,7 +660,12 @@ const Profile: React.FC = () => {
               <Typography variant="body1" gutterBottom>
                 이미지가 성공적으로 최적화되었습니다.
               </Typography>
-              <Box sx={{ mt: 2, p: 2, bgcolor: 'grey.50', borderRadius: 1 }}>
+              <Box sx={{ 
+                mt: 2, 
+                p: 2, 
+                bgcolor: (theme) => theme.palette.mode === 'light' ? 'grey.50' : 'grey.800', 
+                borderRadius: 1 
+              }}>
                 <Typography variant="body2" gutterBottom>
                   <strong>원본 크기:</strong> {formatFileSize(optimizationInfo.originalSize)}
                 </Typography>

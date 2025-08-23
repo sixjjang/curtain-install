@@ -386,9 +386,6 @@ const TemplateManagement: React.FC = () => {
 
   return (
     <Box>
-      <Typography variant="h4" gutterBottom>
-        템플릿 관리
-      </Typography>
 
       <Card>
         <Box sx={{ borderBottom: 1, borderColor: 'divider' }}>

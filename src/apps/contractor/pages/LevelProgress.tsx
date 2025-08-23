@@ -76,9 +76,6 @@ const LevelProgress: React.FC = () => {
   if (!contractor) {
     return (
       <Box>
-        <Typography variant="h4" gutterBottom>
-          레벨 현황
-        </Typography>
         <Typography>사용자 정보를 불러오는 중...</Typography>
       </Box>
     );
@@ -87,9 +84,6 @@ const LevelProgress: React.FC = () => {
   if (!levelInfo) {
     return (
       <Box>
-        <Typography variant="h4" gutterBottom>
-          레벨 현황
-        </Typography>
         <Typography>레벨 정보를 불러오는 중...</Typography>
       </Box>
     );
@@ -124,9 +118,6 @@ const LevelProgress: React.FC = () => {
 
   return (
     <Box>
-      <Typography variant="h4" gutterBottom>
-        레벨 현황
-      </Typography>
 
       {/* 현재 레벨 카드 */}
       <Card sx={{ mb: 3, background: 'linear-gradient(135deg, #667eea 0%, #764ba2 100%)' }}>

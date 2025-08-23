@@ -148,10 +148,6 @@ const Dashboard: React.FC = () => {
 
   return (
     <Box>
-      <Typography variant="h4" gutterBottom>
-        관리자 대시보드
-      </Typography>
-
       <Grid container spacing={3}>
         {/* 사용자 통계 */}
         <Grid item xs={12} sm={6} md={3}>

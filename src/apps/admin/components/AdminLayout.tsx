@@ -253,7 +253,7 @@ const AdminLayout: React.FC<AdminLayoutProps> = ({ children }) => {
           width: { sm: `calc(100% - ${drawerWidth}px)` },
           mt: 8,
           minHeight: '100vh',
-          backgroundColor: '#f5f5f5'
+          backgroundColor: 'background.default'
         }}
       >
         {children}

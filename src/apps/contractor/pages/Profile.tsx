@@ -415,14 +415,11 @@ const Profile: React.FC = () => {
     <Box sx={{ 
       padding: '20px',
       minHeight: '500px',
-      backgroundColor: '#f8f9fa',
+      backgroundColor: 'background.paper',
       borderRadius: '8px',
       boxShadow: '0 2px 4px rgba(0,0,0,0.1)'
     }}>
-      <Box display="flex" justifyContent="space-between" alignItems="center" mb={3}>
-        <Typography variant="h4">
-          프로필
-        </Typography>
+      <Box display="flex" justifyContent="flex-end" alignItems="center" mb={3}>
         <Button
           variant={isEditing ? "contained" : "outlined"}
           startIcon={isEditing ? <Save /> : <Edit />}

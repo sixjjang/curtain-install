@@ -75,9 +75,6 @@ const NotificationsPage: React.FC = () => {
 
   return (
     <Box>
-      <Typography variant="h4" gutterBottom>
-        알림
-      </Typography>
 
       <Card>
         <CardContent>

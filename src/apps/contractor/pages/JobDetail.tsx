@@ -585,7 +585,7 @@ const JobDetail: React.FC = () => {
                    border: '2px dashed #ccc',
                    borderRadius: 1,
                    p: 1,
-                   backgroundColor: '#fafafa'
+                   backgroundColor: (theme) => theme.palette.mode === 'light' ? '#fafafa' : '#2d2d2d'
                  }}
                >
                  <canvas
@@ -965,7 +965,7 @@ const JobDetail: React.FC = () => {
                           borderRadius: 1,
                           backgroundColor: 'white',
                           '&:hover': {
-                            backgroundColor: '#f5f5f5'
+                            backgroundColor: (theme) => theme.palette.mode === 'light' ? '#f5f5f5' : '#2d2d2d'
                           }
                         }}
                       >
@@ -988,8 +988,10 @@ const JobDetail: React.FC = () => {
                               startIcon={<Image />}
                               onClick={() => handleFilePreview(file)}
                               sx={{ 
-                                backgroundColor: '#4CAF50',
-                                '&:hover': { backgroundColor: '#388E3C' }
+                                backgroundColor: (theme) => theme.palette.mode === 'light' ? '#4CAF50' : '#66bb6a',
+                                '&:hover': { 
+                                  backgroundColor: (theme) => theme.palette.mode === 'light' ? '#388E3C' : '#4caf50' 
+                                }
                               }}
                             >
                               미리보기
@@ -1032,7 +1034,12 @@ const JobDetail: React.FC = () => {
                   <Typography variant="h6" gutterBottom>
                     픽업 정보
                   </Typography>
-                  <Box sx={{ p: 2, border: '1px solid #e0e0e0', borderRadius: 1, bgcolor: '#f9f9f9' }}>
+                  <Box sx={{ 
+                    p: 2, 
+                    border: '1px solid #e0e0e0', 
+                    borderRadius: 1, 
+                    bgcolor: (theme) => theme.palette.mode === 'light' ? '#f9f9f9' : '#2d2d2d' 
+                  }}>
                     <Grid container spacing={2}>
                       <Grid item xs={12} sm={6}>
                         <Box display="flex" alignItems="center" mb={1}>
