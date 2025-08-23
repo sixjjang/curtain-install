@@ -28,6 +28,18 @@ export class SystemSettingsService {
     feeSettings: {
       sellerCommissionRate: 3, // 기본 3%
       contractorCommissionRate: 2 // 기본 2%
+    },
+    userGuidanceSettings: {
+      contractorGuidance: {
+        title: '시공자 서비스 이용 안내',
+        content: '',
+        version: 1
+      },
+      sellerGuidance: {
+        title: '판매자 서비스 이용 안내',
+        content: '',
+        version: 1
+      }
     }
   };
 
@@ -55,6 +67,10 @@ export class SystemSettingsService {
           feeSettings: {
             sellerCommissionRate: data.feeSettings?.sellerCommissionRate || this.DEFAULT_SETTINGS.feeSettings.sellerCommissionRate,
             contractorCommissionRate: data.feeSettings?.contractorCommissionRate || this.DEFAULT_SETTINGS.feeSettings.contractorCommissionRate
+          },
+          userGuidanceSettings: {
+            contractorGuidance: data.userGuidanceSettings?.contractorGuidance || this.DEFAULT_SETTINGS.userGuidanceSettings.contractorGuidance,
+            sellerGuidance: data.userGuidanceSettings?.sellerGuidance || this.DEFAULT_SETTINGS.userGuidanceSettings.sellerGuidance
           },
           tossAccount: data.tossAccount || null,
           createdAt: data.createdAt?.toDate() || new Date(),
@@ -421,6 +437,29 @@ export class SystemSettingsService {
       
     } catch (error) {
       console.error('❌ Firebase Firestore 확인 중 오류:', error);
+    }
+  }
+
+  // 사용자 안내사항 설정 업데이트
+  static async updateUserGuidanceSettings(
+    contractorGuidance: { title: string; content: string; version: number },
+    sellerGuidance: { title: string; content: string; version: number },
+    adminId: string
+  ): Promise<void> {
+    try {
+      const settingsRef = doc(db, 'systemSettings', this.SETTINGS_ID);
+      
+      await updateDoc(settingsRef, {
+        'userGuidanceSettings.contractorGuidance': contractorGuidance,
+        'userGuidanceSettings.sellerGuidance': sellerGuidance,
+        updatedAt: serverTimestamp(),
+        updatedBy: adminId
+      });
+      
+      console.log('✅ 사용자 안내사항 설정 업데이트 완료');
+    } catch (error) {
+      console.error('사용자 안내사항 설정 업데이트 실패:', error);
+      throw new Error('사용자 안내사항 설정을 업데이트할 수 없습니다.');
     }
   }
 }

@@ -301,11 +301,14 @@ export class AuthService {
   static async login(email: string, password: string): Promise<User> {
     try {
       console.log('🔐 로그인 시도:', email);
+      console.log('🔐 비밀번호 길이:', password.length);
       
       const userCredential = await signInWithEmailAndPassword(auth, email, password);
       const user = userCredential.user;
       
       console.log('✅ Firebase Auth 로그인 성공, 사용자 ID:', user.uid);
+      console.log('✅ Firebase Auth 사용자 이메일:', user.email);
+      console.log('✅ Firebase Auth 사용자 이메일 검증:', user.emailVerified);
 
       // Firestore에서 사용자 정보 가져오기
       console.log('📄 Firestore에서 사용자 정보 조회 중...');
@@ -342,6 +345,9 @@ export class AuthService {
       return userData;
     } catch (error: any) {
       console.error('❌ 로그인 실패:', error);
+      console.error('❌ 오류 코드:', error.code);
+      console.error('❌ 오류 메시지:', error.message);
+      console.error('❌ 전체 오류 객체:', JSON.stringify(error, null, 2));
       
       // Firebase Auth 오류 코드별 사용자 친화적 메시지
       let userMessage = '로그인에 실패했습니다. 다시 시도해주세요.';
@@ -973,6 +979,20 @@ export class AuthService {
     } catch (error) {
       console.error('모든 사용자 조회 실패:', error);
       throw new Error('사용자 목록을 가져올 수 없습니다.');
+    }
+  }
+
+  // 사용자 정보 업데이트
+  static async updateUser(userId: string, updateData: Partial<User>): Promise<void> {
+    try {
+      const userRef = doc(db, 'users', userId);
+      await updateDoc(userRef, {
+        ...updateData,
+        updatedAt: serverTimestamp()
+      });
+    } catch (error) {
+      console.error('사용자 정보 업데이트 실패:', error);
+      throw new Error('사용자 정보를 업데이트할 수 없습니다.');
     }
   }
 }

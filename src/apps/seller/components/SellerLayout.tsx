@@ -39,6 +39,7 @@ import { useNavigate, useLocation } from 'react-router-dom';
 import { useAuth } from '../../../shared/contexts/AuthContext';
 import { useTheme as useCustomTheme } from '../../../shared/contexts/ThemeContext';
 import { NotificationService } from '../../../shared/services/notificationService';
+import AdvertisementBanner from '../../../shared/components/AdvertisementBanner';
 
 const drawerWidth = 240;
 
@@ -97,7 +98,7 @@ const SellerLayout: React.FC<SellerLayoutProps> = ({ children }) => {
   };
 
   const drawer = (
-    <div>
+    <Box sx={{ display: 'flex', flexDirection: 'column', height: '100%' }}>
       <Toolbar>
         <Box>
           <Typography 
@@ -147,7 +148,7 @@ const SellerLayout: React.FC<SellerLayoutProps> = ({ children }) => {
         </Box>
       </Toolbar>
       <Divider />
-      <List>
+      <List sx={{ flexGrow: 1 }}>
         {menuItems.map((item) => (
           <ListItem key={item.text} disablePadding>
             <ListItemButton
@@ -177,7 +178,17 @@ const SellerLayout: React.FC<SellerLayoutProps> = ({ children }) => {
           </ListItem>
         ))}
       </List>
-    </div>
+      
+      {/* 사이드바 광고 영역 */}
+      <Box sx={{ p: 2, mt: 'auto' }}>
+        <AdvertisementBanner 
+          position="sidebar" 
+          maxCount={3} 
+          height={120}
+          showTitle={false}
+        />
+      </Box>
+    </Box>
   );
 
   return (

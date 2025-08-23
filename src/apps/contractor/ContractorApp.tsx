@@ -1,4 +1,4 @@
-import React from 'react';
+import React, { useState, useEffect } from 'react';
 import { Routes, Route, useLocation } from 'react-router-dom';
 import { Box } from '@mui/material';
 import { useAuth } from '../../shared/contexts/AuthContext';
@@ -12,10 +12,25 @@ import SellerChat from './pages/SellerChat';
 import PointManagement from './pages/PointManagement';
 import Notifications from './pages/Notifications';
 import Profile from './pages/Profile';
+import UserGuidanceDialog from '../../shared/components/UserGuidanceDialog';
 
 const ContractorApp: React.FC = () => {
   const { user } = useAuth();
   const location = useLocation();
+  const [showGuidanceDialog, setShowGuidanceDialog] = useState(false);
+
+  // 안내사항 확인 필요 여부 체크
+  useEffect(() => {
+    if (user && user.approvalStatus === 'approved') {
+      // 안내사항을 확인하지 않았거나 버전이 업데이트된 경우
+      const needsGuidance = !user.guidanceConfirmed?.contractorGuidanceVersion || 
+                           user.guidanceConfirmed.contractorGuidanceVersion < 1;
+      
+      if (needsGuidance) {
+        setShowGuidanceDialog(true);
+      }
+    }
+  }, [user]);
 
   // 승인 상태에 따른 접근 권한 확인
   const canAccessFeature = (featurePath: string) => {
@@ -72,12 +87,30 @@ const ContractorApp: React.FC = () => {
     return canAccessFeature('/') ? <Dashboard /> : <Profile />;
   };
 
+  const handleGuidanceConfirm = () => {
+    setShowGuidanceDialog(false);
+  };
+
+  const handleGuidanceClose = () => {
+    setShowGuidanceDialog(false);
+  };
+
   return (
-    <ContractorLayout>
-      <Box sx={{ flexGrow: 1, p: 3 }}>
-        {renderContent()}
-      </Box>
-    </ContractorLayout>
+    <>
+      <ContractorLayout>
+        <Box sx={{ flexGrow: 1, p: 3 }}>
+          {renderContent()}
+        </Box>
+      </ContractorLayout>
+      
+      <UserGuidanceDialog
+        open={showGuidanceDialog}
+        userRole="contractor"
+        userId={user?.id || ''}
+        onConfirm={handleGuidanceConfirm}
+        onClose={handleGuidanceClose}
+      />
+    </>
   );
 };
 

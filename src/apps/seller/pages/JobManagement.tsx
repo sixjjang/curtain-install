@@ -26,8 +26,6 @@ import {
   InputLabel,
   Select,
   MenuItem,
-  ToggleButtonGroup,
-  ToggleButton,
   TextField
 } from '@mui/material';
 import { 
@@ -120,7 +118,7 @@ const JobManagement: React.FC = () => {
   const [pickupInfoAutoFilled, setPickupInfoAutoFilled] = useState(false);
   
   // 기간별 필터링 상태
-  const [selectedPeriod, setSelectedPeriod] = useState<'1day' | '1week' | '1month' | '3months' | '6months' | '1year' | 'all'>('all');
+  const [selectedPeriod, setSelectedPeriod] = useState<'1day' | '1week' | '1month' | '3months' | '6months' | '1year' | 'all'>('1month');
 
   // 총 예산 계산 함수
   const calculateTotalBudget = (job: ConstructionJob): number => {
@@ -668,24 +666,23 @@ const JobManagement: React.FC = () => {
             시공건 목록 ({jobs.length}건)
           </Typography>
           
-          <ToggleButtonGroup
-            value={selectedPeriod}
-            exclusive
-            onChange={(e, newPeriod) => {
-              if (newPeriod !== null) {
-                handlePeriodChange(newPeriod);
-              }
-            }}
-            size="small"
-          >
-            <ToggleButton value="1day">1일</ToggleButton>
-            <ToggleButton value="1week">1주</ToggleButton>
-            <ToggleButton value="1month">1개월</ToggleButton>
-            <ToggleButton value="3months">분기</ToggleButton>
-            <ToggleButton value="6months">반기</ToggleButton>
-            <ToggleButton value="1year">1년</ToggleButton>
-            <ToggleButton value="all">전체</ToggleButton>
-          </ToggleButtonGroup>
+          <FormControl size="small" sx={{ minWidth: 120 }}>
+            <InputLabel id="period-select-label">기간</InputLabel>
+            <Select
+              labelId="period-select-label"
+              value={selectedPeriod}
+              label="기간"
+              onChange={(e) => handlePeriodChange(e.target.value as '1day' | '1week' | '1month' | '3months' | '6months' | '1year' | 'all')}
+            >
+              <MenuItem value="1day">1일</MenuItem>
+              <MenuItem value="1week">1주</MenuItem>
+              <MenuItem value="1month">1개월</MenuItem>
+              <MenuItem value="3months">분기</MenuItem>
+              <MenuItem value="6months">반기</MenuItem>
+              <MenuItem value="1year">1년</MenuItem>
+              <MenuItem value="all">전체</MenuItem>
+            </Select>
+          </FormControl>
         </Box>
       )}
 

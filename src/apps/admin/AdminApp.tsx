@@ -12,6 +12,7 @@ import TemplateManagement from './pages/TemplateManagement';
 import Analytics from './pages/Analytics';
 import SystemSettings from './pages/SystemSettings';
 import PointWithdrawalManagement from './pages/PointWithdrawalManagement';
+import AdvertisementManagement from './pages/AdvertisementManagement';
 
 const AdminApp: React.FC = () => {
   return (
@@ -28,6 +29,7 @@ const AdminApp: React.FC = () => {
           <Route path="/analytics" element={<Analytics />} />
           <Route path="/settings" element={<SystemSettings />} />
           <Route path="/point-withdrawals" element={<PointWithdrawalManagement />} />
+          <Route path="/advertisements" element={<AdvertisementManagement />} />
         </Routes>
       </Box>
     </AdminLayout>

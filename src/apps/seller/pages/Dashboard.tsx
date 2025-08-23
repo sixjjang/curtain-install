@@ -49,6 +49,7 @@ import { PointService } from '../../../shared/services/pointService';
 import { ConstructionJob } from '../../../types';
 import { useNavigate } from 'react-router-dom';
 import CreateJobDialog from '../components/CreateJobDialog';
+import AdvertisementBanner from '../../../shared/components/AdvertisementBanner';
 
 const Dashboard: React.FC = () => {
   const { user } = useAuth();
@@ -244,6 +245,16 @@ const Dashboard: React.FC = () => {
         <Typography variant="body1" color="text.secondary">
           오늘도 좋은 하루 되세요. 현재 {stats.totalJobs}개의 작업이 등록되어 있습니다.
         </Typography>
+      </Box>
+
+      {/* 대시보드 광고 */}
+      <Box sx={{ mb: 3 }}>
+        <AdvertisementBanner 
+          position="dashboard" 
+          maxCount={1} 
+          height={200}
+          showTitle={true}
+        />
       </Box>
 
       {/* 빠른 액션 버튼 */}

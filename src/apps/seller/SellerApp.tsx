@@ -1,4 +1,4 @@
-import React from 'react';
+import React, { useState, useEffect } from 'react';
 import { useLocation } from 'react-router-dom';
 import { Box } from '@mui/material';
 import { useAuth } from '../../shared/contexts/AuthContext';
@@ -12,6 +12,7 @@ import PaymentFail from './pages/PaymentFail';
 import Profile from './pages/Profile';
 import ContractorChat from './pages/ContractorChat';
 import Notifications from './pages/Notifications';
+import UserGuidanceDialog from '../../shared/components/UserGuidanceDialog';
 
 
 const SellerApp: React.FC = () => {
@@ -20,6 +21,7 @@ const SellerApp: React.FC = () => {
   
   const { user } = useAuth();
   const location = useLocation();
+  const [showGuidanceDialog, setShowGuidanceDialog] = useState(false);
   
   console.log('🔍 SellerApp - useAuth 결과:', user);
   console.log('🔍 SellerApp - useLocation 결과:', location);
@@ -29,6 +31,19 @@ const SellerApp: React.FC = () => {
     location: location.pathname,
     approvalStatus: user?.approvalStatus
   });
+
+  // 안내사항 확인 필요 여부 체크
+  useEffect(() => {
+    if (user && user.approvalStatus === 'approved') {
+      // 안내사항을 확인하지 않았거나 버전이 업데이트된 경우
+      const needsGuidance = !user.guidanceConfirmed?.sellerGuidanceVersion || 
+                           user.guidanceConfirmed.sellerGuidanceVersion < 1;
+      
+      if (needsGuidance) {
+        setShowGuidanceDialog(true);
+      }
+    }
+  }, [user]);
 
   // 승인 상태에 따른 접근 권한 확인
   const canAccessFeature = (featurePath: string) => {
@@ -100,14 +115,32 @@ const SellerApp: React.FC = () => {
   const content = renderContent();
   console.log('🔍 SellerApp - 렌더링된 컴포넌트:', content?.type?.name || 'Unknown');
   
+  const handleGuidanceConfirm = () => {
+    setShowGuidanceDialog(false);
+  };
+
+  const handleGuidanceClose = () => {
+    setShowGuidanceDialog(false);
+  };
+
   console.log('🔍 SellerApp - return 문 실행');
   
   return (
-    <SellerLayout>
-      <Box sx={{ flexGrow: 1, p: 3 }}>
-        {content}
-      </Box>
-    </SellerLayout>
+    <>
+      <SellerLayout>
+        <Box sx={{ flexGrow: 1, p: 3 }}>
+          {content}
+        </Box>
+      </SellerLayout>
+      
+      <UserGuidanceDialog
+        open={showGuidanceDialog}
+        userRole="seller"
+        userId={user?.id || ''}
+        onConfirm={handleGuidanceConfirm}
+        onClose={handleGuidanceClose}
+      />
+    </>
   );
 };
 

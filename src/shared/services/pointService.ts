@@ -957,6 +957,55 @@ export class PointService {
     }
   }
 
+  // 포인트 차감 (수수료, 벌금 등)
+  static async deductPoints(
+    userId: string, 
+    userRole: 'seller' | 'contractor', 
+    amount: number, 
+    deductionType: 'fee' | 'penalty' | 'job_cancellation_fee' | 'other',
+    description: string,
+    jobId?: string
+  ): Promise<void> {
+    try {
+      // 1. 현재 잔액 확인
+      const currentBalance = await this.getPointBalance(userId, userRole);
+      if (currentBalance < amount) {
+        throw new Error(`포인트 잔액이 부족합니다. 필요: ${amount}포인트, 보유: ${currentBalance}포인트`);
+      }
+
+      const newBalance = currentBalance - amount;
+
+      // 2. 거래 기록 생성
+      const transactionData: any = {
+        userId,
+        userRole,
+        type: 'deduction',
+        amount: -amount, // 차감이므로 음수
+        balance: newBalance,
+        description: description,
+        status: 'completed',
+        jobId,
+        deductionType,
+        createdAt: new Date(),
+        completedAt: new Date()
+      };
+
+      await addDoc(collection(db, 'pointTransactions'), {
+        ...removeUndefinedValues(transactionData),
+        createdAt: serverTimestamp(),
+        completedAt: serverTimestamp()
+      });
+
+      // 3. 잔액 업데이트
+      await this.updatePointBalance(userId, userRole, -amount);
+
+      console.log(`✅ 포인트 차감 완료: ${userId} (${userRole}) - ${amount}포인트 차감 (${deductionType})`);
+    } catch (error) {
+      console.error('포인트 차감 실패:', error);
+      throw new Error('포인트 차감에 실패했습니다.');
+    }
+  }
+
   // 은행명을 은행 코드로 변환
   private static getBankCode(bankName: string): string {
     const bankCodeMap: { [key: string]: string } = {

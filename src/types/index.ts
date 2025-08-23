@@ -31,6 +31,12 @@ export interface User {
   businessType?: string; // 업태
   businessCategory?: string; // 종목
   businessLicenseImage?: string; // 사업자등록증 이미지 URL
+  // 안내사항 확인 정보
+  guidanceConfirmed?: {
+    contractorGuidanceVersion?: number; // 시공자 안내사항 확인 버전
+    sellerGuidanceVersion?: number; // 판매자 안내사항 확인 버전
+    confirmedAt?: Date; // 확인 시간
+  };
 }
 
 // 판매자 픽업 정보 타입
@@ -130,13 +136,14 @@ export interface PointTransaction {
   id: string;
   userId: string;
   userRole: 'seller' | 'contractor';
-  type: 'charge' | 'withdraw' | 'escrow' | 'release' | 'refund' | 'payment' | 'compensation';
+  type: 'charge' | 'withdraw' | 'escrow' | 'release' | 'refund' | 'payment' | 'compensation' | 'deduction';
   amount: number;
   balance: number; // 거래 후 잔액
   description: string;
   jobId?: string; // 관련 작업 ID
   relatedJobId?: string; // 관련 작업 ID (별칭)
   compensationType?: 'product_not_ready' | 'customer_absent' | 'schedule_change'; // 보상 타입
+  deductionType?: 'fee' | 'penalty' | 'job_cancellation_fee' | 'other'; // 차감 타입
   status: 'pending' | 'completed' | 'failed' | 'cancelled';
   createdAt: Date;
   completedAt?: Date;
@@ -239,6 +246,19 @@ export interface SystemSettings {
     accountHolder: string;
     isActive: boolean;
   };
+  // 사용자 안내사항 설정
+  userGuidanceSettings: {
+    contractorGuidance: {
+      title: string; // 시공자 안내 제목
+      content: string; // 시공자 안내 내용 (HTML 지원)
+      version: number; // 안내사항 버전
+    };
+    sellerGuidance: {
+      title: string; // 판매자 안내 제목
+      content: string; // 판매자 안내 내용 (HTML 지원)
+      version: number; // 안내사항 버전
+    };
+  };
   createdAt: Date;
   updatedAt: Date;
   updatedBy: string; // 관리자 ID
@@ -335,6 +355,13 @@ export interface ConstructionJob {
   acceptedAt?: Date; // 시공자가 작업을 수락한 시간
   cancelledAt?: Date; // 작업이 취소된 시간
   cancellationReason?: string; // 취소 사유
+  cancellationInfo?: {
+    cancelledBy: string; // 취소한 시공자 ID
+    cancelledAt: Date; // 취소 시간
+    feeAmount: number; // 취소 수수료
+    hoursSinceAcceptance: number; // 수락 후 경과 시간
+    reason: string; // 취소 사유
+  };
   items?: JobItem[];
   requirements?: string[];
   pickupInfo?: PickupInfo;
@@ -533,4 +560,22 @@ export interface JobRequirementBadge {
   isActive: boolean;
   createdAt: Date;
   updatedAt: Date;
+}
+
+// 광고 타입
+export interface Advertisement {
+  id: string;
+  title: string;
+  imageUrl: string;
+  linkUrl: string;
+  position: 'sidebar' | 'dashboard' | 'chat';
+  isActive: boolean;
+  clickCount: number; // 클릭수
+  publishStartDate: Date; // 게시 시작일
+  publishEndDate: Date; // 게시 종료일
+  isExpired: boolean; // 게시기간 만료 여부
+  extensionRequested: boolean; // 연장 요청 여부
+  createdAt: Date;
+  updatedAt: Date;
+  createdBy: string;
 }

@@ -22,11 +22,14 @@ import {
   Build,
   Warning,
   AccountBalance,
-  Payment
+  Payment,
+  Article,
+  Edit
 } from '@mui/icons-material';
 import { useAuth } from '../../../shared/contexts/AuthContext';
 import { SystemSettingsService } from '../../../shared/services/systemSettingsService';
 import { JobService } from '../../../shared/services/jobService';
+import { AuthService } from '../../../shared/services/authService';
 import { SystemSettings as SystemSettingsType } from '../../../types';
 
 const SystemSettings: React.FC = () => {
@@ -37,6 +40,7 @@ const SystemSettings: React.FC = () => {
   const [error, setError] = useState('');
   const [success, setSuccess] = useState('');
   const [fixingProgress, setFixingProgress] = useState(false);
+  const [updatedByUser, setUpdatedByUser] = useState<{ email: string; name: string } | null>(null);
   
   // 폼 데이터
   const [escrowHours, setEscrowHours] = useState(48);
@@ -57,6 +61,18 @@ const SystemSettings: React.FC = () => {
     accountNumber: '',
     accountHolder: '',
     isActive: false
+  });
+
+  // 사용자 안내사항 설정
+  const [contractorGuidance, setContractorGuidance] = useState({
+    title: '',
+    content: '',
+    version: 1
+  });
+  const [sellerGuidance, setSellerGuidance] = useState({
+    title: '',
+    content: '',
+    version: 1
   });
 
   // 시스템 설정 로드
@@ -81,6 +97,27 @@ const SystemSettings: React.FC = () => {
       // 토스페이먼츠 계좌 설정 로드
       if (systemSettings.tossAccount) {
         setTossAccount(systemSettings.tossAccount);
+      }
+
+      // 사용자 안내사항 설정 로드
+      if (systemSettings.userGuidanceSettings) {
+        setContractorGuidance(systemSettings.userGuidanceSettings.contractorGuidance);
+        setSellerGuidance(systemSettings.userGuidanceSettings.sellerGuidance);
+      }
+
+      // 업데이트한 관리자 정보 로드
+      if (systemSettings.updatedBy && systemSettings.updatedBy !== 'system') {
+        try {
+          const adminUser = await AuthService.getUserById(systemSettings.updatedBy);
+          if (adminUser) {
+            setUpdatedByUser({
+              email: adminUser.email || '이메일 없음',
+              name: adminUser.name || '이름 없음'
+            });
+          }
+        } catch (error) {
+          console.warn('관리자 정보 로드 실패:', error);
+        }
       }
     } catch (error) {
       console.error('시스템 설정 로드 실패:', error);
@@ -143,6 +180,13 @@ const SystemSettings: React.FC = () => {
       await SystemSettingsService.updateFeeSettings(
         sellerCommissionRate,
         contractorCommissionRate,
+        user.id
+      );
+
+      // 사용자 안내사항 설정 저장
+      await SystemSettingsService.updateUserGuidanceSettings(
+        contractorGuidance,
+        sellerGuidance,
         user.id
       );
       
@@ -312,91 +356,175 @@ const SystemSettings: React.FC = () => {
 
               {settings && (
                 <Box>
-                                     <Paper sx={{ 
-                     p: 2, 
-                     mb: 2, 
-                     border: '1px solid',
-                     borderColor: 'divider',
-                     bgcolor: 'background.paper',
-                     '&:hover': {
-                       bgcolor: 'action.hover'
-                     }
-                   }}>
-                     <Typography variant="body2" color="textSecondary" gutterBottom>
-                       에스크로 자동 지급 시간
-                     </Typography>
-                     <Typography variant="h6" color="primary">
-                       {formatTimeDisplay(settings.escrowAutoReleaseHours)}
-                     </Typography>
-                   </Paper>
+                  {/* 컴팩트한 설정 정보 */}
+                  <Box sx={{ display: 'flex', flexDirection: 'column', gap: 1.5 }}>
+                    {/* 에스크로 자동 지급 시간 */}
+                    <Box sx={{ 
+                      display: 'flex', 
+                      justifyContent: 'space-between', 
+                      alignItems: 'center',
+                      p: 1.5,
+                      borderRadius: 1,
+                      bgcolor: 'background.paper',
+                      border: '1px solid',
+                      borderColor: 'divider'
+                    }}>
+                      <Typography variant="body2" color="textSecondary">
+                        에스크로 자동 지급 시간
+                      </Typography>
+                      <Typography variant="body2" fontWeight="medium" color="primary">
+                        {formatTimeDisplay(settings.escrowAutoReleaseHours)}
+                      </Typography>
+                    </Box>
 
-                  <Divider sx={{ my: 2 }} />
+                    {/* 취소 정책 */}
+                    <Box sx={{ 
+                      display: 'flex', 
+                      justifyContent: 'space-between', 
+                      alignItems: 'center',
+                      p: 1.5,
+                      borderRadius: 1,
+                      bgcolor: 'background.paper',
+                      border: '1px solid',
+                      borderColor: 'divider'
+                    }}>
+                      <Typography variant="body2" color="textSecondary">
+                        무료 취소 시간
+                      </Typography>
+                      <Typography variant="body2" fontWeight="medium">
+                        {settings.jobCancellationPolicy.maxCancellationHours}시간
+                      </Typography>
+                    </Box>
 
-                  <Typography variant="body2" color="textSecondary" gutterBottom>
-                    마지막 업데이트
-                  </Typography>
-                  <Typography variant="body2">
-                    {settings.updatedAt.toLocaleString('ko-KR')}
-                  </Typography>
+                    <Box sx={{ 
+                      display: 'flex', 
+                      justifyContent: 'space-between', 
+                      alignItems: 'center',
+                      p: 1.5,
+                      borderRadius: 1,
+                      bgcolor: 'background.paper',
+                      border: '1px solid',
+                      borderColor: 'divider'
+                    }}>
+                      <Typography variant="body2" color="textSecondary">
+                        일일 최대 취소
+                      </Typography>
+                      <Typography variant="body2" fontWeight="medium">
+                        {settings.jobCancellationPolicy.maxDailyCancellations}회
+                      </Typography>
+                    </Box>
 
-                  <Typography variant="body2" color="textSecondary" gutterBottom sx={{ mt: 2 }}>
-                    업데이트한 관리자
-                  </Typography>
-                  <Typography variant="body2">
-                    {settings.updatedBy === 'system' ? '시스템' : settings.updatedBy}
-                  </Typography>
+                    <Box sx={{ 
+                      display: 'flex', 
+                      justifyContent: 'space-between', 
+                      alignItems: 'center',
+                      p: 1.5,
+                      borderRadius: 1,
+                      bgcolor: 'background.paper',
+                      border: '1px solid',
+                      borderColor: 'divider'
+                    }}>
+                      <Typography variant="body2" color="textSecondary">
+                        취소 수수료율
+                      </Typography>
+                      <Typography variant="body2" fontWeight="medium" color="error">
+                        {settings.jobCancellationPolicy.cancellationFeeRate}%
+                      </Typography>
+                    </Box>
+
+                    {/* 마지막 업데이트 정보 */}
+                    <Box sx={{ 
+                      display: 'flex', 
+                      justifyContent: 'space-between', 
+                      alignItems: 'center',
+                      p: 1.5,
+                      borderRadius: 1,
+                      bgcolor: 'background.paper',
+                      border: '1px solid',
+                      borderColor: 'divider'
+                    }}>
+                      <Typography variant="body2" color="textSecondary">
+                        마지막 업데이트
+                      </Typography>
+                      <Typography variant="body2" fontWeight="medium">
+                        {settings.updatedAt.toLocaleDateString('ko-KR')}
+                      </Typography>
+                    </Box>
+
+                    {/* 업데이트한 관리자 */}
+                    <Box sx={{ 
+                      display: 'flex', 
+                      justifyContent: 'space-between', 
+                      alignItems: 'center',
+                      p: 1.5,
+                      borderRadius: 1,
+                      bgcolor: 'background.paper',
+                      border: '1px solid',
+                      borderColor: 'divider'
+                    }}>
+                      <Typography variant="body2" color="textSecondary">
+                        업데이트한 관리자
+                      </Typography>
+                      <Box sx={{ textAlign: 'right' }}>
+                        {settings.updatedBy === 'system' ? (
+                          <Typography variant="body2" fontWeight="medium">
+                            시스템
+                          </Typography>
+                        ) : updatedByUser ? (
+                          <Box>
+                            <Typography variant="body2" fontWeight="medium">
+                              {updatedByUser.name}
+                            </Typography>
+                            <Typography variant="caption" color="textSecondary">
+                              {updatedByUser.email}
+                            </Typography>
+                          </Box>
+                        ) : (
+                          <Typography variant="body2" fontWeight="medium">
+                            {settings.updatedBy}
+                          </Typography>
+                        )}
+                      </Box>
+                    </Box>
+                  </Box>
 
                   {/* 토스페이먼츠 계좌 정보 */}
-                  <Divider sx={{ my: 2 }} />
-                  <Typography variant="body2" color="textSecondary" gutterBottom>
-                    토스페이먼츠 계좌
-                  </Typography>
-                  {settings.tossAccount ? (
-                    <Paper sx={{ 
-                      p: 2, 
-                      mb: 2, 
-                      border: '1px solid',
-                      borderColor: 'divider',
-                      bgcolor: 'background.paper',
-                      '&:hover': {
-                        bgcolor: 'action.hover'
-                      }
-                    }}>
-                      <Typography variant="body2" color="textSecondary" gutterBottom>
-                        {settings.tossAccount.bankName}
-                      </Typography>
-                      <Typography variant="body2" sx={{ fontFamily: 'monospace' }}>
-                        {settings.tossAccount.accountNumber}
-                      </Typography>
-                      <Typography variant="body2" color="textSecondary">
-                        {settings.tossAccount.accountHolder}
-                      </Typography>
-                      <Chip 
-                        label={settings.tossAccount.isActive ? '활성화' : '비활성화'}
-                        color={settings.tossAccount.isActive ? 'success' : 'default'}
-                        size="small"
-                        sx={{ mt: 1 }}
-                      />
-                    </Paper>
-                  ) : (
-                    <Paper sx={{ 
-                      p: 2, 
-                      mb: 2, 
-                      border: '1px solid',
-                      borderColor: 'divider',
-                      bgcolor: 'background.paper',
-                      '&:hover': {
-                        bgcolor: 'action.hover'
-                      }
-                    }}>
-                      <Typography variant="body2" color="textSecondary">
-                        토스페이먼츠 계좌가 설정되지 않았습니다.
-                      </Typography>
-                      <Typography variant="body2" color="textSecondary" sx={{ mt: 1 }}>
-                        아래 토스페이먼츠 계좌 설정 섹션에서 계좌 정보를 입력해주세요.
-                      </Typography>
-                    </Paper>
-                  )}
+                  <Box sx={{ 
+                    display: 'flex', 
+                    justifyContent: 'space-between', 
+                    alignItems: 'center',
+                    p: 1.5,
+                    borderRadius: 1,
+                    bgcolor: 'background.paper',
+                    border: '1px solid',
+                    borderColor: 'divider'
+                  }}>
+                    <Typography variant="body2" color="textSecondary">
+                      토스페이먼츠 계좌
+                    </Typography>
+                    <Box sx={{ textAlign: 'right' }}>
+                      {settings.tossAccount ? (
+                        <Box>
+                          <Typography variant="body2" fontWeight="medium">
+                            {settings.tossAccount.bankName}
+                          </Typography>
+                          <Typography variant="caption" color="textSecondary" sx={{ fontFamily: 'monospace' }}>
+                            {settings.tossAccount.accountNumber}
+                          </Typography>
+                          <Chip 
+                            label={settings.tossAccount.isActive ? '활성화' : '비활성화'}
+                            color={settings.tossAccount.isActive ? 'success' : 'default'}
+                            size="small"
+                            sx={{ mt: 0.5 }}
+                          />
+                        </Box>
+                      ) : (
+                        <Typography variant="body2" color="textSecondary">
+                          미설정
+                        </Typography>
+                      )}
+                    </Box>
+                  </Box>
                 </Box>
               )}
             </CardContent>
@@ -879,6 +1007,215 @@ const SystemSettings: React.FC = () => {
                   </Typography>
                 </Grid>
               </Grid>
+            </CardContent>
+          </Card>
+        </Grid>
+
+        {/* 사용자 안내사항 관리 섹션 */}
+        <Grid item xs={12}>
+          <Card>
+            <CardContent>
+              <Typography variant="h6" gutterBottom sx={{ display: 'flex', alignItems: 'center', gap: 1 }}>
+                <Article />
+                사용자 안내사항 관리
+              </Typography>
+              
+              <Typography variant="body2" color="textSecondary" sx={{ mb: 3 }}>
+                시공자와 판매자가 첫 로그인 시 확인하는 필수 안내사항을 관리합니다.
+                HTML 태그를 사용하여 서식을 적용할 수 있습니다.
+              </Typography>
+
+              <Grid container spacing={3}>
+                {/* 시공자 안내사항 */}
+                <Grid item xs={12} md={6}>
+                  <Paper sx={{ p: 3, border: '1px solid #e0e0e0' }}>
+                    <Typography variant="h6" gutterBottom sx={{ display: 'flex', alignItems: 'center', gap: 1 }}>
+                      <Edit />
+                      시공자 안내사항
+                    </Typography>
+                    
+                    <TextField
+                      fullWidth
+                      label="안내사항 제목"
+                      value={contractorGuidance.title}
+                      onChange={(e) => setContractorGuidance(prev => ({ ...prev, title: e.target.value }))}
+                      sx={{ mb: 2 }}
+                    />
+                    
+                                         <TextField
+                       fullWidth
+                       multiline
+                       rows={12}
+                       label="안내사항 내용 (HTML 지원)"
+                       value={contractorGuidance.content}
+                       onChange={(e) => setContractorGuidance(prev => ({ ...prev, content: e.target.value }))}
+                       placeholder="<h3>서비스 목적</h3><p>본 플랫폼은...</p>"
+                       helperText="HTML 태그를 사용하여 서식을 적용할 수 있습니다. 빈 값으로 두면 기본 안내사항이 표시됩니다."
+                     />
+                     
+                     <Box sx={{ mt: 2, mb: 2 }}>
+                       <Button
+                         size="small"
+                         variant="outlined"
+                         onClick={() => {
+                           const defaultContent = `<h3>🏠 시공자 서비스 이용 안내</h3>
+<p><strong>커튼 설치 시공 서비스에 가입해주셔서 감사합니다.</strong> 안전하고 원활한 서비스 이용을 위해 다음 사항들을 반드시 확인해주세요.</p>
+
+<h4>📋 서비스 목적</h4>
+<p>본 플랫폼은 커튼 설치 시공 서비스의 중개 플랫폼으로, 시공자와 고객 간의 안전한 거래를 보장합니다.</p>
+
+<h4>💰 수수료 정책</h4>
+<ul>
+<li>시공 완료 시 수수료가 차감됩니다 (기본 3%)</li>
+<li>에스크로 시스템을 통해 안전한 결제가 이루어집니다</li>
+<li>포인트는 현금으로 인출 가능합니다</li>
+</ul>
+
+<h4>⚠️ 주의사항</h4>
+<ul>
+<li>작업 수락 후 무단 취소 시 수수료가 발생할 수 있습니다</li>
+<li>하루 최대 3회까지 무료 취소가 가능합니다</li>
+<li>고객 부재 시 보상이 지급됩니다</li>
+<li>제품 미준비 시 보상이 지급됩니다</li>
+</ul>
+
+<h4>🔒 안전 수칙</h4>
+<ul>
+<li>개인정보 보호를 위해 고객 정보를 외부에 유출하지 마세요</li>
+<li>안전한 시공을 위해 안전장비를 착용하세요</li>
+<li>고객과의 원활한 소통을 위해 정확한 시간을 지켜주세요</li>
+</ul>
+
+<h4>📅 서비스 이용 방법</h4>
+<ul>
+<li>대시보드에서 새로운 작업을 확인할 수 있습니다</li>
+<li>작업 수락 후 고객과 연락하여 시공 일정을 조율하세요</li>
+<li>시공 완료 후 앱에서 완료 처리를 해주세요</li>
+<li>포인트는 시공 완료 후 자동으로 지급됩니다</li>
+</ul>`;
+                           setContractorGuidance(prev => ({ ...prev, content: defaultContent }));
+                         }}
+                       >
+                         기본 안내사항 불러오기
+                       </Button>
+                     </Box>
+                    
+                    <Box sx={{ mt: 2, display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
+                      <Chip 
+                        label={`버전 ${contractorGuidance.version}`} 
+                        color="secondary" 
+                        size="small" 
+                      />
+                      <Button
+                        size="small"
+                        onClick={() => setContractorGuidance(prev => ({ ...prev, version: prev.version + 1 }))}
+                      >
+                        버전 업데이트
+                      </Button>
+                    </Box>
+                  </Paper>
+                </Grid>
+
+                {/* 판매자 안내사항 */}
+                <Grid item xs={12} md={6}>
+                  <Paper sx={{ p: 3, border: '1px solid #e0e0e0' }}>
+                    <Typography variant="h6" gutterBottom sx={{ display: 'flex', alignItems: 'center', gap: 1 }}>
+                      <Edit />
+                      판매자 안내사항
+                    </Typography>
+                    
+                    <TextField
+                      fullWidth
+                      label="안내사항 제목"
+                      value={sellerGuidance.title}
+                      onChange={(e) => setSellerGuidance(prev => ({ ...prev, title: e.target.value }))}
+                      sx={{ mb: 2 }}
+                    />
+                    
+                                         <TextField
+                       fullWidth
+                       multiline
+                       rows={12}
+                       label="안내사항 내용 (HTML 지원)"
+                       value={sellerGuidance.content}
+                       onChange={(e) => setSellerGuidance(prev => ({ ...prev, content: e.target.value }))}
+                       placeholder="<h3>서비스 목적</h3><p>본 플랫폼은...</p>"
+                       helperText="HTML 태그를 사용하여 서식을 적용할 수 있습니다. 빈 값으로 두면 기본 안내사항이 표시됩니다."
+                     />
+                     
+                     <Box sx={{ mt: 2, mb: 2 }}>
+                       <Button
+                         size="small"
+                         variant="outlined"
+                         onClick={() => {
+                           const defaultContent = `<h3>🏢 판매자 서비스 이용 안내</h3>
+<p><strong>커튼 설치 시공 서비스에 가입해주셔서 감사합니다.</strong> 안전하고 원활한 서비스 이용을 위해 다음 사항들을 반드시 확인해주세요.</p>
+
+<h4>📋 서비스 목적</h4>
+<p>본 플랫폼은 커튼 설치 시공 서비스의 중개 플랫폼으로, 판매자와 시공자 간의 안전한 거래를 보장합니다.</p>
+
+<h4>💰 수수료 정책</h4>
+<ul>
+<li>작업 등록 시 수수료가 차감됩니다 (기본 3%)</li>
+<li>에스크로 시스템을 통해 안전한 결제가 이루어집니다</li>
+<li>시공 완료 후 시공자에게 포인트가 지급됩니다</li>
+</ul>
+
+<h4>⚠️ 주의사항</h4>
+<ul>
+<li>정확한 고객 정보와 시공 일정을 입력해주세요</li>
+<li>제품이 준비된 상태에서 작업을 등록해주세요</li>
+<li>고객 부재 시 보상이 발생할 수 있습니다</li>
+<li>시공자와의 원활한 소통을 위해 연락처를 정확히 입력해주세요</li>
+</ul>
+
+<h4>🔒 안전 수칙</h4>
+<ul>
+<li>개인정보 보호를 위해 고객 정보를 안전하게 관리하세요</li>
+<li>시공자와의 약속 시간을 정확히 지켜주세요</li>
+<li>시공 완료 후 만족도 평가를 남겨주세요</li>
+</ul>
+
+<h4>📅 서비스 이용 방법</h4>
+<ul>
+<li>작업 관리에서 새로운 시공 작업을 등록할 수 있습니다</li>
+<li>시공자가 작업을 수락하면 연락을 받을 수 있습니다</li>
+<li>시공 진행 상황을 실시간으로 확인할 수 있습니다</li>
+<li>시공 완료 후 만족도 평가를 남겨주세요</li>
+</ul>`;
+                           setSellerGuidance(prev => ({ ...prev, content: defaultContent }));
+                         }}
+                       >
+                         기본 안내사항 불러오기
+                       </Button>
+                     </Box>
+                    
+                    <Box sx={{ mt: 2, display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
+                      <Chip 
+                        label={`버전 ${sellerGuidance.version}`} 
+                        color="secondary" 
+                        size="small" 
+                      />
+                      <Button
+                        size="small"
+                        onClick={() => setSellerGuidance(prev => ({ ...prev, version: prev.version + 1 }))}
+                      >
+                        버전 업데이트
+                      </Button>
+                    </Box>
+                  </Paper>
+                </Grid>
+              </Grid>
+
+                             <Alert severity="info" sx={{ mt: 3 }}>
+                 <Typography variant="body2">
+                   <strong>안내사항 업데이트 시 주의사항:</strong><br />
+                   • 버전을 업데이트하면 기존 사용자도 새로운 안내사항을 다시 확인해야 합니다<br />
+                   • HTML 태그를 사용하여 서식을 적용할 수 있습니다 (예: &lt;h3&gt;, &lt;p&gt;, &lt;ul&gt;, &lt;li&gt;)<br />
+                   • "기본 안내사항 불러오기" 버튼을 클릭하면 미리 작성된 기본 안내사항을 불러올 수 있습니다<br />
+                   • 내용을 비워두면 기본 안내사항이 표시됩니다
+                 </Typography>
+               </Alert>
             </CardContent>
           </Card>
         </Grid>

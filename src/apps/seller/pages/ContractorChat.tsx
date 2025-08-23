@@ -46,6 +46,7 @@ import { JobService } from '../../../shared/services/jobService';
 import { ConstructionJob } from '../../../types';
 import { useParams, useSearchParams } from 'react-router-dom';
 import ChatArea from '../components/ChatArea';
+import AdvertisementBanner from '../../../shared/components/AdvertisementBanner';
 
 const ContractorChat: React.FC = () => {
   const { user } = useAuth();
@@ -495,6 +496,16 @@ const ContractorChat: React.FC = () => {
             )}
           </List>
         </Box>
+
+        {/* 모바일 채팅 하단 광고 */}
+        <Box sx={{ p: 2 }}>
+          <AdvertisementBanner 
+            position="chat" 
+            maxCount={1} 
+            height={150}
+            showTitle={true}
+          />
+        </Box>
       </Box>
     );
   }
@@ -588,6 +599,16 @@ const ContractorChat: React.FC = () => {
              />
            </CardContent>
          </Card>
+      </Box>
+
+      {/* 채팅 하단 광고 */}
+      <Box sx={{ mt: 2 }}>
+        <AdvertisementBanner 
+          position="chat" 
+          maxCount={1} 
+          height={150}
+          showTitle={true}
+        />
       </Box>
 
       {/* 상세보기 다이얼로그 */}

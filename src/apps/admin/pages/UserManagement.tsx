@@ -410,7 +410,7 @@ const UserManagement: React.FC = () => {
       <Card sx={{ mb: 3 }}>
         <CardContent>
           <Grid container spacing={2} alignItems="center">
-            <Grid item xs={12} md={3}>
+            <Grid item xs={12} md={2}>
               <TextField
                 fullWidth
                 placeholder="이름, 이메일, 전화번호로 검색"
@@ -421,7 +421,7 @@ const UserManagement: React.FC = () => {
                 }}
               />
             </Grid>
-            <Grid item xs={12} md={2}>
+            <Grid item xs={12} md={1.5}>
               <FormControl fullWidth>
                 <InputLabel>역할</InputLabel>
                 <Select
@@ -436,7 +436,7 @@ const UserManagement: React.FC = () => {
                 </Select>
               </FormControl>
             </Grid>
-            <Grid item xs={12} md={2}>
+            <Grid item xs={12} md={1.5}>
               <FormControl fullWidth>
                 <InputLabel>승인 상태</InputLabel>
                 <Select
@@ -451,7 +451,7 @@ const UserManagement: React.FC = () => {
                 </Select>
               </FormControl>
             </Grid>
-            <Grid item xs={12} md={2}>
+            <Grid item xs={12} md={1.5}>
               <FormControl fullWidth>
                 <InputLabel>활성 상태</InputLabel>
                 <Select
@@ -465,7 +465,7 @@ const UserManagement: React.FC = () => {
                 </Select>
               </FormControl>
             </Grid>
-            <Grid item xs={12} md={3}>
+            <Grid item xs={12} md={5.5}>
               <Box sx={{ display: 'flex', gap: 1 }}>
                 <Button
                   variant="contained"
@@ -479,7 +479,7 @@ const UserManagement: React.FC = () => {
                   }}
                   sx={{ flex: 1 }}
                 >
-                  승인 대기만 보기
+                  승인대기
                 </Button>
                 <Button
                   variant="outlined"

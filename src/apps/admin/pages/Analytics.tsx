@@ -59,7 +59,7 @@ const Analytics: React.FC = () => {
   };
 
   const formatCurrency = (amount: number) => {
-    return new Intl.NumberFormat('ko-KR').format(amount) + '원';
+    return new Intl.NumberFormat('ko-KR').format(Math.round(amount)) + '원';
   };
 
   const formatTime = (hours: number) => {
@@ -376,54 +376,7 @@ const Analytics: React.FC = () => {
         </Grid>
       </Grid>
 
-      {/* 시공시간별 분석 */}
-      <Typography variant="h5" gutterBottom sx={{ mt: 4, mb: 2, display: 'flex', alignItems: 'center' }}>
-        <Schedule sx={{ mr: 1 }} />
-        시공시간별 분석
-      </Typography>
       
-      <Grid container spacing={3} mb={4}>
-        <Grid item xs={12} md={6}>
-          <Card>
-            <CardContent>
-              <Typography variant="h6" gutterBottom>
-                평균 완료 시간
-              </Typography>
-              <Typography variant="h4" color="primary" fontWeight="bold">
-                {formatTime(analyticsData.timeAnalysis.averageCompletionTime)}
-              </Typography>
-              <Typography variant="body2" color="textSecondary">
-                완료된 작업 기준
-              </Typography>
-            </CardContent>
-          </Card>
-        </Grid>
-        
-        <Grid item xs={12} md={6}>
-          <Card>
-            <CardContent>
-              <Typography variant="h6" gutterBottom>
-                시공 시간 분포
-              </Typography>
-              <List dense>
-                {analyticsData.timeAnalysis.timeDistribution.map((item) => (
-                  <ListItem key={item.range}>
-                    <ListItemText 
-                      primary={item.range}
-                      secondary={`${item.count}건`}
-                    />
-                    <ListItemSecondaryAction>
-                      <Typography variant="body2" color="textSecondary">
-                        {((item.count / analyticsData.timeAnalysis.timeDistribution.reduce((sum, d) => sum + d.count, 0)) * 100).toFixed(1)}%
-                      </Typography>
-                    </ListItemSecondaryAction>
-                  </ListItem>
-                ))}
-              </List>
-            </CardContent>
-          </Card>
-        </Grid>
-      </Grid>
 
       {/* 시간대별 분석 */}
       <Typography variant="h5" gutterBottom sx={{ mt: 4, mb: 2, display: 'flex', alignItems: 'center' }}>

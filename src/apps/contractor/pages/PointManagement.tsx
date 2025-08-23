@@ -35,6 +35,7 @@ import {
 import { useAuth } from '../../../shared/contexts/AuthContext';
 import { PointService } from '../../../shared/services/pointService';
 import { JobService } from '../../../shared/services/jobService';
+import { SystemSettingsService } from '../../../shared/services/systemSettingsService';
 import { PointBalance, PointTransaction } from '../../../types';
 
 const PointManagement: React.FC = () => {
@@ -61,6 +62,11 @@ const PointManagement: React.FC = () => {
   // 완료된 작업 포인트 수령 상태
   const [claimingPoints, setClaimingPoints] = useState(false);
   const [completedJobs, setCompletedJobs] = useState<any[]>([]);
+  
+  // 시스템 설정 상태
+  const [systemSettings, setSystemSettings] = useState<{
+    escrowAutoReleaseHours: number;
+  } | null>(null);
 
   // 데이터 로드
   const loadData = async (period: '1month' | '3months' | '6months' | '1year' | 'all' = selectedPeriod) => {
@@ -82,6 +88,12 @@ const PointManagement: React.FC = () => {
       const jobs = await JobService.getJobsByContractor(user.id);
       const completedJobsData = jobs.filter(job => job.status === 'completed');
       setCompletedJobs(completedJobsData);
+      
+      // 시스템 설정 조회
+      const settings = await SystemSettingsService.getSystemSettings();
+      setSystemSettings({
+        escrowAutoReleaseHours: settings.escrowAutoReleaseHours
+      });
     } catch (error) {
       console.error('데이터 로드 실패:', error);
       setError('데이터를 불러오는데 실패했습니다.');
@@ -215,7 +227,7 @@ const PointManagement: React.FC = () => {
   };
 
   // 거래 타입 텍스트
-  const getTypeText = (type: string, compensationType?: string) => {
+  const getTypeText = (type: string, compensationType?: string, deductionType?: string) => {
     switch (type) {
       case 'charge': return '충전';
       case 'payment': return '지급';
@@ -223,6 +235,14 @@ const PointManagement: React.FC = () => {
       case 'refund': return '환불';
       case 'escrow': return '사용';
       case 'release': return '지급';
+      case 'deduction': 
+        switch (deductionType) {
+          case 'job_cancellation_fee': return '취소 수수료';
+          case 'fee': return '수수료';
+          case 'penalty': return '벌금';
+          case 'other': return '기타 차감';
+          default: return '차감';
+        }
       case 'compensation': 
         switch (compensationType) {
           case 'product_not_ready': return '제품 미준비 보상';
@@ -244,6 +264,27 @@ const PointManagement: React.FC = () => {
   };
 
   const pendingPayments = getPendingPayments();
+
+  // 에스크로 자동 지급 시간에 따른 안내 문구 생성
+  const getEscrowReleaseText = () => {
+    if (!systemSettings) {
+      return '시공 완료 후 포인트가 지급됩니다';
+    }
+    
+    const hours = systemSettings.escrowAutoReleaseHours;
+    
+    if (hours === 0) {
+      return '시공 완료 시 즉시 포인트가 지급됩니다';
+    } else if (hours === 24) {
+      return '시공 완료 후 24시간 후에 포인트가 자동 지급됩니다';
+    } else if (hours === 48) {
+      return '시공 완료 후 48시간 후에 포인트가 자동 지급됩니다';
+    } else if (hours === 72) {
+      return '시공 완료 후 72시간 후에 포인트가 자동 지급됩니다';
+    } else {
+      return `시공 완료 후 ${hours}시간 후에 포인트가 자동 지급됩니다`;
+    }
+  };
 
   if (loading) {
     return (
@@ -320,20 +361,20 @@ const PointManagement: React.FC = () => {
                 포인트 수령 안내
               </Typography>
               
-              <Box component="ul" sx={{ pl: 2 }}>
-                <Typography component="li" variant="body2" mb={1}>
-                  1포인트 = 1원으로 환산됩니다
-                </Typography>
-                <Typography component="li" variant="body2" mb={1}>
-                  시공 완료 시 즉시 포인트가 지급됩니다
-                </Typography>
-                <Typography component="li" variant="body2" mb={1}>
-                  포인트는 현금으로 인출할 수 있습니다
-                </Typography>
-                <Typography component="li" variant="body2" mb={2}>
-                  인출 요청 후 1-2일 내에 계좌로 입금됩니다
-                </Typography>
-              </Box>
+                             <Box component="ul" sx={{ pl: 2 }}>
+                 <Typography component="li" variant="body2" mb={1}>
+                   1포인트 = 1원으로 환산됩니다
+                 </Typography>
+                 <Typography component="li" variant="body2" mb={1}>
+                   {getEscrowReleaseText()}
+                 </Typography>
+                 <Typography component="li" variant="body2" mb={1}>
+                   포인트는 현금으로 인출할 수 있습니다
+                 </Typography>
+                 <Typography component="li" variant="body2" mb={2}>
+                   인출 요청 후 1-2일 내에 계좌로 입금됩니다
+                 </Typography>
+               </Box>
               
               {/* 완료된 작업 포인트 수령 버튼 */}
               {completedJobs.length > 0 && (
@@ -469,8 +510,8 @@ const PointManagement: React.FC = () => {
                                  {/* 포인트 인출의 경우 타입 칩을 표시하지 않음 */}
                                  {transaction.type !== 'withdraw' && (
                                    <Chip 
-                                     label={getTypeText(transaction.type, transaction.compensationType)} 
-                                     color={transaction.type === 'compensation' ? 'success' : 'primary'} 
+                                     label={getTypeText(transaction.type, transaction.compensationType, transaction.deductionType)} 
+                                     color={transaction.type === 'compensation' ? 'success' : transaction.type === 'deduction' ? 'error' : 'primary'} 
                                      size="small" 
                                      variant="outlined"
                                    />

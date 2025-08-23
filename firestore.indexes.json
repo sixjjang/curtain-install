@@ -46,6 +46,48 @@
       "density": "SPARSE_ALL"
     },
     {
+      "collectionGroup": "jobAcceptRequests",
+      "queryScope": "COLLECTION",
+      "fields": [
+        {
+          "fieldPath": "jobId",
+          "order": "ASCENDING"
+        },
+        {
+          "fieldPath": "status",
+          "order": "ASCENDING"
+        },
+        {
+          "fieldPath": "priority",
+          "order": "DESCENDING"
+        },
+        {
+          "fieldPath": "requestTime",
+          "order": "ASCENDING"
+        }
+      ],
+      "density": "SPARSE_ALL"
+    },
+    {
+      "collectionGroup": "jobAcceptRequests",
+      "queryScope": "COLLECTION",
+      "fields": [
+        {
+          "fieldPath": "jobId",
+          "order": "ASCENDING"
+        },
+        {
+          "fieldPath": "contractorId",
+          "order": "ASCENDING"
+        },
+        {
+          "fieldPath": "status",
+          "order": "ASCENDING"
+        }
+      ],
+      "density": "SPARSE_ALL"
+    },
+    {
       "collectionGroup": "estimates",
       "queryScope": "COLLECTION",
       "fields": [
@@ -131,6 +173,74 @@
         {
           "fieldPath": "createdAt",
           "order": "DESCENDING"
+        }
+      ],
+      "density": "SPARSE_ALL"
+    },
+    {
+      "collectionGroup": "constructionJobs",
+      "queryScope": "COLLECTION",
+      "fields": [
+        {
+          "fieldPath": "cancellationInfo.cancelledBy",
+          "order": "ASCENDING"
+        },
+        {
+          "fieldPath": "cancellationInfo.cancelledAt",
+          "order": "ASCENDING"
+        },
+        {
+          "fieldPath": "cancellationInfo.reason",
+          "order": "ASCENDING"
+        }
+      ],
+      "density": "SPARSE_ALL"
+    },
+    {
+      "collectionGroup": "jobCancellationRecords",
+      "queryScope": "COLLECTION",
+      "fields": [
+        {
+          "fieldPath": "contractorId",
+          "order": "ASCENDING"
+        },
+        {
+          "fieldPath": "reason",
+          "order": "ASCENDING"
+        }
+      ],
+      "density": "SPARSE_ALL"
+    },
+    {
+      "collectionGroup": "advertisements",
+      "queryScope": "COLLECTION",
+      "fields": [
+        {
+          "fieldPath": "position",
+          "order": "ASCENDING"
+        },
+        {
+          "fieldPath": "isActive",
+          "order": "ASCENDING"
+        },
+        {
+          "fieldPath": "createdAt",
+          "order": "DESCENDING"
+        }
+      ],
+      "density": "SPARSE_ALL"
+    },
+    {
+      "collectionGroup": "advertisements",
+      "queryScope": "COLLECTION",
+      "fields": [
+        {
+          "fieldPath": "publishEndDate",
+          "order": "ASCENDING"
+        },
+        {
+          "fieldPath": "isActive",
+          "order": "ASCENDING"
         }
       ],
       "density": "SPARSE_ALL"
