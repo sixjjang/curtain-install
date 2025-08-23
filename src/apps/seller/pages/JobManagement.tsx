@@ -425,8 +425,62 @@ const JobManagement: React.FC = () => {
   };
 
   // 작업 수정 다이얼로그 열기
-  const handleEditJob = (job: ConstructionJob) => {
-    setJobToEdit(job);
+  const handleEditJob = async (job: ConstructionJob) => {
+    console.log('작업수정 모달 - 전체 작업 데이터:', job);
+    console.log('작업수정 모달 - 시공일시:', job.scheduledDate);
+    console.log('작업수정 모달 - 픽업정보:', job.pickupInfo);
+    
+    // 판매자의 픽업정보 가져오기
+    let sellerPickupInfo = null;
+    try {
+      if (user?.id) {
+        sellerPickupInfo = await SellerService.getPickupInfo(user.id);
+        console.log('판매자 픽업정보:', sellerPickupInfo);
+      }
+    } catch (error) {
+      console.error('판매자 픽업정보 가져오기 실패:', error);
+    }
+    
+    // 고객 정보 가져오기
+    let customerData = null;
+    try {
+      if (job.customerId) {
+        customerData = await CustomerService.getCustomerInfo(job.customerId);
+        console.log('고객 정보:', customerData);
+      }
+    } catch (error) {
+      console.error('고객 정보 가져오기 실패:', error);
+    }
+    
+    // 픽업정보가 비어있고 판매자 픽업정보가 있으면 자동으로 채우기
+    let updatedJob = { ...job };
+    let wasAutoFilled = false;
+    if (sellerPickupInfo && (!job.pickupInfo || 
+        (!job.pickupInfo.companyName && !job.pickupInfo.phone && !job.pickupInfo.address))) {
+      updatedJob = {
+        ...job,
+        pickupInfo: {
+          companyName: sellerPickupInfo.companyName || '',
+          phone: sellerPickupInfo.phone || '',
+          address: sellerPickupInfo.address || '',
+          scheduledDateTime: job.pickupInfo?.scheduledDateTime || ''
+        }
+      };
+      wasAutoFilled = true;
+      console.log('픽업정보 자동 채움:', updatedJob.pickupInfo);
+    }
+    
+    // 고객 정보가 있으면 작업 데이터에 추가 (타입 안전하게)
+    if (customerData) {
+      updatedJob = {
+        ...updatedJob,
+        // @ts-ignore - 동적으로 고객 정보 추가
+        customerName: customerData.name,
+        customerPhone: customerData.phone
+      } as any;
+    }
+    
+    setJobToEdit(updatedJob);
     setEditDialogOpen(true);
   };
 

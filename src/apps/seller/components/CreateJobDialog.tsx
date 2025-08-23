@@ -153,8 +153,8 @@ const CreateJobDialog: React.FC<CreateJobDialogProps> = ({
         if (initialJobData.customerId) {
           // 고객 정보는 별도로 로드해야 할 수 있음
           setCustomerInfo({
-            name: '',
-            phone: '',
+            name: (initialJobData as any).customerName || '',
+            phone: (initialJobData as any).customerPhone || '',
             address: initialJobData.address
           });
         }
