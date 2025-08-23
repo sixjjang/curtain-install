@@ -28,9 +28,7 @@ import {
   ListItemText,
   FormControlLabel,
   Checkbox,
-  Paper,
-  ToggleButtonGroup,
-  ToggleButton
+  Paper
 } from '@mui/material';
 import { 
   Search, 
@@ -709,7 +707,7 @@ const MyJobs: React.FC = () => {
 
   return (
     <Box>
-      <Box display="flex" justifyContent="space-between" alignItems="center" mb={3}>
+      <Box display="flex" justifyContent="space-between" alignItems="flex-start" mb={3} flexDirection={{ xs: 'column', sm: 'row' }} gap={2}>
         <Box>
           <Typography variant="h5" gutterBottom>
             나의 작업 ({jobs.length}건)
@@ -720,24 +718,22 @@ const MyJobs: React.FC = () => {
         </Box>
         
         {/* 기간별 필터링 */}
-        <ToggleButtonGroup
-          value={selectedPeriod}
-          exclusive
-          onChange={(e, newPeriod) => {
-            if (newPeriod !== null) {
-              handlePeriodChange(newPeriod);
-            }
-          }}
-          size="small"
-        >
-          <ToggleButton value="1day">1일</ToggleButton>
-          <ToggleButton value="1week">1주</ToggleButton>
-          <ToggleButton value="1month">1개월</ToggleButton>
-          <ToggleButton value="3months">분기</ToggleButton>
-          <ToggleButton value="6months">반기</ToggleButton>
-          <ToggleButton value="1year">1년</ToggleButton>
-          <ToggleButton value="all">전체</ToggleButton>
-        </ToggleButtonGroup>
+        <FormControl size="small" sx={{ minWidth: { xs: '100%', sm: 120 } }}>
+          <InputLabel>기간</InputLabel>
+          <Select
+            value={selectedPeriod}
+            onChange={(e) => handlePeriodChange(e.target.value as any)}
+            label="기간"
+          >
+            <MenuItem value="1day">1일</MenuItem>
+            <MenuItem value="1week">1주</MenuItem>
+            <MenuItem value="1month">1개월</MenuItem>
+            <MenuItem value="3months">분기</MenuItem>
+            <MenuItem value="6months">반기</MenuItem>
+            <MenuItem value="1year">1년</MenuItem>
+            <MenuItem value="all">전체</MenuItem>
+          </Select>
+        </FormControl>
       </Box>
 
 
