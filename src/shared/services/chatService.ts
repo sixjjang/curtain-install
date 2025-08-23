@@ -13,7 +13,13 @@ import {
   serverTimestamp,
   Timestamp
 } from 'firebase/firestore';
-import { db } from '../../firebase/config';
+import { 
+  ref, 
+  uploadBytes, 
+  getDownloadURL, 
+  deleteObject 
+} from 'firebase/storage';
+import { db, storage } from '../../firebase/config';
 import { ChatMessage, ChatRoom, Customer } from '../../types';
 import { NotificationService } from './notificationService';
 
@@ -124,17 +130,18 @@ export class ChatService {
   ): Promise<void> {
     try {
       const messagesRef = collection(db, 'messages');
-      const newMessage = {
-        chatRoomId,
-        jobId,
-        senderId,
-        senderType,
-        senderName,
-        ...(senderProfileImage && { senderProfileImage }),
-        content,
-        timestamp: serverTimestamp(),
-        isRead: false
-      };
+             const newMessage = {
+         chatRoomId,
+         jobId,
+         senderId,
+         senderType,
+         senderName,
+         ...(senderProfileImage && { senderProfileImage }),
+         content,
+         messageType: 'text',
+         timestamp: serverTimestamp(),
+         isRead: false
+       };
       
       await addDoc(messagesRef, newMessage);
       
@@ -223,7 +230,9 @@ export class ChatService {
           senderProfileImage: data.senderProfileImage,
           content: data.content,
           timestamp: data.timestamp?.toDate() || new Date(),
-          isRead: data.isRead
+          isRead: data.isRead,
+          imageUrl: data.imageUrl,
+          messageType: data.messageType || 'text'
         };
       });
       
@@ -247,21 +256,35 @@ export class ChatService {
       // orderBy('timestamp', 'asc') // 복합 인덱스 필요 - 임시 제거
     );
     
-    return onSnapshot(q, (querySnapshot) => {
-      const messages = querySnapshot.docs.map(doc => {
-        const data = doc.data();
-        return {
-          id: doc.id,
-          jobId: data.jobId,
-          senderId: data.senderId,
-          senderType: data.senderType,
-          senderName: data.senderName,
-          senderProfileImage: data.senderProfileImage,
-          content: data.content,
-          timestamp: data.timestamp?.toDate() || new Date(),
-          isRead: data.isRead
-        };
-      });
+         return onSnapshot(q, (querySnapshot) => {
+       const messages = querySnapshot.docs.map(doc => {
+         const data = doc.data();
+         const message = {
+           id: doc.id,
+           jobId: data.jobId,
+           senderId: data.senderId,
+           senderType: data.senderType,
+           senderName: data.senderName,
+           senderProfileImage: data.senderProfileImage,
+           content: data.content,
+           timestamp: data.timestamp?.toDate() || new Date(),
+           isRead: data.isRead,
+           imageUrl: data.imageUrl,
+           messageType: data.messageType || 'text'
+         };
+         
+         // 이미지 메시지 디버깅 로그
+         if (message.messageType === 'image') {
+           console.log('🖼️ 이미지 메시지 수신:', {
+             id: message.id,
+             content: message.content,
+             imageUrl: message.imageUrl,
+             messageType: message.messageType
+           });
+         }
+         
+         return message;
+       });
       
       // 클라이언트에서 시간순 정렬
       const sortedMessages = messages.sort((a, b) => a.timestamp.getTime() - b.timestamp.getTime());
@@ -539,6 +562,127 @@ ${surveyLink}
     } catch (error) {
       console.error('상태 변경 자동 메시지 전송 실패:', error);
       // 자동 메시지 실패는 작업 상태 변경을 막지 않도록 에러를 던지지 않음
+    }
+  }
+
+  // 이미지 업로드 및 메시지 전송
+  static async sendImageMessage(
+    chatRoomId: string,
+    jobId: string,
+    senderId: string,
+    senderType: 'contractor' | 'seller' | 'customer' | 'admin',
+    senderName: string,
+    imageFile: File,
+    senderProfileImage?: string
+  ): Promise<void> {
+    try {
+      // 이미지 파일 검증
+      if (!imageFile.type.startsWith('image/')) {
+        throw new Error('이미지 파일만 업로드 가능합니다.');
+      }
+
+      // 파일 크기 제한 (5MB)
+      const maxSize = 5 * 1024 * 1024; // 5MB
+      if (imageFile.size > maxSize) {
+        throw new Error('이미지 파일 크기는 5MB 이하여야 합니다.');
+      }
+
+      // Firebase Storage에 이미지 업로드
+      const timestamp = Date.now();
+      const fileName = `chat-images/${chatRoomId}/${timestamp}_${imageFile.name}`;
+      const storageRef = ref(storage, fileName);
+      
+      console.log('📤 이미지 업로드 시작:', fileName);
+      const uploadResult = await uploadBytes(storageRef, imageFile);
+      console.log('✅ 이미지 업로드 완료:', uploadResult.ref.fullPath);
+      
+      const imageUrl = await getDownloadURL(uploadResult.ref);
+      console.log('🔗 이미지 URL 생성:', imageUrl);
+
+      // 메시지에 이미지 URL 포함하여 전송
+      const messagesRef = collection(db, 'messages');
+      const newMessage = {
+        chatRoomId,
+        jobId,
+        senderId,
+        senderType,
+        senderName,
+        ...(senderProfileImage && { senderProfileImage }),
+        content: `[이미지] ${imageFile.name}`,
+        imageUrl,
+        messageType: 'image',
+        timestamp: serverTimestamp(),
+        isRead: false
+      };
+      
+      console.log('💬 이미지 메시지 생성:', {
+        chatRoomId,
+        jobId,
+        senderId,
+        content: newMessage.content,
+        imageUrl: newMessage.imageUrl,
+        messageType: newMessage.messageType
+      });
+      
+      await addDoc(messagesRef, newMessage);
+      
+      // 채팅방 업데이트
+      const chatRoomRef = doc(db, 'chatRooms', chatRoomId);
+      try {
+        const chatRoomDoc = await getDoc(chatRoomRef);
+        if (chatRoomDoc.exists()) {
+          await updateDoc(chatRoomRef, {
+            lastMessage: {
+              content: `[이미지] ${imageFile.name}`,
+              timestamp: serverTimestamp(),
+              senderName
+            },
+            updatedAt: serverTimestamp()
+          });
+        }
+      } catch (chatRoomError) {
+        console.warn('채팅방 업데이트 실패:', chatRoomError);
+      }
+
+      // 알림 전송
+      try {
+        const chatRoomDoc = await getDoc(chatRoomRef);
+        if (chatRoomDoc.exists()) {
+          const chatRoomData = chatRoomDoc.data();
+          const participants = chatRoomData.participants || [];
+          
+          for (const participant of participants) {
+            if (participant.id !== senderId) {
+              await NotificationService.createChatNotification(
+                jobId,
+                senderId,
+                senderName,
+                `[이미지] ${imageFile.name}`,
+                participant.id
+              );
+            }
+          }
+        }
+      } catch (notificationError) {
+        console.warn('채팅 알림 전송 실패:', notificationError);
+      }
+
+      console.log('이미지 메시지 전송 완료:', imageUrl);
+    } catch (error) {
+      console.error('이미지 메시지 전송 실패:', error);
+      throw error;
+    }
+  }
+
+  // 이미지 삭제
+  static async deleteImage(imageUrl: string): Promise<void> {
+    try {
+      const imageRef = ref(storage, imageUrl);
+      await deleteObject(imageRef);
+      console.log('이미지 삭제 완료:', imageUrl);
+    } catch (error) {
+      console.error('이미지 삭제 실패:', error);
+      throw error;
     }
   }
 }

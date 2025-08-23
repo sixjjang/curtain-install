@@ -399,6 +399,8 @@ export interface ChatMessage {
   content: string;
   timestamp: Date;
   isRead: boolean;
+  imageUrl?: string; // 이미지 URL (이미지 메시지인 경우)
+  messageType?: 'text' | 'image'; // 메시지 타입 (기본값: 'text')
 }
 
 // 채팅방 타입

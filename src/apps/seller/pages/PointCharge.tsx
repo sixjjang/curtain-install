@@ -59,6 +59,9 @@ const PointCharge: React.FC = () => {
   const [selectedAmount, setSelectedAmount] = useState<number | null>(null);
   const [paymentMethod, setPaymentMethod] = useState<'simulation' | 'toss_payments'>('simulation');
   const [tossPaymentMethod, setTossPaymentMethod] = useState('card');
+  
+  // 기간별 필터링 상태
+  const [selectedPeriod, setSelectedPeriod] = useState<'1month' | '3months' | '6months' | '1year' | 'all'>('all');
 
   // 충전 금액 옵션
   const chargeOptions = [
@@ -71,19 +74,19 @@ const PointCharge: React.FC = () => {
   ];
 
   // 데이터 로드
-  const loadData = async () => {
+  const loadData = async (period: '1month' | '3months' | '6months' | '1year' | 'all' = selectedPeriod) => {
     if (!user) return;
     
     try {
       setLoading(true);
       setError('');
       
-      // 포인트 잔액 조회
-      const balanceData = await PointService.getPointBalance(user.id, 'seller');
-      setBalance({ balance: balanceData });
+      // 포인트 잔액 상세 조회 (총충전, 총인출 포함)
+      const balanceDetails = await PointService.getPointBalanceDetails(user.id, 'seller');
+      setBalance(balanceDetails);
       
-      // 거래 내역 조회
-      const transactionData = await PointService.getTransactionHistory(user.id, 'seller');
+      // 거래 내역 조회 (기간별 필터링 적용)
+      const transactionData = await PointService.getTransactionHistory(user.id, 'seller', period);
       setTransactions(transactionData);
     } catch (error) {
       console.error('데이터 로드 실패:', error);
@@ -91,6 +94,12 @@ const PointCharge: React.FC = () => {
     } finally {
       setLoading(false);
     }
+  };
+
+  // 기간 변경 핸들러
+  const handlePeriodChange = async (newPeriod: '1month' | '3months' | '6months' | '1year' | 'all') => {
+    setSelectedPeriod(newPeriod);
+    await loadData(newPeriod);
   };
 
   useEffect(() => {
@@ -247,7 +256,7 @@ const PointCharge: React.FC = () => {
               </Typography>
               
               <Typography variant="body2" color="textSecondary" mb={2}>
-                ≈ {((balance?.balance || 0) / 1000).toLocaleString()}원
+                ≈ {(balance?.balance || 0).toLocaleString()}원
               </Typography>
               
               <Box display="flex" gap={1} flexWrap="wrap">
@@ -296,13 +305,36 @@ const PointCharge: React.FC = () => {
         <Grid item xs={12}>
           <Card>
             <CardContent>
-              <Typography variant="h6" gutterBottom>
-                거래 내역
-              </Typography>
+              <Box display="flex" justifyContent="space-between" alignItems="center" mb={2}>
+                <Box>
+                  <Typography variant="h6">
+                    거래 내역
+                  </Typography>
+                  <Typography variant="caption" color="textSecondary">
+                    총 {transactions.length}건
+                  </Typography>
+                </Box>
+                
+                {/* 기간별 필터링 */}
+                <FormControl size="small" sx={{ minWidth: 150 }}>
+                  <InputLabel>기간 선택</InputLabel>
+                  <Select
+                    value={selectedPeriod}
+                    onChange={(e) => handlePeriodChange(e.target.value as '1month' | '3months' | '6months' | '1year' | 'all')}
+                    label="기간 선택"
+                  >
+                    <MenuItem value="all">전체</MenuItem>
+                    <MenuItem value="1month">1개월</MenuItem>
+                    <MenuItem value="3months">3개월</MenuItem>
+                    <MenuItem value="6months">6개월</MenuItem>
+                    <MenuItem value="1year">1년</MenuItem>
+                  </Select>
+                </FormControl>
+              </Box>
               
               {transactions.length === 0 ? (
                 <Typography color="textSecondary" textAlign="center" py={4}>
-                  포인트 잔액이 없습니다.
+                  {selectedPeriod === 'all' ? '거래 내역이 없습니다.' : '선택한 기간에 거래 내역이 없습니다.'}
                 </Typography>
               ) : (
                 <List>

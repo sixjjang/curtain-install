@@ -21,7 +21,13 @@ import {
   Tab,
   IconButton,
   Paper,
-  ListItemSecondaryAction
+  ListItemSecondaryAction,
+  FormControl,
+  InputLabel,
+  Select,
+  MenuItem,
+  ToggleButtonGroup,
+  ToggleButton
 } from '@mui/material';
 import { 
   Add, 
@@ -105,6 +111,9 @@ const JobManagement: React.FC = () => {
   const [chatNotifications, setChatNotifications] = useState<{[jobId: string]: number}>({});
   const [pointBalance, setPointBalance] = useState(0);
   const [pickupInfoAutoFilled, setPickupInfoAutoFilled] = useState(false);
+  
+  // 기간별 필터링 상태
+  const [selectedPeriod, setSelectedPeriod] = useState<'1day' | '1week' | '1month' | '3months' | '6months' | '1year' | 'all'>('all');
 
   // 총 예산 계산 함수
   const calculateTotalBudget = (job: ConstructionJob): number => {
@@ -118,8 +127,8 @@ const JobManagement: React.FC = () => {
   const fetchPointBalance = async () => {
     if (user?.id) {
       try {
-        const balance = await PointService.getPointBalance(user.id, 'seller');
-        setPointBalance(balance);
+        const balanceDetails = await PointService.getPointBalanceDetails(user.id, 'seller');
+        setPointBalance(balanceDetails.balance);
       } catch (error) {
         console.error('포인트 잔액 조회 실패:', error);
       }
@@ -127,7 +136,7 @@ const JobManagement: React.FC = () => {
   };
 
   // 작업 목록 가져오기
-  const fetchJobs = async () => {
+  const fetchJobs = async (period: '1day' | '1week' | '1month' | '3months' | '6months' | '1year' | 'all' = selectedPeriod) => {
     try {
       setLoading(true);
       setError('');
@@ -138,8 +147,8 @@ const JobManagement: React.FC = () => {
         return;
       }
       
-      // 현재 로그인한 판매자의 작업만 가져오기
-      const sellerJobs = await JobService.getJobsBySeller(user.id);
+      // 현재 로그인한 판매자의 작업만 가져오기 (기간별 필터링 적용)
+      const sellerJobs = await JobService.getJobsBySeller(user.id, period);
       
       // 각 작업별 채팅 알림 개수 가져오기
       try {
@@ -195,6 +204,12 @@ const JobManagement: React.FC = () => {
       fetchPointBalance();
     }
   }, [user]);
+
+  // 기간 변경 핸들러
+  const handlePeriodChange = async (newPeriod: '1day' | '1week' | '1month' | '3months' | '6months' | '1year' | 'all') => {
+    setSelectedPeriod(newPeriod);
+    await fetchJobs(newPeriod);
+  };
 
   // 실시간 알림 구독
   useEffect(() => {
@@ -593,6 +608,34 @@ const JobManagement: React.FC = () => {
         </Tabs>
       </Box>
 
+      {/* 기간별 필터링 (목록 보기 탭에서만 표시) */}
+      {tabValue === 0 && (
+        <Box sx={{ mb: 3, display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
+          <Typography variant="h6">
+            시공건 목록 ({jobs.length}건)
+          </Typography>
+          
+          <ToggleButtonGroup
+            value={selectedPeriod}
+            exclusive
+            onChange={(e, newPeriod) => {
+              if (newPeriod !== null) {
+                handlePeriodChange(newPeriod);
+              }
+            }}
+            size="small"
+          >
+            <ToggleButton value="1day">1일</ToggleButton>
+            <ToggleButton value="1week">1주</ToggleButton>
+            <ToggleButton value="1month">1개월</ToggleButton>
+            <ToggleButton value="3months">분기</ToggleButton>
+            <ToggleButton value="6months">반기</ToggleButton>
+            <ToggleButton value="1year">1년</ToggleButton>
+            <ToggleButton value="all">전체</ToggleButton>
+          </ToggleButtonGroup>
+        </Box>
+      )}
+
       {loading ? (
         <Box display="flex" justifyContent="center" py={4}>
           <CircularProgress />
@@ -604,15 +647,28 @@ const JobManagement: React.FC = () => {
             {jobs.length === 0 ? (
               <Box textAlign="center" py={4}>
                 <Typography variant="h6" color="textSecondary" gutterBottom>
-                  등록된 작업이 없습니다
+                  {selectedPeriod === 'all' ? '등록된 작업이 없습니다' : '선택한 기간에 등록된 작업이 없습니다'}
                 </Typography>
                 <Typography variant="body2" color="textSecondary">
-                  "새 작업 등록" 버튼을 클릭하여 첫 번째 작업을 등록해보세요.
+                  {selectedPeriod === 'all' 
+                    ? '"새 작업 등록" 버튼을 클릭하여 첫 번째 작업을 등록해보세요.'
+                    : '다른 기간을 선택하거나 "전체"를 선택해보세요.'
+                  }
                 </Typography>
               </Box>
             ) : (
               <Grid container spacing={3}>
-                {jobs.map((job) => (
+                {jobs
+                  .sort((a, b) => {
+                    // scheduledDate가 없는 작업은 뒤로
+                    if (!a.scheduledDate && !b.scheduledDate) return 0;
+                    if (!a.scheduledDate) return 1;
+                    if (!b.scheduledDate) return -1;
+                    
+                    // scheduledDate가 가까운 순으로 정렬 (오름차순)
+                    return a.scheduledDate.getTime() - b.scheduledDate.getTime();
+                  })
+                  .map((job) => (
                   <Grid item xs={12} md={6} key={job.id}>
                     <Card>
                       <CardContent>
@@ -860,18 +916,18 @@ const JobManagement: React.FC = () => {
                             </Button>
                           )}
                           
-                          {/* 취소된 작업에 대한 수정/삭제 버튼 */}
+                          {/* 취소된 작업에 대한 재등록/삭제 버튼 */}
                           {job.status === 'cancelled' && (
                             <>
                               <Button 
-                                variant="outlined" 
+                                variant="contained" 
                                 size="small"
                                 color="primary"
                                 startIcon={<Edit />}
                                 onClick={() => handleEditJob(job)}
                                 sx={{ ml: 1 }}
                               >
-                                수정
+                                재등록
                               </Button>
                               <Button 
                                 variant="outlined" 

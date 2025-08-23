@@ -216,13 +216,25 @@ const JobList: React.FC = () => {
 
   // 작업 수락
   const handleAcceptJob = async (jobId: string) => {
+    if (!user?.id) return;
+    
     try {
-      await JobService.updateJobStatus(jobId, 'assigned', user?.id);
-      setSnackbar({
-        open: true,
-        message: '🎉 작업이 성공적으로 수락되었습니다!',
-        severity: 'success'
-      });
+      const result = await JobService.acceptJobSafely(jobId, user.id);
+      
+      if (result.success) {
+        setSnackbar({
+          open: true,
+          message: '🎉 작업이 성공적으로 수락되었습니다!',
+          severity: 'success'
+        });
+      } else {
+        setSnackbar({
+          open: true,
+          message: result.message,
+          severity: 'error'
+        });
+      }
+      
       await loadData();
     } catch (error: unknown) {
       console.error('작업 수락 실패:', error);
@@ -352,7 +364,7 @@ const JobList: React.FC = () => {
       case 'pending': return '대기중';
       case 'assigned': return '배정됨';
       case 'product_preparing': return '자재준비';
-      case 'product_ready': return '자재완료';
+              case 'product_ready': return '제품준비완료';
       case 'pickup_completed': return '픽업완료';
       case 'in_progress': return '시공중';
       case 'completed': return '완료';
@@ -791,7 +803,17 @@ const JobList: React.FC = () => {
             </Card>
           </Grid>
         ) : (
-          filteredJobs.map((job) => (
+          filteredJobs
+            .sort((a, b) => {
+              // scheduledDate가 없는 작업은 뒤로
+              if (!a.scheduledDate && !b.scheduledDate) return 0;
+              if (!a.scheduledDate) return 1;
+              if (!b.scheduledDate) return -1;
+              
+              // scheduledDate가 가까운 순으로 정렬 (오름차순)
+              return a.scheduledDate.getTime() - b.scheduledDate.getTime();
+            })
+            .map((job) => (
             <Grid item xs={12} sm={6} md={4} lg={3} key={job.id}>
               <Card sx={{ 
                 height: '100%',

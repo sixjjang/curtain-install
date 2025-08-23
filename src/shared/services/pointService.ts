@@ -45,6 +45,59 @@ export class PointService {
     }
   }
 
+  // 포인트 잔액 상세 조회 (총충전, 총인출 포함)
+  static async getPointBalanceDetails(userId: string, userRole: 'seller' | 'contractor'): Promise<{
+    balance: number;
+    totalCharged: number;
+    totalWithdrawn: number;
+  }> {
+    try {
+      // 1. 현재 잔액 조회
+      const balance = await this.getPointBalance(userId, userRole);
+      
+      // 2. 총충전 금액 계산
+      const chargedQuery = query(
+        collection(db, 'pointTransactions'),
+        where('userId', '==', userId),
+        where('userRole', '==', userRole),
+        where('type', '==', 'charge'),
+        where('status', '==', 'completed')
+      );
+      const chargedDocs = await getDocs(chargedQuery);
+      const totalCharged = chargedDocs.docs.reduce((sum, doc) => {
+        const data = doc.data();
+        return sum + (data.amount || 0);
+      }, 0);
+      
+      // 3. 총인출 금액 계산
+      const withdrawnQuery = query(
+        collection(db, 'pointTransactions'),
+        where('userId', '==', userId),
+        where('userRole', '==', userRole),
+        where('type', '==', 'withdraw'),
+        where('status', '==', 'completed')
+      );
+      const withdrawnDocs = await getDocs(withdrawnQuery);
+      const totalWithdrawn = withdrawnDocs.docs.reduce((sum, doc) => {
+        const data = doc.data();
+        return sum + (data.amount || 0);
+      }, 0);
+      
+      return {
+        balance,
+        totalCharged,
+        totalWithdrawn
+      };
+    } catch (error) {
+      console.error('포인트 잔액 상세 조회 실패:', error);
+      return {
+        balance: 0,
+        totalCharged: 0,
+        totalWithdrawn: 0
+      };
+    }
+  }
+
   // 포인트 잔액 검증 (시공의뢰 시)
   static async validatePointBalance(userId: string, requiredAmount: number): Promise<{
     isValid: boolean;
@@ -306,8 +359,12 @@ export class PointService {
     }
   }
 
-  // 거래 내역 조회
-  static async getTransactionHistory(userId: string, userRole: 'seller' | 'contractor'): Promise<PointTransaction[]> {
+  // 거래 내역 조회 (기간별 필터링 지원)
+  static async getTransactionHistory(
+    userId: string, 
+    userRole: 'seller' | 'contractor',
+    period?: '1month' | '3months' | '6months' | '1year' | 'all'
+  ): Promise<PointTransaction[]> {
     try {
       // TODO: Firebase Console에서 다음 인덱스를 생성하여 성능 최적화
       // 컬렉션: pointTransactions
@@ -315,6 +372,26 @@ export class PointService {
       // 
       // Firebase Console > Firestore Database > Indexes > Composite 탭에서 생성
       // 또는 오류 메시지의 링크를 클릭하여 자동 생성
+      
+      // 기간별 필터링을 위한 날짜 계산
+      let startDate: Date | null = null;
+      if (period && period !== 'all') {
+        const now = new Date();
+        switch (period) {
+          case '1month':
+            startDate = new Date(now.getFullYear(), now.getMonth() - 1, now.getDate());
+            break;
+          case '3months':
+            startDate = new Date(now.getFullYear(), now.getMonth() - 3, now.getDate());
+            break;
+          case '6months':
+            startDate = new Date(now.getFullYear(), now.getMonth() - 6, now.getDate());
+            break;
+          case '1year':
+            startDate = new Date(now.getFullYear() - 1, now.getMonth(), now.getDate());
+            break;
+        }
+      }
       
       // 인덱스 오류를 방지하기 위해 단순한 쿼리 사용
       const q = query(
@@ -327,8 +404,15 @@ export class PointService {
       
       querySnapshot.forEach((doc) => {
         const data = doc.data();
+        const createdAt = data.createdAt?.toDate() || new Date();
+        
         // 클라이언트에서 userRole 필터링
         if (data.userRole === userRole) {
+          // 기간별 필터링 적용
+          if (startDate && createdAt < startDate) {
+            return; // 이 기간에 포함되지 않는 거래는 제외
+          }
+          
           transactions.push({
             id: doc.id,
             userId: data.userId,
@@ -339,7 +423,7 @@ export class PointService {
             description: data.description,
             jobId: data.jobId,
             status: data.status,
-            createdAt: data.createdAt?.toDate() || new Date(),
+            createdAt,
             completedAt: data.completedAt?.toDate(),
             adminId: data.adminId,
             notes: data.notes

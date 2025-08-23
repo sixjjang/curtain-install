@@ -704,13 +704,22 @@ const JobDetail: React.FC = () => {
   };
 
   const handleAcceptJob = async (jobId: string) => {
+    if (!user?.id) return;
+    
     try {
-      await JobService.updateJobStatus(jobId, 'assigned');
-      // 작업 상태 업데이트 후 페이지 새로고침
-      const updatedJob = await JobService.getJobById(jobId);
-      setJob(updatedJob);
+      const result = await JobService.acceptJobSafely(jobId, user.id);
+      
+      if (result.success) {
+        // 작업 상태 업데이트 후 페이지 새로고침
+        const updatedJob = await JobService.getJobById(jobId);
+        setJob(updatedJob);
+      } else {
+        // 실패 메시지 표시
+        alert(result.message);
+      }
     } catch (error) {
       console.error('작업 수락 실패:', error);
+      alert('작업 수락에 실패했습니다.');
     }
   };
 

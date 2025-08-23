@@ -12,10 +12,12 @@ import {
   List,
   ListItem,
   ListItemAvatar,
+  ListItemText,
   LinearProgress,
   Alert,
   CircularProgress,
-  Skeleton
+  Skeleton,
+  Divider
 } from '@mui/material';
 import {
   Work,
@@ -25,7 +27,8 @@ import {
   LocationOn,
   Schedule,
   CheckCircle,
-  Pending
+  Pending,
+  Chat
 } from '@mui/icons-material';
 import { useAuth } from '../../../shared/contexts/AuthContext';
 import { ContractorInfo, ConstructionJob, Notification } from '../../../types';
@@ -49,6 +52,7 @@ const Dashboard: React.FC = () => {
   // 상태 관리
   const [scheduledJobs, setScheduledJobs] = useState<ConstructionJob[]>([]);
   const [notifications, setNotifications] = useState<Notification[]>([]);
+  const [chatNotifications, setChatNotifications] = useState<{[jobId: string]: number}>({});
   const [contractorStats, setContractorStats] = useState({
     totalJobs: 0,
     completedJobs: 0,
@@ -94,6 +98,18 @@ const Dashboard: React.FC = () => {
             .filter(notif => !notif.isRead)
             .slice(0, 10);
           setNotifications(unreadNotifications);
+          
+          // 채팅 알림 처리
+          const chatNotifMap: {[jobId: string]: number} = {};
+          notifs.forEach(notification => {
+            if (notification.type === 'info' && notification.actionUrl?.includes('/chat/')) {
+              const jobId = notification.actionUrl.split('/chat/')[1];
+              if (jobId && !notification.isRead) {
+                chatNotifMap[jobId] = (chatNotifMap[jobId] || 0) + 1;
+              }
+            }
+          });
+          setChatNotifications(chatNotifMap);
         }
 
         // 시공자 통계 데이터 처리
@@ -110,6 +126,28 @@ const Dashboard: React.FC = () => {
     };
 
     loadDashboardData();
+  }, [user?.id]);
+
+  // 실시간 알림 구독
+  useEffect(() => {
+    if (user?.id) {
+      const unsubscribe = NotificationService.subscribeToNotifications(user.id, (notifications) => {
+        const chatNotifMap: {[jobId: string]: number} = {};
+        
+        notifications.forEach(notification => {
+          if (notification.type === 'info' && notification.actionUrl?.includes('/chat/')) {
+            const jobId = notification.actionUrl.split('/chat/')[1];
+            if (jobId && !notification.isRead) {
+              chatNotifMap[jobId] = (chatNotifMap[jobId] || 0) + 1;
+            }
+          }
+        });
+        
+        setChatNotifications(chatNotifMap);
+      });
+      
+      return unsubscribe;
+    }
   }, [user?.id]);
 
   const getStatusColor = (status: string) => {
@@ -156,6 +194,9 @@ const Dashboard: React.FC = () => {
   };
 
   const todayGoals = calculateTodayGoals();
+  
+  // 채팅 알림 총 개수 계산
+  const totalChatNotifications = Object.values(chatNotifications).reduce((sum, count) => sum + count, 0);
 
   // 동적 인사말 생성 함수
   const generateGreeting = () => {
@@ -393,6 +434,27 @@ const Dashboard: React.FC = () => {
           </Card>
         </Grid>
 
+        {/* 채팅 알림 카드 */}
+        <Grid item xs={12} sm={6} md={3}>
+          <Card>
+            <CardContent>
+              <Box display="flex" alignItems="center">
+                <Avatar sx={{ bgcolor: totalChatNotifications > 0 ? 'error.main' : 'grey.500', mr: 2 }}>
+                  <Chat />
+                </Avatar>
+                <Box>
+                  <Typography variant="h4" sx={{ color: totalChatNotifications > 0 ? 'error.main' : 'inherit' }}>
+                    {totalChatNotifications}
+                  </Typography>
+                  <Typography variant="body2" color="textSecondary">
+                    채팅 알림
+                  </Typography>
+                </Box>
+              </Box>
+            </CardContent>
+          </Card>
+        </Grid>
+
         {/* 최근 작업 목록 */}
         <Grid item xs={12} md={8}>
           <Card>
@@ -482,6 +544,98 @@ const Dashboard: React.FC = () => {
             </CardContent>
           </Card>
         </Grid>
+
+        {/* 채팅 알림이 있는 작업 목록 */}
+        {totalChatNotifications > 0 && (
+          <Grid item xs={12}>
+            <Card>
+              <CardContent>
+                <Typography variant="h6" gutterBottom sx={{ display: 'flex', alignItems: 'center', gap: 1 }}>
+                  <Chat color="error" />
+                  채팅 알림이 있는 작업
+                </Typography>
+                <List>
+                  {scheduledJobs
+                    .filter(job => chatNotifications[job.id] > 0)
+                    .map((job, index) => (
+                      <React.Fragment key={job.id}>
+                        <ListItem 
+                          sx={{ 
+                            cursor: 'pointer',
+                            '&:hover': { bgcolor: 'action.hover' }
+                          }}
+                          onClick={async () => {
+                            // 해당 작업의 채팅 알림을 읽음 처리
+                            if (chatNotifications[job.id] > 0) {
+                              try {
+                                const notifications = await NotificationService.getNotifications(user!.id);
+                                const chatNotificationsForJob = notifications.filter(
+                                  notification => 
+                                    notification.type === 'info' && 
+                                    notification.actionUrl?.includes(`/chat/${job.id}`) &&
+                                    !notification.isRead
+                                );
+                                
+                                await Promise.all(
+                                  chatNotificationsForJob.map(notification => 
+                                    NotificationService.markAsRead(notification.id)
+                                  )
+                                );
+                              } catch (error) {
+                                console.error('채팅 알림 읽음 처리 실패:', error);
+                              }
+                            }
+                            navigate(`/contractor/chat/${job.id}`);
+                          }}
+                        >
+                          <ListItemAvatar>
+                            <Avatar sx={{ bgcolor: 'error.main' }}>
+                              <Chat />
+                            </Avatar>
+                          </ListItemAvatar>
+                          <ListItemText
+                            primary={
+                              <Box display="flex" alignItems="center" gap={1}>
+                                <Typography variant="subtitle1">
+                                  {job.title}
+                                </Typography>
+                                <Chip 
+                                  label={`💬 ${chatNotifications[job.id]}`}
+                                  color="error"
+                                  size="small"
+                                />
+                                <Chip 
+                                  label={getStatusText(job.status)} 
+                                  color={getStatusColor(job.status)} 
+                                  size="small"
+                                />
+                              </Box>
+                            }
+                            secondary={
+                              <>
+                                <Typography variant="body2" color="textSecondary">
+                                  {job.address}
+                                </Typography>
+                                {job.scheduledDate && (
+                                  <Typography variant="body2" color="textSecondary">
+                                    {new Date(job.scheduledDate).toLocaleDateString('ko-KR')} {new Date(job.scheduledDate).toLocaleTimeString('ko-KR', {
+                                      hour: '2-digit',
+                                      minute: '2-digit'
+                                    })}
+                                  </Typography>
+                                )}
+                              </>
+                            }
+                          />
+                        </ListItem>
+                        {index < scheduledJobs.filter(job => chatNotifications[job.id] > 0).length - 1 && <Divider />}
+                      </React.Fragment>
+                    ))}
+                </List>
+              </CardContent>
+            </Card>
+          </Grid>
+        )}
 
         {/* 빠른 액션 */}
         <Grid item xs={12} md={4}>

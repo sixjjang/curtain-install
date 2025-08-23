@@ -68,7 +68,7 @@ const CalendarView: React.FC = () => {
       case 'pending': return '대기중';
       case 'assigned': return '배정됨';
       case 'product_preparing': return '자재준비';
-      case 'product_ready': return '자재완료';
+              case 'product_ready': return '제품준비완료';
       case 'pickup_completed': return '픽업완료';
       case 'in_progress': return '시공중';
       case 'completed': return '완료';

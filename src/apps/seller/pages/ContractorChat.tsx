@@ -289,7 +289,7 @@ const ContractorChat: React.FC = () => {
       case 'pending': return '대기중';
       case 'assigned': return '배정됨';
       case 'product_preparing': return '자재준비';
-      case 'product_ready': return '자재완료';
+      case 'product_ready': return '제품준비완료';
       case 'pickup_completed': return '픽업완료';
       case 'in_progress': return '시공중';
       case 'completed': return '완료';
@@ -649,7 +649,7 @@ const ContractorChat: React.FC = () => {
                     <Person color="action" />
                     고객 정보
                   </Typography>
-                  <Box sx={{ ml: 3, p: 2, bgcolor: 'grey.50', borderRadius: 1 }}>
+                  <Box sx={{ ml: 3, p: 2, bgcolor: 'background.paper', border: 1, borderColor: 'divider', borderRadius: 1 }}>
                     <Typography variant="body2">
                       이름: {customerInfo.name}
                     </Typography>
@@ -672,7 +672,7 @@ const ContractorChat: React.FC = () => {
                     <Person color="action" />
                     시공자 정보
                   </Typography>
-                  <Box sx={{ ml: 3, p: 2, bgcolor: 'grey.50', borderRadius: 1 }}>
+                  <Box sx={{ ml: 3, p: 2, bgcolor: 'background.paper', border: 1, borderColor: 'divider', borderRadius: 1 }}>
                     <Typography variant="body2">
                       이름: {contractorInfo.name || contractorInfo.email}
                     </Typography>
@@ -696,22 +696,59 @@ const ContractorChat: React.FC = () => {
                     품목 및 단가
                   </Typography>
                   <Box sx={{ ml: 3 }}>
-                    {detailJob.items.map((item, index) => (
-                      <Box key={index} sx={{ p: 2, bgcolor: 'grey.50', borderRadius: 1, mb: 1 }}>
-                        <Typography variant="body2" fontWeight="bold">
-                          {item.name}
-                        </Typography>
-                        <Typography variant="body2" color="textSecondary">
-                          수량: {item.quantity}개
-                        </Typography>
-                        <Typography variant="body2" color="textSecondary">
-                          단가: {item.unitPrice?.toLocaleString()}원
-                        </Typography>
-                        <Typography variant="body2" color="primary" fontWeight="bold">
-                          소계: {item.totalPrice?.toLocaleString()}원
-                        </Typography>
+                    <Paper 
+                      variant="outlined" 
+                      sx={{ 
+                        bgcolor: 'background.paper',
+                        borderColor: 'divider'
+                      }}
+                    >
+                      <Box sx={{ 
+                        display: 'grid', 
+                        gridTemplateColumns: '1fr auto auto auto',
+                        gap: 1,
+                        p: 1.5,
+                        borderBottom: 1,
+                        borderColor: 'divider',
+                        bgcolor: 'action.hover',
+                        fontWeight: 'bold',
+                        fontSize: '0.875rem'
+                      }}>
+                        <Typography variant="body2">품목</Typography>
+                        <Typography variant="body2" textAlign="right">수량</Typography>
+                        <Typography variant="body2" textAlign="right">단가</Typography>
+                        <Typography variant="body2" textAlign="right">소계</Typography>
                       </Box>
-                    ))}
+                      {detailJob.items.map((item, index) => (
+                        <Box 
+                          key={index} 
+                          sx={{ 
+                            display: 'grid', 
+                            gridTemplateColumns: '1fr auto auto auto',
+                            gap: 1,
+                            p: 1.5,
+                                                         borderBottom: index < (detailJob.items?.length || 0) - 1 ? 1 : 0,
+                            borderColor: 'divider',
+                            '&:hover': {
+                              bgcolor: 'action.hover'
+                            }
+                          }}
+                        >
+                          <Typography variant="body2" sx={{ fontWeight: 'medium' }}>
+                            {item.name}
+                          </Typography>
+                          <Typography variant="body2" textAlign="right" color="textSecondary">
+                            {item.quantity}개
+                          </Typography>
+                          <Typography variant="body2" textAlign="right" color="textSecondary">
+                            {item.unitPrice?.toLocaleString()}원
+                          </Typography>
+                          <Typography variant="body2" textAlign="right" color="primary" fontWeight="bold">
+                            {item.totalPrice?.toLocaleString()}원
+                          </Typography>
+                        </Box>
+                      ))}
+                    </Paper>
                   </Box>
                 </Box>
               )}
@@ -723,7 +760,7 @@ const ContractorChat: React.FC = () => {
                     <LocalShipping color="action" />
                     준비일시
                   </Typography>
-                  <Box sx={{ ml: 3, p: 2, bgcolor: 'grey.50', borderRadius: 1 }}>
+                  <Box sx={{ ml: 3, p: 2, bgcolor: 'background.paper', border: 1, borderColor: 'divider', borderRadius: 1 }}>
                     <Typography variant="body2">
                       {formatDateTime(new Date(detailJob.pickupInfo.scheduledDateTime))}
                     </Typography>

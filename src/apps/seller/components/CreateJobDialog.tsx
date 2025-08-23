@@ -145,8 +145,12 @@ const CreateJobDialog: React.FC<CreateJobDialogProps> = ({
         });
         
         // 품목 설정
+        console.log('🔍 작업 수정 - initialJobData 품목:', initialJobData.items);
         if (initialJobData.items && initialJobData.items.length > 0) {
+          console.log('🔍 작업 수정 - 품목 설정:', initialJobData.items);
           setItems(initialJobData.items);
+        } else {
+          console.log('🔍 작업 수정 - 품목이 없거나 비어있음');
         }
         
         // 고객 정보 설정 (있는 경우)
@@ -347,8 +351,20 @@ const CreateJobDialog: React.FC<CreateJobDialogProps> = ({
         // 기본출장비 가져오기
         const travelFee = await PricingService.getTravelFee();
         
-        // 엑셀 데이터가 없을 때만 기본출장비를 자동으로 추가
-        if (!excelJobData) {
+        console.log('🔍 품목 목록 가져오기 - 조건 확인:', { 
+          excelJobData: !!excelJobData, 
+          initialJobData: !!initialJobData,
+          initialJobDataItems: initialJobData?.items 
+        });
+        
+        // initialJobData가 있으면 품목을 건드리지 않음 (이미 위에서 설정됨)
+        if (initialJobData?.items && initialJobData.items.length > 0) {
+          console.log('🔍 initialJobData 품목 유지:', initialJobData.items);
+          // initialJobData의 품목을 유지 (이미 위에서 설정됨)
+        }
+        // 엑셀 데이터가 없고 initialJobData도 없을 때만 기본출장비를 자동으로 추가
+        else if (!excelJobData && !initialJobData) {
+          console.log('🔍 기본출장비 자동 추가');
           const travelFeeItem: JobItem = {
             name: '기본출장비',
             quantity: 1,
@@ -368,7 +384,7 @@ const CreateJobDialog: React.FC<CreateJobDialogProps> = ({
     };
 
     fetchData();
-  }, [open, excelJobData]); // open과 excelJobData가 변경될 때마다 실행
+  }, [open, excelJobData, initialJobData]); // open, excelJobData, initialJobData가 변경될 때마다 실행
 
   // 30분 단위 시간 옵션 생성 (06:00 ~ 23:30)
   const generateTimeOptions = () => {
@@ -959,6 +975,8 @@ const CreateJobDialog: React.FC<CreateJobDialogProps> = ({
 
       if (isEditMode && initialJobData) {
         // 기존 작업 업데이트
+        const wasCancelled = initialJobData.status === 'cancelled';
+        
         await JobService.updateJob(initialJobData.id, {
           title: jobData.title,
           description: jobData.description,
@@ -970,7 +988,21 @@ const CreateJobDialog: React.FC<CreateJobDialogProps> = ({
           status: 'pending' // 취소된 작업을 다시 대기중 상태로 변경
         });
         
-        alert('작업이 성공적으로 수정되었습니다.');
+        // 취소된 작업을 재등록한 경우 포인트 차감 처리
+        if (wasCancelled) {
+          try {
+            // 에스크로 포인트 차감
+            await PointService.escrowPoints(initialJobData.id, user.id, totalBudget);
+            console.log(`✅ 취소된 작업 재등록으로 인한 포인트 차감 완료: ${totalBudget}포인트`);
+          } catch (escrowError) {
+            console.error('❌ 포인트 차감 실패:', escrowError);
+            // 포인트 차감 실패 시 작업 상태를 다시 취소로 되돌림
+            await JobService.updateJobStatus(initialJobData.id, 'cancelled');
+            throw new Error(`포인트 차감에 실패했습니다: ${escrowError instanceof Error ? escrowError.message : '알 수 없는 오류'}`);
+          }
+        }
+        
+        alert(wasCancelled ? '작업이 성공적으로 재등록되었습니다.' : '작업이 성공적으로 수정되었습니다.');
         // 임시저장 데이터 삭제
         clearTempData();
       } else {
@@ -1304,7 +1336,7 @@ const CreateJobDialog: React.FC<CreateJobDialogProps> = ({
       <DialogTitle>
         <Box display="flex" justifyContent="space-between" alignItems="center">
           <Typography variant="h6">
-            {initialJobData ? '작업 수정' : '새 작업 등록'}
+            {initialJobData ? (initialJobData.status === 'cancelled' ? '작업 재등록' : '작업 수정') : '새 작업 등록'}
           </Typography>
           <TextField
             size="small"
@@ -1326,6 +1358,18 @@ const CreateJobDialog: React.FC<CreateJobDialogProps> = ({
         {successMessage && (
           <Alert severity="success" sx={{ mb: 2 }}>
             {successMessage}
+          </Alert>
+        )}
+
+        {/* 취소된 작업 재등록 시 포인트 차감 안내 */}
+        {initialJobData?.status === 'cancelled' && (
+          <Alert severity="warning" sx={{ mb: 2 }}>
+            <Typography variant="body2" fontWeight="bold">
+              ⚠️ 작업 재등록 안내
+            </Typography>
+            <Typography variant="body2">
+              취소된 작업을 재등록하면 해당 작업의 예산 금액만큼 포인트가 차감됩니다.
+            </Typography>
           </Alert>
         )}
 
@@ -2019,7 +2063,7 @@ const CreateJobDialog: React.FC<CreateJobDialogProps> = ({
             }
           }}
         >
-          {loading ? (initialJobData ? '수정 중...' : '등록 중...') : (initialJobData ? '작업 수정' : '작업 등록')}
+                      {loading ? (initialJobData ? (initialJobData.status === 'cancelled' ? '재등록 중...' : '수정 중...') : '등록 중...') : (initialJobData ? (initialJobData.status === 'cancelled' ? '작업 재등록' : '작업 수정') : '작업 등록')}
         </Button>
       </DialogActions>
     </Dialog>

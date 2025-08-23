@@ -28,7 +28,9 @@ import {
   ListItemText,
   FormControlLabel,
   Checkbox,
-  Paper
+  Paper,
+  ToggleButtonGroup,
+  ToggleButton
 } from '@mui/material';
 import { 
   Search, 
@@ -70,6 +72,9 @@ const MyJobs: React.FC = () => {
   });
   const [viewMode, setViewMode] = useState<'list'>('list');
   
+  // 기간별 필터링 상태
+  const [selectedPeriod, setSelectedPeriod] = useState<'1day' | '1week' | '1month' | '3months' | '6months' | '1year' | 'all'>('all');
+  
   // 시공완료 다이얼로그 관련 상태
   const [completionDialogOpen, setCompletionDialogOpen] = useState(false);
   const [activeStep, setActiveStep] = useState(0);
@@ -96,23 +101,18 @@ const MyJobs: React.FC = () => {
           return;
         }
 
-        const allJobs = await JobService.getAllJobs();
+        // 시공자별 작업 가져오기 (기간별 필터링 적용)
+        const myJobs = await JobService.getJobsByContractor(user.id, selectedPeriod);
         
-        // 현재 로그인한 시공자의 작업만 필터링
-        const myJobs = allJobs.filter(job => {
-          // 상태 필터링
-          const statusMatch = ['assigned', 'product_preparing', 'product_ready', 'pickup_completed', 'in_progress', 'completed'].includes(job.status);
-          
-          // 시공자 ID 필터링
-          const contractorMatch = job.contractorId === user.id;
-          
-          return statusMatch && contractorMatch;
-        });
+        // 상태 필터링 (배정된 작업들만)
+        const filteredJobs = myJobs.filter(job => 
+          ['assigned', 'product_preparing', 'product_ready', 'pickup_completed', 'in_progress', 'completed'].includes(job.status)
+        );
         
-        console.log(`전체 작업: ${allJobs.length}개, 내 작업: ${myJobs.length}개`);
-        console.log('내 작업들:', myJobs.map(job => ({ id: job.id, title: job.title, contractorId: job.contractorId, status: job.status })));
+        console.log(`전체 작업: ${myJobs.length}개, 필터링된 작업: ${filteredJobs.length}개`);
+        console.log('내 작업들:', filteredJobs.map(job => ({ id: job.id, title: job.title, contractorId: job.contractorId, status: job.status })));
         
-        setJobs(myJobs);
+        setJobs(filteredJobs);
       } catch (error) {
         console.error('나의 작업 목록 가져오기 실패:', error);
       } finally {
@@ -121,7 +121,12 @@ const MyJobs: React.FC = () => {
     };
 
     fetchMyJobs();
-  }, [user?.id]);
+  }, [user?.id, selectedPeriod]);
+
+  // 기간 변경 핸들러
+  const handlePeriodChange = async (newPeriod: '1day' | '1week' | '1month' | '3months' | '6months' | '1year' | 'all') => {
+    setSelectedPeriod(newPeriod);
+  };
 
   const getStatusColor = (status: string) => {
     switch (status) {
@@ -586,11 +591,33 @@ const MyJobs: React.FC = () => {
     <Box>
       <Box display="flex" justifyContent="space-between" alignItems="center" mb={3}>
         <Box>
+          <Typography variant="h5" gutterBottom>
+            나의 작업 ({jobs.length}건)
+          </Typography>
           <Typography variant="body2" color="textSecondary">
             📋 배정된 작업: 모든 진행 중인 작업을 한눈에 확인할 수 있습니다
           </Typography>
         </Box>
-
+        
+        {/* 기간별 필터링 */}
+        <ToggleButtonGroup
+          value={selectedPeriod}
+          exclusive
+          onChange={(e, newPeriod) => {
+            if (newPeriod !== null) {
+              handlePeriodChange(newPeriod);
+            }
+          }}
+          size="small"
+        >
+          <ToggleButton value="1day">1일</ToggleButton>
+          <ToggleButton value="1week">1주</ToggleButton>
+          <ToggleButton value="1month">1개월</ToggleButton>
+          <ToggleButton value="3months">분기</ToggleButton>
+          <ToggleButton value="6months">반기</ToggleButton>
+          <ToggleButton value="1year">1년</ToggleButton>
+          <ToggleButton value="all">전체</ToggleButton>
+        </ToggleButtonGroup>
       </Box>
 
 
@@ -669,7 +696,17 @@ const MyJobs: React.FC = () => {
           </Box>
 
           <Grid container spacing={2}>
-            {filteredJobs.map((job) => (
+            {filteredJobs
+              .sort((a, b) => {
+                // scheduledDate가 없는 작업은 뒤로
+                if (!a.scheduledDate && !b.scheduledDate) return 0;
+                if (!a.scheduledDate) return 1;
+                if (!b.scheduledDate) return -1;
+                
+                // scheduledDate가 가까운 순으로 정렬 (오름차순)
+                return a.scheduledDate.getTime() - b.scheduledDate.getTime();
+              })
+              .map((job) => (
               <Grid item xs={12} md={6} lg={4} key={job.id}>
                 <Card>
                   <CardContent>
@@ -853,7 +890,13 @@ const MyJobs: React.FC = () => {
           {filteredJobs.length === 0 && (
             <Box textAlign="center" py={4}>
               <Typography variant="h6" color="textSecondary">
-                조건에 맞는 작업이 없습니다.
+                {selectedPeriod === 'all' ? '배정된 작업이 없습니다.' : '선택한 기간에 배정된 작업이 없습니다.'}
+              </Typography>
+              <Typography variant="body2" color="textSecondary" mt={1}>
+                {selectedPeriod === 'all' 
+                  ? '새로운 작업이 배정되면 여기에 표시됩니다.'
+                  : '다른 기간을 선택하거나 "전체"를 선택해보세요.'
+                }
               </Typography>
             </Box>
           )}

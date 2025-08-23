@@ -1,17 +1,15 @@
 import React from 'react';
-import { Routes, Route, useLocation } from 'react-router-dom';
+import { useLocation } from 'react-router-dom';
 import { Box } from '@mui/material';
 import { useAuth } from '../../shared/contexts/AuthContext';
 import SellerLayout from './components/SellerLayout';
 import Dashboard from './pages/Dashboard';
 import JobManagement from './pages/JobManagement';
-import ContractorList from './pages/ContractorList';
 import PointCharge from './pages/PointCharge';
 import PaymentSimulation from './pages/PaymentSimulation';
 import PaymentComplete from './pages/PaymentComplete';
 import PaymentFail from './pages/PaymentFail';
 import Profile from './pages/Profile';
-import Chat from './pages/Chat';
 import ContractorChat from './pages/ContractorChat';
 import Notifications from './pages/Notifications';
 
@@ -69,9 +67,7 @@ const SellerApp: React.FC = () => {
     if (location.pathname === '/seller/jobs') {
       return canAccessFeature('/jobs') ? <JobManagement /> : <Profile />;
     }
-    if (location.pathname === '/seller/contractors') {
-      return canAccessFeature('/contractors') ? <ContractorList /> : <Profile />;
-    }
+
     if (location.pathname === '/seller/points') {
       return canAccessFeature('/points') ? <PointCharge /> : <Profile />;
     }

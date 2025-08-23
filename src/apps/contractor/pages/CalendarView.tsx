@@ -86,9 +86,17 @@ const CalendarView: React.FC = () => {
 
   // 작업 수락
   const handleAcceptJob = async (jobId: string) => {
+    if (!user?.id) return;
+    
     try {
-      await JobService.updateJobStatus(jobId, 'assigned', user?.id);
-      setSuccess('작업을 수락했습니다.');
+      const result = await JobService.acceptJobSafely(jobId, user.id);
+      
+      if (result.success) {
+        setSuccess('작업을 수락했습니다.');
+      } else {
+        setError(result.message);
+      }
+      
       await loadData();
     } catch (error: unknown) {
       console.error('작업 수락 실패:', error);
@@ -102,7 +110,7 @@ const CalendarView: React.FC = () => {
       case 'pending': return '대기중';
       case 'assigned': return '배정됨';
       case 'product_preparing': return '자재준비';
-      case 'product_ready': return '자재완료';
+              case 'product_ready': return '제품준비완료';
       case 'pickup_completed': return '픽업완료';
       case 'in_progress': return '시공중';
       case 'completed': return '완료';
@@ -184,7 +192,17 @@ const CalendarView: React.FC = () => {
                 </Typography>
               ) : (
                 <List>
-                  {pendingJobs.map((job, index) => (
+                  {pendingJobs
+                    .sort((a, b) => {
+                      // scheduledDate가 없는 작업은 뒤로
+                      if (!a.scheduledDate && !b.scheduledDate) return 0;
+                      if (!a.scheduledDate) return 1;
+                      if (!b.scheduledDate) return -1;
+                      
+                      // scheduledDate가 가까운 순으로 정렬 (오름차순)
+                      return a.scheduledDate.getTime() - b.scheduledDate.getTime();
+                    })
+                    .map((job, index) => (
                     <React.Fragment key={job.id}>
                       <ListItem 
                         sx={{ 
@@ -262,7 +280,17 @@ const CalendarView: React.FC = () => {
                 </Typography>
               ) : (
                 <List>
-                  {myJobs.map((job, index) => (
+                  {myJobs
+                    .sort((a, b) => {
+                      // scheduledDate가 없는 작업은 뒤로
+                      if (!a.scheduledDate && !b.scheduledDate) return 0;
+                      if (!a.scheduledDate) return 1;
+                      if (!b.scheduledDate) return -1;
+                      
+                      // scheduledDate가 가까운 순으로 정렬 (오름차순)
+                      return a.scheduledDate.getTime() - b.scheduledDate.getTime();
+                    })
+                    .map((job, index) => (
                     <React.Fragment key={job.id}>
                       <ListItem 
                         sx={{ 

@@ -1,4 +1,4 @@
-import React, { useState, useEffect } from 'react';
+import React, { useState, useEffect, useRef } from 'react';
 import { useParams, useNavigate } from 'react-router-dom';
 import {
   Box,
@@ -19,9 +19,25 @@ import {
   IconButton,
   useTheme,
   useMediaQuery,
-  Skeleton
+  Skeleton,
+  Dialog,
+  DialogTitle,
+  DialogContent,
+  DialogActions
 } from '@mui/material';
-import { Send, Chat as ChatIcon, List as ListIcon, ArrowBack, VisibilityOff, Visibility as VisibilityOn, LocationOn, AttachMoney, Work } from '@mui/icons-material';
+import { 
+  Send, 
+  Chat as ChatIcon, 
+  List as ListIcon, 
+  ArrowBack, 
+  VisibilityOff, 
+  Visibility as VisibilityOn, 
+  LocationOn, 
+  AttachMoney, 
+  Work,
+  Image as ImageIcon,
+  Close as CloseIcon
+} from '@mui/icons-material';
 import { useAuth } from '../../../shared/contexts/AuthContext';
 import { ChatService } from '../../../shared/services/chatService';
 import { JobService } from '../../../shared/services/jobService';
@@ -69,6 +85,14 @@ const Chat: React.FC = () => {
   const [error, setError] = useState('');
   const [showChat, setShowChat] = useState(false); // 모바일에서 채팅창 표시 여부
   const [hideCompleted, setHideCompleted] = useState(true); // 완료된 작업 숨김 여부
+  
+  // 이미지 전송 관련 상태
+  const [imageDialogOpen, setImageDialogOpen] = useState(false);
+  const [selectedImage, setSelectedImage] = useState<File | null>(null);
+  const [imagePreview, setImagePreview] = useState<string | null>(null);
+  const [uploadingImage, setUploadingImage] = useState(false);
+  const [imageError, setImageError] = useState<string | null>(null);
+  const fileInputRef = useRef<HTMLInputElement>(null);
 
   useEffect(() => {
     loadMyJobs();
@@ -174,7 +198,7 @@ const Chat: React.FC = () => {
       case 'pending': return '대기중';
       case 'assigned': return '배정됨';
       case 'product_preparing': return '자재준비';
-      case 'product_ready': return '자재완료';
+              case 'product_ready': return '제품준비완료';
       case 'pickup_completed': return '픽업완료';
       case 'in_progress': return '시공중';
       case 'completed': return '완료';
@@ -201,6 +225,88 @@ const Chat: React.FC = () => {
 
   const handleBackToList = () => {
     setShowChat(false);
+  };
+
+  // 이미지 선택 처리
+  const handleImageSelect = (event: React.ChangeEvent<HTMLInputElement>) => {
+    const file = event.target.files?.[0];
+    if (file) {
+      // 파일 타입 검증
+      if (!file.type.startsWith('image/')) {
+        setImageError('이미지 파일만 선택 가능합니다.');
+        return;
+      }
+
+      // 파일 크기 검증 (5MB)
+      if (file.size > 5 * 1024 * 1024) {
+        setImageError('이미지 파일 크기는 5MB 이하여야 합니다.');
+        return;
+      }
+
+      setSelectedImage(file);
+      setImageError(null);
+
+      // 이미지 미리보기 생성
+      const reader = new FileReader();
+      reader.onload = (e) => {
+        setImagePreview(e.target?.result as string);
+      };
+      reader.readAsDataURL(file);
+      setImageDialogOpen(true);
+    }
+  };
+
+  // 이미지 전송 처리
+  const handleSendImage = async () => {
+    if (!selectedJob || !selectedImage || !user?.id) return;
+
+    try {
+      setUploadingImage(true);
+      setImageError(null);
+
+      console.log('📤 이미지 전송 시작:', {
+        jobId: selectedJob.id,
+        fileName: selectedImage.name,
+        fileSize: selectedImage.size,
+        fileType: selectedImage.type
+      });
+
+      await ChatService.sendImageMessage(
+        selectedJob.id,
+        selectedJob.id,
+        user.id,
+        'contractor',
+        user.name || '시공자',
+        selectedImage,
+        user.profileImage || ''
+      );
+
+      console.log('✅ 이미지 전송 완료');
+
+      // 성공 시 상태 초기화
+      setSelectedImage(null);
+      setImagePreview(null);
+      setImageDialogOpen(false);
+      if (fileInputRef.current) {
+        fileInputRef.current.value = '';
+      }
+    } catch (error) {
+      console.error('❌ 이미지 전송 실패:', error);
+      setImageError(error instanceof Error ? error.message : '이미지 전송에 실패했습니다.');
+    } finally {
+      setUploadingImage(false);
+    }
+  };
+
+  // 이미지 다이얼로그 닫기
+  const handleCloseImageDialog = () => {
+    setImageDialogOpen(false);
+    setSelectedImage(null);
+    setImagePreview(null);
+    setImageError(null);
+    if (fileInputRef.current) {
+      fileInputRef.current.value = '';
+    }
   };
 
   // 완료된 작업 필터링
@@ -332,14 +438,45 @@ const Chat: React.FC = () => {
                   sx={{
                     p: 1.5,
                     maxWidth: '70%',
-                    backgroundColor: message.senderId === user?.id ? 'primary.main' : 'white',
+                    backgroundColor: message.senderId === user?.id ? 'primary.main' : 'background.paper',
                     color: message.senderId === user?.id ? 'white' : 'text.primary',
-                    boxShadow: 1
+                    boxShadow: 1,
+                    border: message.senderId !== user?.id ? 1 : 0,
+                    borderColor: message.senderId !== user?.id ? 'divider' : 'transparent'
                   }}
                 >
-                  <Typography variant="body2" sx={{ wordBreak: 'break-word' }}>
-                    {message.content}
-                  </Typography>
+                  {message.messageType === 'image' ? (
+                    <Box>
+                      {message.imageUrl ? (
+                        <img 
+                          src={message.imageUrl} 
+                          alt="채팅 이미지"
+                          style={{
+                            maxWidth: '200px',
+                            maxHeight: '200px',
+                            borderRadius: '8px',
+                            cursor: 'pointer'
+                          }}
+                          onClick={() => window.open(message.imageUrl, '_blank')}
+                          onError={(e) => {
+                            console.error('이미지 로딩 실패:', message.imageUrl);
+                            e.currentTarget.style.display = 'none';
+                          }}
+                        />
+                      ) : (
+                        <Typography variant="body2" color="error">
+                          이미지를 불러올 수 없습니다.
+                        </Typography>
+                      )}
+                      <Typography variant="caption" color="textSecondary" display="block" mt={0.5}>
+                        {message.content}
+                      </Typography>
+                    </Box>
+                  ) : (
+                    <Typography variant="body2" sx={{ wordBreak: 'break-word' }}>
+                      {message.content}
+                    </Typography>
+                  )}
                   <Typography 
                     variant="caption" 
                     sx={{ 
@@ -383,6 +520,13 @@ const Chat: React.FC = () => {
               onKeyPress={handleKeyPress}
               size="small"
             />
+            <IconButton
+              onClick={() => fileInputRef.current?.click()}
+              sx={{ minWidth: 'auto' }}
+              title="이미지 전송"
+            >
+              <ImageIcon />
+            </IconButton>
             <Button
               variant="contained"
               onClick={handleSendMessage}
@@ -392,6 +536,15 @@ const Chat: React.FC = () => {
               <Send />
             </Button>
           </Box>
+          
+          {/* 숨겨진 파일 입력 */}
+          <input
+            ref={fileInputRef}
+            type="file"
+            accept="image/*"
+            onChange={handleImageSelect}
+            style={{ display: 'none' }}
+          />
         </Box>
       </Box>
     );
@@ -657,9 +810,28 @@ const Chat: React.FC = () => {
                             color: message.senderId === user?.id ? 'white' : 'text.primary'
                           }}
                         >
-                          <Typography variant="body2" sx={{ wordBreak: 'break-word' }}>
-                            {message.content}
-                          </Typography>
+                          {message.messageType === 'image' ? (
+                            <Box>
+                              <img 
+                                src={message.imageUrl} 
+                                alt="채팅 이미지"
+                                style={{
+                                  maxWidth: '200px',
+                                  maxHeight: '200px',
+                                  borderRadius: '8px',
+                                  cursor: 'pointer'
+                                }}
+                                onClick={() => window.open(message.imageUrl, '_blank')}
+                              />
+                              <Typography variant="caption" color="textSecondary" display="block" mt={0.5}>
+                                {message.content}
+                              </Typography>
+                            </Box>
+                          ) : (
+                            <Typography variant="body2" sx={{ wordBreak: 'break-word' }}>
+                              {message.content}
+                            </Typography>
+                          )}
                           <Typography 
                             variant="caption" 
                             sx={{ 
@@ -698,6 +870,13 @@ const Chat: React.FC = () => {
                       onKeyPress={handleKeyPress}
                       size="small"
                     />
+                    <IconButton
+                      onClick={() => fileInputRef.current?.click()}
+                      sx={{ minWidth: 'auto' }}
+                      title="이미지 전송"
+                    >
+                      <ImageIcon />
+                    </IconButton>
                     <Button
                       variant="contained"
                       onClick={handleSendMessage}
@@ -707,6 +886,15 @@ const Chat: React.FC = () => {
                       <Send />
                     </Button>
                   </Box>
+                  
+                  {/* 숨겨진 파일 입력 */}
+                  <input
+                    ref={fileInputRef}
+                    type="file"
+                    accept="image/*"
+                    onChange={handleImageSelect}
+                    style={{ display: 'none' }}
+                  />
                 </Box>
               </>
             ) : (
@@ -730,6 +918,61 @@ const Chat: React.FC = () => {
           </CardContent>
         </Card>
       </Box>
+
+      {/* 이미지 전송 다이얼로그 */}
+      <Dialog 
+        open={imageDialogOpen} 
+        onClose={handleCloseImageDialog}
+        maxWidth="sm"
+        fullWidth
+      >
+        <DialogTitle>
+          <Box display="flex" justifyContent="space-between" alignItems="center">
+            <Typography variant="h6">이미지 전송</Typography>
+            <IconButton onClick={handleCloseImageDialog}>
+              <CloseIcon />
+            </IconButton>
+          </Box>
+        </DialogTitle>
+        <DialogContent>
+          {imageError && (
+            <Alert severity="error" sx={{ mb: 2 }}>
+              {imageError}
+            </Alert>
+          )}
+          
+          {imagePreview && (
+            <Box sx={{ textAlign: 'center', mb: 2 }}>
+              <img 
+                src={imagePreview} 
+                alt="미리보기"
+                style={{
+                  maxWidth: '100%',
+                  maxHeight: '300px',
+                  borderRadius: '8px'
+                }}
+              />
+            </Box>
+          )}
+          
+          <Typography variant="body2" color="textSecondary">
+            선택한 이미지를 전송하시겠습니까?
+          </Typography>
+        </DialogContent>
+        <DialogActions>
+          <Button onClick={handleCloseImageDialog}>
+            취소
+          </Button>
+          <Button
+            onClick={handleSendImage}
+            variant="contained"
+            disabled={uploadingImage}
+            startIcon={uploadingImage ? <CircularProgress size={16} /> : <Send />}
+          >
+            {uploadingImage ? '전송 중...' : '전송'}
+          </Button>
+        </DialogActions>
+      </Dialog>
     </Box>
   );
 };

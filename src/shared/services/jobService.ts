@@ -1,4 +1,4 @@
-import { collection, getDocs, query, where, orderBy, doc, updateDoc, addDoc, deleteDoc, getDoc, setDoc } from 'firebase/firestore';
+import { collection, getDocs, query, where, orderBy, doc, updateDoc, addDoc, deleteDoc, getDoc, setDoc, runTransaction, serverTimestamp, limit } from 'firebase/firestore';
 import { db } from '../../firebase/config';
 import { ConstructionJob } from '../../types';
 
@@ -104,8 +104,11 @@ export class JobService {
     }
   }
 
-  // 판매자별 작업 가져오기
-  static async getJobsBySeller(sellerId: string): Promise<ConstructionJob[]> {
+  // 판매자별 작업 가져오기 (기간별 필터링 지원)
+  static async getJobsBySeller(
+    sellerId: string, 
+    period?: '1day' | '1week' | '1month' | '3months' | '6months' | '1year' | 'all'
+  ): Promise<ConstructionJob[]> {
     try {
       const jobsRef = collection(db, 'constructionJobs');
       const q = query(
@@ -115,13 +118,46 @@ export class JobService {
       );
       const querySnapshot = await getDocs(q);
       
+      // 기간별 필터링을 위한 날짜 계산
+      let startDate: Date | null = null;
+      if (period && period !== 'all') {
+        const now = new Date();
+        switch (period) {
+          case '1day':
+            startDate = new Date(now.getFullYear(), now.getMonth(), now.getDate());
+            break;
+          case '1week':
+            startDate = new Date(now.getTime() - 7 * 24 * 60 * 60 * 1000);
+            break;
+          case '1month':
+            startDate = new Date(now.getFullYear(), now.getMonth() - 1, now.getDate());
+            break;
+          case '3months':
+            startDate = new Date(now.getFullYear(), now.getMonth() - 3, now.getDate());
+            break;
+          case '6months':
+            startDate = new Date(now.getFullYear(), now.getMonth() - 6, now.getDate());
+            break;
+          case '1year':
+            startDate = new Date(now.getFullYear() - 1, now.getMonth(), now.getDate());
+            break;
+        }
+      }
+      
       const jobs: ConstructionJob[] = [];
       querySnapshot.forEach((doc) => {
         const data = doc.data();
+        const createdAt = this.safeDateConversion(data.createdAt) || new Date();
+        
+        // 기간별 필터링 적용
+        if (startDate && createdAt < startDate) {
+          return; // 이 기간에 포함되지 않는 작업은 제외
+        }
+        
         jobs.push({
           id: doc.id,
           ...data,
-          createdAt: this.safeDateConversion(data.createdAt) || new Date(),
+          createdAt,
           updatedAt: this.safeDateConversion(data.updatedAt) || new Date(),
           scheduledDate: this.safeDateConversion(data.scheduledDate),
           completedDate: this.safeDateConversion(data.completedDate),
@@ -150,8 +186,11 @@ export class JobService {
     }
   }
 
-  // 시공자별 작업 가져오기
-  static async getJobsByContractor(contractorId: string): Promise<ConstructionJob[]> {
+  // 시공자별 작업 가져오기 (기간별 필터링 지원)
+  static async getJobsByContractor(
+    contractorId: string, 
+    period?: '1day' | '1week' | '1month' | '3months' | '6months' | '1year' | 'all'
+  ): Promise<ConstructionJob[]> {
     try {
       const jobsRef = collection(db, 'constructionJobs');
       const q = query(
@@ -161,13 +200,46 @@ export class JobService {
       );
       const querySnapshot = await getDocs(q);
       
+      // 기간별 필터링을 위한 날짜 계산
+      let startDate: Date | null = null;
+      if (period && period !== 'all') {
+        const now = new Date();
+        switch (period) {
+          case '1day':
+            startDate = new Date(now.getFullYear(), now.getMonth(), now.getDate());
+            break;
+          case '1week':
+            startDate = new Date(now.getTime() - 7 * 24 * 60 * 60 * 1000);
+            break;
+          case '1month':
+            startDate = new Date(now.getFullYear(), now.getMonth() - 1, now.getDate());
+            break;
+          case '3months':
+            startDate = new Date(now.getFullYear(), now.getMonth() - 3, now.getDate());
+            break;
+          case '6months':
+            startDate = new Date(now.getFullYear(), now.getMonth() - 6, now.getDate());
+            break;
+          case '1year':
+            startDate = new Date(now.getFullYear() - 1, now.getMonth(), now.getDate());
+            break;
+        }
+      }
+      
       const jobs: ConstructionJob[] = [];
       querySnapshot.forEach((doc) => {
         const data = doc.data();
+        const createdAt = this.safeDateConversion(data.createdAt) || new Date();
+        
+        // 기간별 필터링 적용
+        if (startDate && createdAt < startDate) {
+          return; // 이 기간에 포함되지 않는 작업은 제외
+        }
+        
         jobs.push({
           id: doc.id,
           ...data,
-          createdAt: this.safeDateConversion(data.createdAt) || new Date(),
+          createdAt,
           updatedAt: this.safeDateConversion(data.updatedAt) || new Date(),
           scheduledDate: this.safeDateConversion(data.scheduledDate),
           completedDate: this.safeDateConversion(data.completedDate),
@@ -337,6 +409,210 @@ export class JobService {
     }
   }
 
+  // 동시 수락을 방지하는 안전한 작업 수락 메서드 (레벨/평점 우선순위 포함)
+  static async acceptJobSafely(jobId: string, contractorId: string): Promise<{
+    success: boolean;
+    message: string;
+    reason?: string;
+  }> {
+    return this.processJobAcceptanceWithPriority(jobId, contractorId);
+  }
+
+  // 레벨과 평점을 고려한 우선순위 작업 수락 처리
+  private static async processJobAcceptanceWithPriority(jobId: string, contractorId: string): Promise<{
+    success: boolean;
+    message: string;
+    reason?: string;
+  }> {
+    try {
+      console.log(`🔍 우선순위 작업 수락 시도: ${jobId} (시공자: ${contractorId})`);
+      
+      // 1. 작업 정보 조회
+      const job = await this.getJobById(jobId);
+      if (!job) {
+        return { success: false, message: '작업을 찾을 수 없습니다.' };
+      }
+      
+      // 2. 작업이 이미 배정되었는지 확인
+      if (job.status !== 'pending') {
+        return { 
+          success: false, 
+          message: '죄송합니다. 다른 시공자가 먼저 수락했습니다. 다른 시공건을 찾아주세요.',
+          reason: 'already_assigned'
+        };
+      }
+      
+      // 3. 시공자 정보 조회 (레벨, 평점, 이름)
+      const { ContractorService } = await import('./contractorService');
+      const { AuthService } = await import('./authService');
+      const contractorStats = await ContractorService.getContractorStats(contractorId);
+      const contractorUser = await AuthService.getUserById(contractorId);
+      const contractorName = contractorUser?.name || '시공자';
+      
+      // 4. 우선순위 계산 (레벨 * 1000 + 평점 * 100 + 요청시간)
+      const priority = (contractorStats.level || 1) * 1000 + (contractorStats.rating || 0) * 100;
+      
+      // 5. 작업 수락 요청을 큐에 저장
+      const acceptRequestData = {
+        jobId,
+        contractorId,
+        contractorName,
+        contractorLevel: contractorStats.level || 1,
+        contractorRating: contractorStats.rating || 0,
+        requestTime: serverTimestamp(),
+        status: 'pending',
+        priority
+      };
+      
+      await addDoc(collection(db, 'jobAcceptRequests'), acceptRequestData);
+      
+      // 6. 우선순위에 따른 작업 수락 처리
+      const jobRef = doc(db, 'constructionJobs', jobId);
+      
+      const result = await runTransaction(db, async (transaction) => {
+        // 트랜잭션 내에서 최신 작업 정보 다시 조회
+        const jobDoc = await transaction.get(jobRef);
+        if (!jobDoc.exists()) {
+          throw new Error('작업을 찾을 수 없습니다.');
+        }
+        
+        const currentJobData = jobDoc.data() as ConstructionJob;
+        
+        // 다시 한번 상태 확인
+        if (currentJobData.status !== 'pending') {
+          throw new Error('이미 다른 시공자가 수락한 작업입니다.');
+        }
+        
+        // 우선순위가 가장 높은 시공자 확인
+        const acceptRequestsQuery = query(
+          collection(db, 'jobAcceptRequests'),
+          where('jobId', '==', jobId),
+          where('status', '==', 'pending'),
+          orderBy('priority', 'desc'),
+          orderBy('requestTime', 'asc'),
+          limit(1)
+        );
+        
+        const acceptRequests = await getDocs(acceptRequestsQuery);
+        
+        if (acceptRequests.empty) {
+          throw new Error('수락 요청을 찾을 수 없습니다.');
+        }
+        
+        const topRequest = acceptRequests.docs[0];
+        const topRequestData = topRequest.data();
+        
+        // 현재 시공자가 최우선 순위인지 확인
+        if (topRequestData.contractorId !== contractorId) {
+          throw new Error('다른 시공자가 더 높은 우선순위를 가지고 있습니다.');
+        }
+        
+        // 시공자 정보를 포함한 업데이트 데이터 준비
+        const updateData = {
+          status: 'assigned' as const,
+          contractorId,
+          contractorName,
+          acceptedAt: new Date(),
+          updatedAt: new Date(),
+          progressHistory: [
+            ...(currentJobData.progressHistory || []),
+            {
+              status: 'assigned',
+              timestamp: new Date(),
+              contractorId,
+              note: '시공자 수락'
+            }
+          ]
+        };
+        
+        // 트랜잭션에서 업데이트 실행
+        transaction.update(jobRef, updateData);
+        
+        // 수락 요청 상태를 성공으로 업데이트
+        transaction.update(topRequest.ref, { status: 'accepted' });
+        
+        return {
+          success: true,
+          message: '작업이 성공적으로 수락되었습니다.',
+          contractorLevel: contractorStats.level,
+          contractorRating: contractorStats.rating
+        };
+      });
+      
+      console.log(`✅ 우선순위 작업 수락 성공: ${jobId} (시공자: ${contractorId})`);
+      
+      // 7. 성공 시 알림 생성
+      try {
+        const { NotificationService } = await import('./notificationService');
+        await NotificationService.createNotification(
+          contractorId,
+          '작업 수락 완료',
+          `작업 "${job.title}"이 성공적으로 수락되었습니다.`,
+          'success',
+          `/contractor/jobs/${jobId}`
+        );
+      } catch (notificationError) {
+        console.warn('알림 생성 실패:', notificationError);
+      }
+      
+      // 8. 실패한 다른 시공자들에게 알림 전송
+      try {
+        const { NotificationService } = await import('./notificationService');
+        
+        // 같은 작업에 대한 다른 수락 요청들 조회
+        const otherRequestsQuery = query(
+          collection(db, 'jobAcceptRequests'),
+          where('jobId', '==', jobId),
+          where('contractorId', '!=', contractorId),
+          where('status', '==', 'pending')
+        );
+        
+        const otherRequests = await getDocs(otherRequestsQuery);
+        
+        // 실패한 시공자들에게 알림 전송
+        for (const requestDoc of otherRequests.docs) {
+          const requestData = requestDoc.data();
+          await NotificationService.createNotification(
+            requestData.contractorId,
+            '작업 수락 실패',
+            `죄송합니다. 다른 시공자가 먼저 수락했습니다. 다른 시공건을 찾아주세요.`,
+            'info',
+            '/contractor/jobs'
+          );
+          
+          // 요청 상태를 실패로 업데이트
+          await updateDoc(requestDoc.ref, { status: 'failed' });
+        }
+        
+        console.log(`📢 실패한 시공자 ${otherRequests.docs.length}명에게 알림 전송 완료`);
+      } catch (failureNotificationError) {
+        console.warn('실패 알림 전송 실패:', failureNotificationError);
+      }
+      
+      return result;
+      
+    } catch (error: any) {
+      console.error(`❌ 우선순위 작업 수락 실패: ${jobId} (시공자: ${contractorId})`, error);
+      
+      // 실패 원인에 따른 메시지
+      let message = '작업 수락에 실패했습니다.';
+      let reason = 'unknown';
+      
+      if (error.message.includes('이미 다른 시공자가 수락한 작업입니다')) {
+        message = '죄송합니다. 다른 시공자가 먼저 수락했습니다. 다른 시공건을 찾아주세요.';
+        reason = 'already_assigned';
+      } else if (error.message.includes('다른 시공자가 더 높은 우선순위를 가지고 있습니다')) {
+        message = '죄송합니다. 더 높은 레벨의 시공자가 수락했습니다. 다른 시공건을 찾아주세요.';
+        reason = 'lower_priority';
+      } else if (error.message.includes('작업을 찾을 수 없습니다')) {
+        message = '작업을 찾을 수 없습니다.';
+        reason = 'job_not_found';
+      }
+      
+      return { success: false, message, reason };
+    }
+  }
+
   // 작업 상태 업데이트 (진행 시간 기록 포함)
   static async updateJobStatus(
     jobId: string, 
@@ -485,6 +761,29 @@ export class JobService {
         } catch (refundError) {
           console.error('❌ 포인트 환불 실패:', refundError);
           // 포인트 환불 실패 시에도 작업 취소는 진행
+        }
+      }
+
+      // 취소된 작업을 다시 대기중으로 변경 시 포인트 차감
+      if (status === 'pending' && currentData.status === 'cancelled') {
+        try {
+          const jobData = await this.getJobById(jobId);
+          if (jobData && jobData.sellerId && jobData.budget?.max) {
+            const PointService = await import('./pointService').then(module => module.PointService);
+            
+            // 포인트 잔액 확인
+            const currentBalance = await PointService.getPointBalance(jobData.sellerId, 'seller');
+            if (currentBalance < jobData.budget.max) {
+              throw new Error(`포인트 잔액이 부족합니다. 필요: ${jobData.budget.max}포인트, 보유: ${currentBalance}포인트`);
+            }
+            
+            // 에스크로 포인트 차감
+            await PointService.escrowPoints(jobId, jobData.sellerId, jobData.budget.max);
+            console.log(`✅ 작업 재등록으로 인한 포인트 차감 완료: ${jobData.budget.max}포인트`);
+          }
+        } catch (escrowError) {
+          console.error('❌ 포인트 차감 실패:', escrowError);
+          throw new Error(`포인트 차감에 실패했습니다: ${escrowError instanceof Error ? escrowError.message : '알 수 없는 오류'}`);
         }
       }
     } catch (error) {
@@ -1108,7 +1407,7 @@ export class JobService {
     }
   }
 
-  // 작업 취소
+  // 작업 취소 (포인트 환불 포함)
   static async cancelJob(jobId: string): Promise<void> {
     try {
       const jobRef = doc(db, 'constructionJobs', jobId);
@@ -1123,6 +1422,23 @@ export class JobService {
       // 대기중 상태에서만 취소 가능
       if (jobData.status !== 'pending') {
         throw new Error('대기중 상태의 작업만 취소할 수 있습니다.');
+      }
+
+      // 포인트 환불 처리
+      if (jobData.sellerId) {
+        try {
+          const { PointService } = await import('./pointService');
+          const escrowInfo = await PointService.getEscrowInfo(jobId);
+          
+          if (escrowInfo && escrowInfo.status === 'pending') {
+            // 에스크로 포인트 환불
+            await PointService.refundEscrowToSeller(jobId, '작업 취소로 인한 환불');
+            console.log(`✅ 작업 ${jobId}의 에스크로 포인트가 환불되었습니다.`);
+          }
+        } catch (pointError) {
+          console.error('포인트 환불 실패:', pointError);
+          // 포인트 환불 실패해도 작업 취소는 진행
+        }
       }
 
       // 진행 이력에 취소 기록 추가
