@@ -137,6 +137,7 @@ const PointManagement: React.FC = () => {
       case 'payment': return '지급';
       case 'withdrawal': return '인출';
       case 'refund': return '환불';
+      case 'escrow': return '사용';
       default: return '알 수 없음';
     }
   };
