@@ -1,4 +1,5 @@
 import React, { useState } from 'react';
+import { useNavigate } from 'react-router-dom';
 import {
   Dialog,
   DialogTitle,
@@ -74,6 +75,7 @@ const CreateJobDialog: React.FC<CreateJobDialogProps> = ({
   initialJobData
 }) => {
   const { user } = useAuth();
+  const navigate = useNavigate();
   const [formData, setFormData] = useState({
     title: '',
     description: '',
@@ -301,7 +303,20 @@ const CreateJobDialog: React.FC<CreateJobDialogProps> = ({
     currentBalance: number;
     requiredAmount: number;
     shortage: number;
+    feeAmount: number;
+    totalRequiredAmount: number;
   } | null>(null);
+  
+  // 포인트 부족 확인 다이얼로그 상태
+  const [insufficientPointsDialog, setInsufficientPointsDialog] = useState<{
+    open: boolean;
+    message: string;
+    totalRequiredAmount: number;
+  }>({
+    open: false,
+    message: '',
+    totalRequiredAmount: 0
+  });
   const [error, setError] = useState('');
   const [successMessage, setSuccessMessage] = useState('');
   const [pricingItems, setPricingItems] = useState<PricingItem[]>([]);
@@ -943,9 +958,20 @@ const CreateJobDialog: React.FC<CreateJobDialogProps> = ({
       console.log('🔍 포인트 검증 결과:', isValidBalance);
       
       if (!isValidBalance) {
-        const errorMessage = `포인트 잔액이 부족합니다. 현재 잔액: ${currentBalance.toLocaleString()}포인트, 필요 금액: ${totalBudget.toLocaleString()}포인트`;
+        // 수수료를 포함한 총 필요 금액 계산
+        const feeCalculation = await PointService.calculateFees(totalBudget, 'seller');
+        const totalRequiredAmount = totalBudget + feeCalculation.feeAmount;
+        
+        const errorMessage = `포인트 잔액이 부족합니다.\n\n현재 잔액: ${currentBalance.toLocaleString()}포인트\n시공비: ${totalBudget.toLocaleString()}포인트\n수수료: ${feeCalculation.feeAmount.toLocaleString()}포인트\n총 필요 금액: ${totalRequiredAmount.toLocaleString()}포인트\n\n포인트 충전 화면으로 이동하시겠습니까?`;
         console.error('❌ 포인트 잔액 부족:', errorMessage);
-        setError(errorMessage);
+        
+        // 포인트 부족 확인 다이얼로그 표시
+        setInsufficientPointsDialog({
+          open: true,
+          message: errorMessage,
+          totalRequiredAmount
+        });
+        
         setLoading(false);
         return;
       }
@@ -1996,7 +2022,9 @@ const CreateJobDialog: React.FC<CreateJobDialogProps> = ({
                     <Typography variant="body2">
                       <strong>포인트 잔액 검증:</strong><br />
                       현재 잔액: {pointValidation.currentBalance.toLocaleString()}포인트<br />
-                      필요 금액: {pointValidation.requiredAmount.toLocaleString()}포인트<br />
+                      시공비: {pointValidation.requiredAmount.toLocaleString()}포인트<br />
+                      수수료 ({pointValidation.feeAmount > 0 ? Math.round(pointValidation.feeAmount / pointValidation.requiredAmount * 100) : 0}%): {pointValidation.feeAmount.toLocaleString()}포인트<br />
+                      <strong>총 필요 금액: {pointValidation.totalRequiredAmount.toLocaleString()}포인트</strong><br />
                       {!pointValidation.isValid && (
                         <span style={{ color: 'red' }}>
                           부족 금액: {pointValidation.shortage.toLocaleString()}포인트
@@ -2354,6 +2382,48 @@ const CreateJobDialog: React.FC<CreateJobDialogProps> = ({
           disabled={!newExample.title.trim() || !newExample.content.trim()}
         >
           {editingExample ? '수정' : '추가'}
+        </Button>
+      </DialogActions>
+    </Dialog>
+
+    {/* 포인트 부족 확인 다이얼로그 */}
+    <Dialog
+      open={insufficientPointsDialog.open}
+      onClose={() => setInsufficientPointsDialog(prev => ({ ...prev, open: false }))}
+      maxWidth="sm"
+      fullWidth
+    >
+      <DialogTitle sx={{ pb: 1 }}>
+        <Box display="flex" alignItems="center" gap={1}>
+          <Warning color="warning" />
+          <Typography variant="h6">포인트 잔액 부족</Typography>
+        </Box>
+      </DialogTitle>
+      <DialogContent>
+        <Typography variant="body1" sx={{ whiteSpace: 'pre-line', mb: 2 }}>
+          {insufficientPointsDialog.message}
+        </Typography>
+        <Alert severity="info" sx={{ mt: 2 }}>
+          포인트를 충전한 후 다시 작업 등록을 시도해주세요.
+        </Alert>
+      </DialogContent>
+      <DialogActions>
+        <Button 
+          onClick={() => setInsufficientPointsDialog(prev => ({ ...prev, open: false }))}
+        >
+          취소
+        </Button>
+        <Button
+          onClick={() => {
+            setInsufficientPointsDialog(prev => ({ ...prev, open: false }));
+            onClose(); // 현재 다이얼로그 닫기
+            navigate('/seller/points'); // 포인트 충전 화면으로 이동
+          }}
+          variant="contained"
+          color="primary"
+          startIcon={<Payment />}
+        >
+          포인트 충전하기
         </Button>
       </DialogActions>
     </Dialog>

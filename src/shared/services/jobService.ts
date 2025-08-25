@@ -445,10 +445,30 @@ export class JobService {
         };
       }
       
-      // 3. 시공자 정보 조회
+      // 3. 시공자 정보 조회 및 정지 상태 확인
       const { AuthService } = await import('./authService');
+      const { ContractorService } = await import('./contractorService');
+      
       const contractorUser = await AuthService.getUserById(contractorId);
       const contractorName = contractorUser?.name || '시공자';
+      
+      // 시공자 정지 상태 확인
+      const suspensionStatus = await ContractorService.checkSuspensionStatus(contractorId);
+      if (suspensionStatus.isSuspended) {
+        if (suspensionStatus.remainingDays === -1) {
+          return {
+            success: false,
+            message: '평점이 낮아 신규 시공건 수락이 영구정지되었습니다.',
+            reason: 'permanently_suspended'
+          };
+        } else {
+          return {
+            success: false,
+            message: `평점이 낮아 신규 시공건 수락이 정지되었습니다. (${suspensionStatus.remainingDays}일 남음)`,
+            reason: 'temporarily_suspended'
+          };
+        }
+      }
       
       // 4. 트랜잭션으로 작업 수락 처리
       const jobRef = doc(db, 'constructionJobs', jobId);
@@ -1486,7 +1506,7 @@ export class JobService {
         'contractor',
         compensationAmount,
         'product_not_ready',
-        `제품 미준비 보상 (작업: ${jobId})`,
+                    `제품 미준비 보상`,
         jobId
       );
 
@@ -1570,7 +1590,7 @@ export class JobService {
         'contractor',
         compensationAmount,
         'customer_absent',
-        `소비자 부재 보상 (작업: ${jobId})`,
+                    `소비자 부재 보상`,
         jobId
       );
 
@@ -1847,7 +1867,7 @@ export class JobService {
             'contractor',
             feeAmount,
             'job_cancellation_fee',
-            `작업 수락취소 수수료 (작업: ${jobId})`,
+            `작업 수락취소 수수료`,
             jobId
           );
           

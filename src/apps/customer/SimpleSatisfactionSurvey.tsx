@@ -1,5 +1,5 @@
 import React, { useState, useEffect } from 'react';
-import { useParams, useNavigate } from 'react-router-dom';
+import { useParams, useNavigate, useSearchParams } from 'react-router-dom';
 import {
   Box,
   Container,
@@ -47,6 +47,8 @@ interface SurveyResponse {
 const SimpleSatisfactionSurvey: React.FC = () => {
   const { surveyId } = useParams<{ surveyId: string }>();
   const navigate = useNavigate();
+  const [searchParams] = useSearchParams();
+  const token = searchParams.get('token');
   const [survey, setSurvey] = useState<SatisfactionSurvey | null>(null);
   const [questions, setQuestions] = useState<SurveyQuestion[]>([]);
   const [loading, setLoading] = useState(true);
@@ -68,6 +70,13 @@ const SimpleSatisfactionSurvey: React.FC = () => {
         const surveyData = await SatisfactionService.getSurvey(surveyId);
         if (!surveyData) {
           setError('만족도 조사를 찾을 수 없습니다.');
+          setLoading(false);
+          return;
+        }
+
+        // 토큰이 있는 경우 토큰 검증
+        if (token && surveyData.accessToken && token !== surveyData.accessToken) {
+          setError('잘못된 접근입니다. 올바른 링크를 사용해주세요.');
           setLoading(false);
           return;
         }
@@ -296,6 +305,9 @@ const SimpleSatisfactionSurvey: React.FC = () => {
         <Paper elevation={3} sx={{ p: 3, mb: 3 }}>
           <Typography variant="h4" align="center" gutterBottom>
             🏠 시공 서비스 만족도 조사
+          </Typography>
+          <Typography variant="body2" align="center" color="textSecondary" sx={{ mb: 2 }}>
+            ※ 로그인 없이 바로 참여 가능합니다
           </Typography>
           <Typography variant="body1" align="center" color="textSecondary">
             소중한 의견을 바탕으로 더 나은 서비스를 제공하겠습니다

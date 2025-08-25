@@ -89,6 +89,12 @@ const Dashboard: React.FC = () => {
     averageRating: 0,
     totalReviews: 0
   });
+  const [suspensionStatus, setSuspensionStatus] = useState<{
+    isSuspended: boolean;
+    suspensionEndDate: Date | null;
+    remainingDays: number;
+    reason: string | null;
+  } | null>(null);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
 
@@ -102,11 +108,12 @@ const Dashboard: React.FC = () => {
         setError(null);
 
         // 병렬로 데이터 로딩
-        const [jobsData, notificationsData, contractorStatsData, pointBalance] = await Promise.allSettled([
+        const [jobsData, notificationsData, contractorStatsData, pointBalance, suspensionStatusData] = await Promise.allSettled([
           JobService.getJobsByContractor(user.id),
           NotificationService.getNotifications(user.id),
           ContractorService.getContractorStats(user.id),
-          PointService.getPointBalance(user.id, 'contractor')
+          PointService.getPointBalance(user.id, 'contractor'),
+          ContractorService.checkSuspensionStatus(user.id)
         ]);
 
         // 시공 작업 데이터 처리
@@ -196,6 +203,11 @@ const Dashboard: React.FC = () => {
           setContractorStats(prev => ({ ...prev, points: pointBalance.value }));
         }
 
+        // 정지 상태 처리
+        if (suspensionStatusData.status === 'fulfilled') {
+          setSuspensionStatus(suspensionStatusData.value);
+        }
+
       } catch (error) {
         console.error('대시보드 데이터 로드 실패:', error);
         setError('데이터를 불러오는 중 오류가 발생했습니다.');
@@ -211,6 +223,12 @@ const Dashboard: React.FC = () => {
   useEffect(() => {
     if (user?.id) {
       const unsubscribe = NotificationService.subscribeToNotifications(user.id, (notifications) => {
+        // 읽지 않은 알림만 필터링 (최대 10개)
+        const unreadNotifications = notifications
+          .filter(notif => !notif.isRead)
+          .slice(0, 10);
+        setNotifications(unreadNotifications);
+
         const chatNotifMap: {[jobId: string]: number} = {};
         
         notifications.forEach(notification => {
@@ -240,6 +258,10 @@ const Dashboard: React.FC = () => {
       case 'completed': return '완료';
       case 'cancelled': return '취소됨';
       case 'reschedule_requested': return '일정 재조정 요청';
+      case 'compensation_completed': return '보상완료';
+      case 'product_not_ready': return '제품 미준비';
+      case 'customer_absent': return '고객 부재';
+      case 'schedule_changed': return '일정 변경';
       default: return status;
     }
   };
@@ -255,6 +277,10 @@ const Dashboard: React.FC = () => {
       case 'completed': return 'success';
       case 'cancelled': return 'error';
       case 'reschedule_requested': return 'warning';
+      case 'compensation_completed': return 'success';
+      case 'product_not_ready': return 'error';
+      case 'customer_absent': return 'error';
+      case 'schedule_changed': return 'warning';
       default: return 'default';
     }
   };
@@ -321,6 +347,42 @@ const Dashboard: React.FC = () => {
           오늘도 안전하고 깔끔한 시공 부탁드립니다. 현재 {contractorStats.inProgressJobs}개의 작업이 진행중입니다.
         </Typography>
       </Box>
+
+      {/* 정지 상태 알림 */}
+      {suspensionStatus?.isSuspended && (
+        <Box sx={{ mb: 3, px: { xs: 1, sm: 2, md: 3 } }}>
+          <Alert 
+            severity="warning" 
+            icon={<Warning />}
+            sx={{ 
+              '& .MuiAlert-message': { 
+                display: 'flex', 
+                flexDirection: 'column', 
+                gap: 1 
+              } 
+            }}
+          >
+            <Typography variant="h6" sx={{ fontWeight: 'bold' }}>
+              신규 시공건 수락 정지
+            </Typography>
+            <Typography variant="body2">
+              {suspensionStatus.reason}
+            </Typography>
+            {suspensionStatus.remainingDays === -1 ? (
+              <Typography variant="body2" sx={{ fontWeight: 'bold', color: 'error.main' }}>
+                영구정지 상태입니다.
+              </Typography>
+            ) : (
+              <Typography variant="body2">
+                정지 해제까지 <strong>{suspensionStatus.remainingDays}일</strong> 남았습니다.
+                {suspensionStatus.suspensionEndDate && (
+                  <span> (해제 예정일: {suspensionStatus.suspensionEndDate.toLocaleDateString()})</span>
+                )}
+              </Typography>
+            )}
+          </Alert>
+        </Box>
+      )}
 
       {/* 빠른 액션 버튼 */}
       <Paper sx={{ 
@@ -593,247 +655,7 @@ const Dashboard: React.FC = () => {
         </Grid>
       </Grid>
 
-      {/* 작업 현황 및 알림 */}
-      <Grid container spacing={{ xs: 1, sm: 2, md: 3 }} sx={{ mb: 3, px: { xs: 1, sm: 2, md: 3 } }}>
-        <Grid item xs={12} md={8}>
-          <Card>
-            <CardContent sx={{ p: { xs: 2, sm: 3 } }}>
-              <Box sx={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', mb: 2 }}>
-                <Typography variant="h6">
-                  진행중인 작업
-                </Typography>
-                <Button
-                  size="small"
-                  onClick={() => navigate('/contractor/my-jobs')}
-                  endIcon={<ArrowForward />}
-                >
-                  전체보기
-                </Button>
-              </Box>
-              {getRecentJobs().length > 0 ? (
-                <List>
-                  {getRecentJobs().map((job, index) => (
-                    <React.Fragment key={job.id}>
-                      <ListItem>
-                        <ListItemAvatar>
-                          <Avatar sx={{ bgcolor: `${getStatusColor(job.status)}.main` }}>
-                            {getStatusIcon(job.status)}
-                          </Avatar>
-                        </ListItemAvatar>
-                        <ListItemText
-                          primary={
-                            <Box sx={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
-                              <Typography variant="subtitle2" noWrap>
-                                {job.title || '제목 없음'}
-                              </Typography>
-                              <Chip
-                                label={getStatusText(job.status)}
-                                color={getStatusColor(job.status) as any}
-                                size="small"
-                              />
-                            </Box>
-                          }
-                          secondary={
-                            <Box>
-                              <Typography variant="body2" color="text.secondary">
-                                <LocationOn sx={{ fontSize: 16, verticalAlign: 'middle', mr: 0.5 }} />
-                                {job.address}
-                              </Typography>
-                              <Typography variant="body2" color="text.secondary">
-                                <Schedule sx={{ fontSize: 16, verticalAlign: 'middle', mr: 0.5 }} />
-                                {job.scheduledDate ? new Date(job.scheduledDate).toLocaleDateString() : '일정 미정'}
-                              </Typography>
-                              <Typography variant="body2" color="primary.main" sx={{ fontWeight: 'bold' }}>
-                                예산: {formatCurrency(calculateTotalBudget(job))}원
-                              </Typography>
-                            </Box>
-                          }
-                        />
-                        <IconButton
-                          size="small"
-                          onClick={() => navigate(`/contractor/jobs/${job.id}`)}
-                        >
-                          <Visibility />
-                        </IconButton>
-                      </ListItem>
-                      {index < getRecentJobs().length - 1 && <Divider />}
-                    </React.Fragment>
-                  ))}
-                </List>
-              ) : (
-                <Box sx={{ textAlign: 'center', py: 4 }}>
-                  <Work sx={{ fontSize: 60, color: 'text.secondary', mb: 2 }} />
-                  <Typography variant="body1" color="text.secondary">
-                    진행중인 작업이 없습니다
-                  </Typography>
-                  <Button
-                    variant="outlined"
-                    onClick={() => navigate('/contractor/jobs')}
-                    sx={{ mt: 2 }}
-                  >
-                    시공건 찾기
-                  </Button>
-                </Box>
-              )}
-            </CardContent>
-          </Card>
-        </Grid>
-        
-        <Grid item xs={12} md={4}>
-          <Card 
-            sx={{ 
-              cursor: 'pointer',
-              '&:hover': {
-                boxShadow: 4,
-                transform: 'translateY(-2px)',
-                transition: 'all 0.2s ease'
-              }
-            }}
-            onClick={() => navigate('/contractor/notifications')}
-          >
-            <CardContent sx={{ p: { xs: 2, sm: 3 } }}>
-              <Box sx={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', mb: 2 }}>
-                <Typography variant="h6">
-                  알림 현황
-                </Typography>
-                <Button
-                  size="small"
-                  onClick={(e) => {
-                    e.stopPropagation(); // 이벤트 버블링 방지
-                    navigate('/contractor/notifications');
-                  }}
-                  endIcon={<ArrowForward />}
-                >
-                  전체보기
-                </Button>
-              </Box>
-              <Box sx={{ textAlign: 'center', py: 2 }}>
-                <Badge badgeContent={notifications.length} color="error">
-                  <Notifications sx={{ fontSize: 60, color: 'primary.main' }} />
-                </Badge>
-                <Typography variant="h6" sx={{ mt: 1 }}>
-                  {notifications.length}개
-                </Typography>
-                <Typography variant="body2" color="text.secondary">
-                  읽지 않은 알림
-                </Typography>
-              </Box>
-              {getJobsWithChatNotifications().length > 0 && (
-                <Box sx={{ mt: 2 }}>
-                  <Typography variant="subtitle2" gutterBottom>
-                    채팅 알림
-                  </Typography>
-                  <List dense>
-                    {getJobsWithChatNotifications().slice(0, 3).map((job) => (
-                      <ListItem 
-                        key={job.id} 
-                        sx={{ 
-                          px: 0,
-                          cursor: 'pointer',
-                          '&:hover': {
-                            backgroundColor: 'action.hover'
-                          }
-                        }}
-                        onClick={() => navigate(`/contractor/chat/${job.id}`)}
-                      >
-                        <ListItemAvatar>
-                          <Badge badgeContent={chatNotifications[job.id]} color="error">
-                            <Avatar sx={{ width: 32, height: 32, bgcolor: 'primary.main' }}>
-                              <Chat sx={{ fontSize: 16 }} />
-                            </Avatar>
-                          </Badge>
-                        </ListItemAvatar>
-                        <ListItemText
-                          primary={
-                            <Typography variant="body2" noWrap>
-                              {job.title || '제목 없음'}
-                            </Typography>
-                          }
-                          secondary={
-                            <Typography variant="caption" color="text.secondary">
-                              {chatNotifications[job.id]}개 메시지
-                            </Typography>
-                          }
-                        />
-                        <IconButton
-                          size="small"
-                          onClick={(e) => {
-                            e.stopPropagation(); // 이벤트 버블링 방지
-                            navigate(`/contractor/chat/${job.id}`);
-                          }}
-                        >
-                          <ArrowForward />
-                        </IconButton>
-                      </ListItem>
-                    ))}
-                  </List>
-                </Box>
-              )}
-              <Button
-                fullWidth
-                variant="outlined"
-                onClick={(e) => {
-                  e.stopPropagation(); // 이벤트 버블링 방지
-                  navigate('/contractor/notifications');
-                }}
-                endIcon={<ArrowForward />}
-                sx={{ 
-                  mt: 2,
-                  minHeight: '48px', // 모바일 터치 영역 확보
-                  touchAction: 'manipulation', // 터치 이벤트 최적화
-                  fontSize: '1rem', // 모바일에서 더 큰 폰트
-                  fontWeight: 500
-                }}
-              >
-                알림 확인하기
-              </Button>
-            </CardContent>
-          </Card>
-        </Grid>
-      </Grid>
 
-      {/* 지역별 작업 분포 */}
-      <Card sx={{ mb: 3, mx: { xs: 1, sm: 2, md: 3 } }}>
-        <CardContent sx={{ p: { xs: 2, sm: 3 } }}>
-          <Typography variant="h6" gutterBottom>
-            지역별 작업 분포
-          </Typography>
-          <Grid container spacing={{ xs: 1, sm: 2 }}>
-            {scheduledJobs.length > 0 ? (
-              scheduledJobs.map((job) => (
-                                 <Grid item xs={12} sm={6} md={4} key={job.id}>
-                   <Paper sx={{ p: { xs: 1.5, sm: 2 }, border: 1, borderColor: 'divider' }}>
-                    <Box sx={{ display: 'flex', alignItems: 'center', mb: 1 }}>
-                      <LocationOn sx={{ color: 'primary.main', mr: 1 }} />
-                      <Typography variant="subtitle2">
-                        {job.address?.split(' ').slice(0, 2).join(' ')}
-                      </Typography>
-                    </Box>
-                    <Typography variant="body2" color="text.secondary">
-                      {job.title || '제목 없음'}
-                    </Typography>
-                    <Chip
-                      label={getStatusText(job.status)}
-                      color={getStatusColor(job.status) as any}
-                      size="small"
-                      sx={{ mt: 1 }}
-                    />
-                  </Paper>
-                </Grid>
-              ))
-            ) : (
-              <Grid item xs={12}>
-                <Box sx={{ textAlign: 'center', py: 4 }}>
-                  <LocationOn sx={{ fontSize: 60, color: 'text.secondary', mb: 2 }} />
-                  <Typography variant="body1" color="text.secondary">
-                    지역별 작업 정보가 없습니다
-                  </Typography>
-                </Box>
-              </Grid>
-            )}
-          </Grid>
-        </CardContent>
-      </Card>
     </Box>
   );
 };

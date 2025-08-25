@@ -1,6 +1,7 @@
 import { db } from '../../firebase/config';
-import { doc, getDoc, updateDoc, setDoc, collection, addDoc, deleteDoc, query, where, getDocs } from 'firebase/firestore';
+import { doc, getDoc, updateDoc, setDoc, collection, addDoc, deleteDoc, query, where, getDocs, serverTimestamp } from 'firebase/firestore';
 import { ContractorInfo } from '../../types';
+import { RatingPolicyService } from './ratingPolicyService';
 
 // 시공자 기본 정보 타입
 export interface ContractorBasicInfo {
@@ -12,6 +13,12 @@ export interface ContractorBasicInfo {
   serviceAreas: string[];
   bankName: string;
   bankAccount: string;
+  accountHolder?: string;
+  businessName?: string;
+  businessNumber?: string;
+  businessAddress?: string;
+  businessType?: string;
+  businessCategory?: string;
   profileImage?: string;
 }
 
@@ -47,6 +54,12 @@ export class ContractorService {
           serviceAreas: basicInfo.serviceAreas,
           bankName: basicInfo.bankName,
           bankAccount: basicInfo.bankAccount,
+          ...(basicInfo.accountHolder && { accountHolder: basicInfo.accountHolder }),
+          ...(basicInfo.businessName && { businessName: basicInfo.businessName }),
+          ...(basicInfo.businessNumber && { businessNumber: basicInfo.businessNumber }),
+          ...(basicInfo.businessAddress && { businessAddress: basicInfo.businessAddress }),
+          ...(basicInfo.businessType && { businessType: basicInfo.businessType }),
+          ...(basicInfo.businessCategory && { businessCategory: basicInfo.businessCategory }),
           ...(basicInfo.profileImage && { profileImage: basicInfo.profileImage }),
           updatedAt: new Date()
         });
@@ -67,6 +80,12 @@ export class ContractorService {
           serviceAreas: basicInfo.serviceAreas,
           bankName: basicInfo.bankName,
           bankAccount: basicInfo.bankAccount,
+          ...(basicInfo.accountHolder && { accountHolder: basicInfo.accountHolder }),
+          ...(basicInfo.businessName && { businessName: basicInfo.businessName }),
+          ...(basicInfo.businessNumber && { businessNumber: basicInfo.businessNumber }),
+          ...(basicInfo.businessAddress && { businessAddress: basicInfo.businessAddress }),
+          ...(basicInfo.businessType && { businessType: basicInfo.businessType }),
+          ...(basicInfo.businessCategory && { businessCategory: basicInfo.businessCategory }),
           ...(basicInfo.profileImage && { profileImage: basicInfo.profileImage }),
           level: 1,
           totalJobs: 0,
@@ -101,6 +120,12 @@ export class ContractorService {
           serviceAreas: contractorData.serviceAreas || [],
           bankName: contractorData.bankName || '',
           bankAccount: contractorData.bankAccount || '',
+          accountHolder: contractorData.accountHolder || '',
+          businessName: contractorData.businessName || '',
+          businessNumber: contractorData.businessNumber || '',
+          businessAddress: contractorData.businessAddress || '',
+          businessType: contractorData.businessType || '',
+          businessCategory: contractorData.businessCategory || '',
           profileImage: contractorData.profileImage || ''
         };
       }
@@ -355,18 +380,166 @@ export class ContractorService {
       // 새로운 평균 평점 계산
       const newTotalRatings = totalRatings + 1;
       const newAverageRating = ((currentRating * totalRatings) + newRating) / newTotalRatings;
+      const finalRating = Math.round(newAverageRating * 10) / 10; // 소수점 첫째 자리까지
       
       // 평점 업데이트
       await updateDoc(contractorRef, {
-        rating: Math.round(newAverageRating * 10) / 10, // 소수점 첫째 자리까지
+        rating: finalRating,
         totalRatings: newTotalRatings,
         updatedAt: new Date()
       });
       
-      console.log(`✅ 시공자 ${contractorId} 평점 업데이트: ${currentRating} → ${Math.round(newAverageRating * 10) / 10} (총 ${newTotalRatings}개 평가)`);
+      console.log(`✅ 시공자 ${contractorId} 평점 업데이트: ${currentRating} → ${finalRating} (총 ${newTotalRatings}개 평가)`);
+      
+      // 평점 기반 정책 적용
+      await this.applyRatingBasedPolicies(contractorId, finalRating);
+      
     } catch (error) {
       console.error('시공자 평점 업데이트 실패:', error);
       throw new Error('시공자 평점을 업데이트할 수 없습니다.');
+    }
+  }
+
+  // 평점 기반 정책 적용
+  static async applyRatingBasedPolicies(contractorId: string, rating: number): Promise<void> {
+    try {
+      const contractorRef = doc(db, 'users', contractorId);
+      
+      // 평점 기반 수수료율 계산
+      const commissionRate = await RatingPolicyService.getCommissionRateByRating(rating);
+      
+      // 평점 기반 정지 일수 계산
+      const suspensionDays = await RatingPolicyService.getSuspensionDaysByRating(rating);
+      
+      // 정지 정보 계산
+      let suspensionInfo = null;
+      if (suspensionDays > 0) {
+        const suspensionStartDate = new Date();
+        const suspensionEndDate = new Date();
+        suspensionEndDate.setDate(suspensionEndDate.getDate() + suspensionDays);
+        
+        suspensionInfo = {
+          isSuspended: true,
+          suspensionStartDate: suspensionStartDate,
+          suspensionEndDate: suspensionEndDate,
+          suspensionDays: suspensionDays,
+          reason: `평점 ${rating}점으로 인한 자동 정지`
+        };
+      } else if (suspensionDays === -1) {
+        // 영구정지
+        suspensionInfo = {
+          isSuspended: true,
+          suspensionStartDate: new Date(),
+          suspensionEndDate: null,
+          suspensionDays: -1,
+          reason: `평점 ${rating}점으로 인한 영구정지`
+        };
+      }
+      
+      // 시공자 정보 업데이트
+      const updateData: any = {
+        commissionRate: commissionRate,
+        updatedAt: new Date()
+      };
+      
+      if (suspensionInfo) {
+        updateData.suspensionInfo = suspensionInfo;
+      } else {
+        // 정지 해제
+        updateData.suspensionInfo = {
+          isSuspended: false,
+          suspensionStartDate: null,
+          suspensionEndDate: null,
+          suspensionDays: 0,
+          reason: null
+        };
+      }
+      
+      await updateDoc(contractorRef, updateData);
+      
+      console.log(`✅ 시공자 ${contractorId} 평점 기반 정책 적용:`);
+      console.log(`   - 수수료율: ${commissionRate}%`);
+      console.log(`   - 정지 일수: ${suspensionDays === -1 ? '영구정지' : suspensionDays}일`);
+      
+    } catch (error) {
+      console.error('평점 기반 정책 적용 실패:', error);
+      throw new Error('평점 기반 정책을 적용할 수 없습니다.');
+    }
+  }
+
+  // 시공자 정지 상태 확인
+  static async checkSuspensionStatus(contractorId: string): Promise<{
+    isSuspended: boolean;
+    suspensionEndDate: Date | null;
+    remainingDays: number;
+    reason: string | null;
+  }> {
+    try {
+      const contractorRef = doc(db, 'users', contractorId);
+      const contractorDoc = await getDoc(contractorRef);
+      
+      if (!contractorDoc.exists()) {
+        throw new Error('시공자를 찾을 수 없습니다.');
+      }
+
+      const contractorData = contractorDoc.data();
+      const suspensionInfo = contractorData.suspensionInfo;
+      
+      if (!suspensionInfo || !suspensionInfo.isSuspended) {
+        return {
+          isSuspended: false,
+          suspensionEndDate: null,
+          remainingDays: 0,
+          reason: null
+        };
+      }
+      
+      // 영구정지인 경우
+      if (suspensionInfo.suspensionDays === -1) {
+        return {
+          isSuspended: true,
+          suspensionEndDate: null,
+          remainingDays: -1,
+          reason: suspensionInfo.reason
+        };
+      }
+      
+      // 임시정지인 경우
+      const now = new Date();
+      const endDate = suspensionInfo.suspensionEndDate?.toDate() || new Date();
+      
+      if (now >= endDate) {
+        // 정지 기간이 만료된 경우 정지 해제
+        await updateDoc(contractorRef, {
+          'suspensionInfo.isSuspended': false,
+          'suspensionInfo.suspensionEndDate': null,
+          'suspensionInfo.remainingDays': 0,
+          'suspensionInfo.reason': null,
+          updatedAt: new Date()
+        });
+        
+        return {
+          isSuspended: false,
+          suspensionEndDate: null,
+          remainingDays: 0,
+          reason: null
+        };
+      }
+      
+      // 남은 일수 계산
+      const remainingTime = endDate.getTime() - now.getTime();
+      const remainingDays = Math.ceil(remainingTime / (1000 * 60 * 60 * 24));
+      
+      return {
+        isSuspended: true,
+        suspensionEndDate: endDate,
+        remainingDays: remainingDays,
+        reason: suspensionInfo.reason
+      };
+      
+    } catch (error) {
+      console.error('정지 상태 확인 실패:', error);
+      throw new Error('정지 상태를 확인할 수 없습니다.');
     }
   }
 }

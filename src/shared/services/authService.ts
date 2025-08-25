@@ -136,7 +136,7 @@ export class AuthService {
         phone, // 포맷팅된 전화번호 (표시용)
         phoneNumbers: extractPhoneNumbers(phone), // 숫자만 저장 (검색용)
         role,
-        approvalStatus: 'pending' as ApprovalStatus,
+        approvalStatus: role === 'admin' ? 'approved' as ApprovalStatus : 'pending' as ApprovalStatus,
         createdAt: new Date(),
         updatedAt: new Date()
       };

@@ -8,6 +8,87 @@ service cloud.firestore {
       allow write: if request.auth != null && request.auth.uid == userId;
     }
     
+    // 판매자 정보
+    match /sellers/{sellerId} {
+      allow read: if request.auth != null;
+      allow write: if request.auth != null && request.auth.uid == sellerId;
+    }
+    
+    // 시공자 정보
+    match /contractors/{contractorId} {
+      allow read: if request.auth != null;
+      allow write: if request.auth != null && request.auth.uid == contractorId;
+    }
+    
+    // 작업 정보
+    match /jobs/{jobId} {
+      allow read: if request.auth != null;
+      allow write: if request.auth != null;
+    }
+    
+    // 채팅 메시지
+    match /messages/{messageId} {
+      allow read: if request.auth != null;
+      allow write: if request.auth != null;
+    }
+    
+    // 포인트 거래 내역
+    match /pointTransactions/{transactionId} {
+      allow read: if request.auth != null;
+      allow write: if request.auth != null;
+    }
+    
+    // 포인트 잔액
+    match /pointBalances/{balanceId} {
+      allow read: if request.auth != null;
+      allow write: if request.auth != null;
+    }
+    
+    // 포인트 에스크로
+    match /pointEscrows/{escrowId} {
+      allow read: if request.auth != null;
+      allow write: if request.auth != null;
+    }
+    
+    // 레벨 정보
+    match /levels/{levelId} {
+      allow read: if request.auth != null;
+      allow write: if request.auth != null && 
+        get(/databases/$(database)/documents/users/$(request.auth.uid)).data.role == 'admin';
+    }
+    
+    // 평점 기반 수수료율 정책
+    match /ratingBasedCommissionPolicies/{policyId} {
+      allow read: if request.auth != null;
+      allow write: if request.auth != null && 
+        get(/databases/$(database)/documents/users/$(request.auth.uid)).data.role == 'admin';
+    }
+    
+    // 평점 기반 정지 정책
+    match /ratingBasedSuspensionPolicies/{policyId} {
+      allow read: if request.auth != null;
+      allow write: if request.auth != null && 
+        get(/databases/$(database)/documents/users/$(request.auth.uid)).data.role == 'admin';
+    }
+    
+    // 알림
+    match /notifications/{notificationId} {
+      allow read: if request.auth != null;
+      allow write: if request.auth != null;
+    }
+    
+    // 게시판 게시글
+    match /boardPosts/{postId} {
+      allow read: if request.auth != null;
+      allow write: if request.auth != null;
+    }
+    
+    // 게시판 댓글
+    match /boardReplies/{replyId} {
+      allow read: if request.auth != null;
+      allow write: if request.auth != null;
+    }
+    
     // 광고 문서 (모든 사용자가 읽기 가능, 관리자만 쓰기 가능)
     match /advertisements/{adId} {
       allow read: if request.auth != null;
@@ -19,6 +100,12 @@ service cloud.firestore {
     match /systemSettings/{docId} {
       allow read: if request.auth != null;
       allow write: if request.auth != null && 
+        get(/databases/$(database)/documents/users/$(request.auth.uid)).data.role == 'admin';
+    }
+    
+    // 분석 데이터 (관리자만 접근)
+    match /analytics/{docId} {
+      allow read, write: if request.auth != null && 
         get(/databases/$(database)/documents/users/$(request.auth.uid)).data.role == 'admin';
     }
     

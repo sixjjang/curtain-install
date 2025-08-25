@@ -51,10 +51,14 @@ export class SatisfactionService {
   // 만족도 조사 생성 (작업 완료 시 자동 생성)
   static async createSurvey(jobId: string, customerId: string, contractorId: string): Promise<string> {
     try {
+      // 접근 토큰 생성 (간단한 랜덤 문자열)
+      const accessToken = Math.random().toString(36).substring(2, 15) + Math.random().toString(36).substring(2, 15);
+      
       const surveyData = {
         jobId,
         customerId,
         contractorId,
+        accessToken, // 접근 토큰 추가
         responses: [],
         isCompleted: false,
         createdAt: serverTimestamp(),
@@ -170,41 +174,49 @@ export class SatisfactionService {
     }
   }
 
-  // 만족도 조사 링크 생성
-  static generateSurveyLink(surveyId: string): string {
+  // 만족도 조사 링크 생성 (로그인 불필요)
+  static generateSurveyLink(surveyId: string, accessToken?: string): string {
     // Firebase 호스팅 URL 사용 (프로덕션 환경)
     const isProduction = window.location.hostname !== 'localhost' && window.location.hostname !== '127.0.0.1';
     
+    let baseUrl: string;
     if (isProduction) {
-      // Firebase 호스팅 URL (실제 배포된 도메인)
-      return `https://curtain-install.web.app/survey/${surveyId}`;
+      // Firebase 호스팅 URL (실제 배포된 도메인) - 로그인 불필요
+      baseUrl = 'https://curtain-install.web.app';
     } else {
-      // 개발 환경에서는 현재 도메인 사용
-      const baseUrl = window.location.origin;
-      return `${baseUrl}/survey/${surveyId}`;
+      // 개발 환경에서는 현재 도메인 사용 - 로그인 불필요
+      baseUrl = window.location.origin;
     }
+    
+    // 토큰이 있으면 쿼리 파라미터로 추가
+    if (accessToken) {
+      return `${baseUrl}/survey/${surveyId}?token=${accessToken}`;
+    }
+    
+    return `${baseUrl}/survey/${surveyId}`;
   }
 
-  // 카카오톡 링크 생성
-  static generateKakaoLink(surveyId: string, customerName: string): string {
-    const surveyUrl = this.generateSurveyLink(surveyId);
+  // 카카오톡 링크 생성 (로그인 불필요)
+  static generateKakaoLink(surveyId: string, customerName: string, accessToken?: string): string {
+    const surveyUrl = this.generateSurveyLink(surveyId, accessToken);
     const message = encodeURIComponent(
       `안녕하세요! ${customerName}님\n\n` +
       `시공 서비스 만족도 조사에 참여해 주세요.\n` +
       `소중한 의견을 바탕으로 더 나은 서비스를 제공하겠습니다.\n\n` +
-      `만족도 조사 참여하기 👇\n` +
-      `${surveyUrl}`
+      `📱 만족도 조사 참여하기 (로그인 불필요)\n` +
+      `${surveyUrl}\n\n` +
+      `※ 위 링크는 로그인 없이 바로 접근 가능합니다.`
     );
     
     return `https://open.kakao.com/me/send?text=${message}`;
   }
 
   // 카카오톡으로 만족도 조사 링크 발송 (시뮬레이션)
-  static async sendSurveyLink(phoneNumber: string, surveyId: string, customerName: string): Promise<void> {
+  static async sendSurveyLink(phoneNumber: string, surveyId: string, customerName: string, accessToken?: string): Promise<void> {
     try {
       // 실제 구현에서는 카카오톡 API나 SMS API를 사용
       // 현재는 시뮬레이션으로 처리
-      const kakaoLink = this.generateKakaoLink(surveyId, customerName);
+      const kakaoLink = this.generateKakaoLink(surveyId, customerName, accessToken);
       
       console.log('카카오톡 링크 생성:', kakaoLink);
       console.log('발송 대상:', phoneNumber);

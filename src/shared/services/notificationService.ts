@@ -55,7 +55,7 @@ export class NotificationService {
     try {
       const title = '새로운 채팅 메시지';
       const notificationMessage = `${senderName}: ${message.length > 50 ? message.substring(0, 50) + '...' : message}`;
-      const actionUrl = `/seller/chat/${jobId}`;
+      const actionUrl = `/contractor/chat/${jobId}`;
       
       await this.createNotification(
         recipientId,

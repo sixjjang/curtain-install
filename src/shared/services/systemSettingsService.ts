@@ -65,8 +65,8 @@ export class SystemSettingsService {
             scheduleChangeFeeRate: data.compensationPolicy?.scheduleChangeFeeRate || this.DEFAULT_SETTINGS.compensationPolicy.scheduleChangeFeeRate
           },
           feeSettings: {
-            sellerCommissionRate: data.feeSettings?.sellerCommissionRate || this.DEFAULT_SETTINGS.feeSettings.sellerCommissionRate,
-            contractorCommissionRate: data.feeSettings?.contractorCommissionRate || this.DEFAULT_SETTINGS.feeSettings.contractorCommissionRate
+            sellerCommissionRate: data.feeSettings?.sellerCommissionRate !== undefined ? data.feeSettings.sellerCommissionRate : this.DEFAULT_SETTINGS.feeSettings.sellerCommissionRate,
+            contractorCommissionRate: data.feeSettings?.contractorCommissionRate !== undefined ? data.feeSettings.contractorCommissionRate : this.DEFAULT_SETTINGS.feeSettings.contractorCommissionRate
           },
           userGuidanceSettings: {
             contractorGuidance: data.userGuidanceSettings?.contractorGuidance || this.DEFAULT_SETTINGS.userGuidanceSettings.contractorGuidance,

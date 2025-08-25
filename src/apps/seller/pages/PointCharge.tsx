@@ -60,7 +60,7 @@ const PointCharge: React.FC = () => {
   const [chargeDialogOpen, setChargeDialogOpen] = useState(false);
   const [chargeAmount, setChargeAmount] = useState('');
   const [selectedAmount, setSelectedAmount] = useState<number | null>(null);
-  const [paymentMethod, setPaymentMethod] = useState<'simulation' | 'toss_payments'>('simulation');
+  const [paymentMethod, setPaymentMethod] = useState<'simulation' | 'toss_payments' | 'kakao_pay'>('simulation');
   const [tossPaymentMethod, setTossPaymentMethod] = useState('card');
   
   // 토스페이먼츠 계좌 정보 상태
@@ -124,7 +124,7 @@ const PointCharge: React.FC = () => {
   };
 
   // 결제 수단 변경 시 계좌 정보 로드
-  const handlePaymentMethodChange = async (method: 'simulation' | 'toss_payments') => {
+  const handlePaymentMethodChange = async (method: 'simulation' | 'toss_payments' | 'kakao_pay') => {
     setPaymentMethod(method);
     if (method === 'toss_payments') {
       await loadTossAccountInfo();
@@ -170,6 +170,15 @@ const PointCharge: React.FC = () => {
       
       // 결제 수단에 따른 처리
       switch (paymentMethod) {
+        case 'kakao_pay':
+          paymentResult = await PaymentService.requestKakaoPay({
+            amount,
+            orderId,
+            itemName: `${amount.toLocaleString()}포인트 충전`,
+            userId: user.id,
+            userRole: 'seller'
+          });
+          break;
           
         case 'toss_payments':
           paymentResult = await PaymentService.requestTossPayments({
@@ -493,7 +502,7 @@ const PointCharge: React.FC = () => {
             <FormControl component="fieldset" fullWidth>
               <RadioGroup
                 value={paymentMethod}
-                onChange={(e) => handlePaymentMethodChange(e.target.value as 'simulation' | 'toss_payments')}
+                onChange={(e) => handlePaymentMethodChange(e.target.value as 'simulation' | 'toss_payments' | 'kakao_pay')}
               >
                 <FormControlLabel
                   value="simulation"
@@ -502,6 +511,22 @@ const PointCharge: React.FC = () => {
                     <Box display="flex" alignItems="center" gap={1}>
                       <AccountBalanceWallet color="primary" />
                       <Typography component="span">시뮬레이션 (테스트)</Typography>
+                    </Box>
+                  }
+                />
+
+                <FormControlLabel
+                  value="kakao_pay"
+                  control={<Radio />}
+                  label={
+                    <Box display="flex" alignItems="center" gap={1}>
+                      <Box 
+                        component="img" 
+                        src="https://developers.kakao.com/assets/img/about/logos/kakaopay/kakaopay_btn_small.png" 
+                        alt="카카오페이"
+                        sx={{ width: 20, height: 20 }}
+                      />
+                      <Typography component="span">카카오페이</Typography>
                     </Box>
                   }
                 />

@@ -41,7 +41,8 @@ import {
   Delete,
   Visibility,
   Save,
-  Cancel
+  Cancel,
+  Refresh
 } from '@mui/icons-material';
 import { SystemSettingsService } from '../../../shared/services/systemSettingsService';
 import { AnalyticsService } from '../../../shared/services/analyticsService';
@@ -95,73 +96,73 @@ const Dashboard: React.FC = () => {
   const [sellerInfo, setSellerInfo] = useState<{ email: string; name: string; phone: string } | null>(null);
   const [contractorInfo, setContractorInfo] = useState<{ email: string; name: string; phone: string } | null>(null);
 
+  const loadDashboardData = async () => {
+    try {
+      setLoading(true);
+      setError(null);
+
+      // 시스템 설정 로드
+      const hours = await SystemSettingsService.getEscrowAutoReleaseHours();
+      setEscrowHours(hours);
+      
+      // 수수료 설정 로드
+      const systemSettings = await SystemSettingsService.getSystemSettings();
+      setFeeSettings({
+        sellerCommissionRate: systemSettings.feeSettings.sellerCommissionRate,
+        contractorCommissionRate: systemSettings.feeSettings.contractorCommissionRate
+      });
+
+      // 분석 데이터 로드
+      const analyticsData = await AnalyticsService.getAnalyticsData('all');
+      console.log('📊 AnalyticsData:', analyticsData);
+      
+      // 안전한 데이터 접근
+      const userStats = analyticsData?.userStats || {};
+      const jobStats = analyticsData?.jobStats || {};
+      const revenueAnalysis = analyticsData?.revenueAnalysis || {};
+      const ratingAnalysis = analyticsData?.ratingAnalysis || {};
+      
+      console.log('👥 UserStats:', userStats);
+      console.log('📋 JobStats:', jobStats);
+      console.log('💰 RevenueAnalysis:', revenueAnalysis);
+      console.log('⭐ RatingAnalysis:', ratingAnalysis);
+      
+      // 사용자 통계 계산
+      const totalUsers = userStats.totalUsers || 0;
+      const pendingApprovals = userStats.pendingApprovals || 0;
+      const activeContractors = userStats.activeContractors || 0;
+
+      // 작업 통계 계산
+      const totalJobs = jobStats.totalJobs || 0;
+      const completedJobs = jobStats.completedJobs || 0;
+      const inProgressJobs = jobStats.inProgressJobs || 0;
+
+      // 수익 통계
+      const totalRevenue = revenueAnalysis.totalRevenue || 0;
+
+      // 평균 평점 계산
+      const averageRating = ratingAnalysis.averageRating || 0;
+
+      setStats({
+        totalUsers,
+        totalJobs,
+        averageRating,
+        activeContractors,
+        totalRevenue,
+        pendingApprovals,
+        completedJobs,
+        inProgressJobs
+      });
+
+    } catch (error) {
+      console.error('대시보드 데이터 로드 실패:', error);
+      setError('데이터를 불러오는데 실패했습니다.');
+    } finally {
+      setLoading(false);
+    }
+  };
+
   useEffect(() => {
-    const loadDashboardData = async () => {
-      try {
-        setLoading(true);
-        setError(null);
-
-        // 시스템 설정 로드
-        const hours = await SystemSettingsService.getEscrowAutoReleaseHours();
-        setEscrowHours(hours);
-        
-        // 수수료 설정 로드
-        const systemSettings = await SystemSettingsService.getSystemSettings();
-        setFeeSettings({
-          sellerCommissionRate: systemSettings.feeSettings.sellerCommissionRate,
-          contractorCommissionRate: systemSettings.feeSettings.contractorCommissionRate
-        });
-
-        // 분석 데이터 로드
-        const analyticsData = await AnalyticsService.getAnalyticsData('all');
-        console.log('📊 AnalyticsData:', analyticsData);
-        
-        // 안전한 데이터 접근
-        const userStats = analyticsData?.userStats || {};
-        const jobStats = analyticsData?.jobStats || {};
-        const revenueAnalysis = analyticsData?.revenueAnalysis || {};
-        const ratingAnalysis = analyticsData?.ratingAnalysis || {};
-        
-        console.log('👥 UserStats:', userStats);
-        console.log('📋 JobStats:', jobStats);
-        console.log('💰 RevenueAnalysis:', revenueAnalysis);
-        console.log('⭐ RatingAnalysis:', ratingAnalysis);
-        
-        // 사용자 통계 계산
-        const totalUsers = userStats.totalUsers || 0;
-        const pendingApprovals = userStats.pendingApprovals || 0;
-        const activeContractors = userStats.activeContractors || 0;
-
-        // 작업 통계 계산
-        const totalJobs = jobStats.totalJobs || 0;
-        const completedJobs = jobStats.completedJobs || 0;
-        const inProgressJobs = jobStats.inProgressJobs || 0;
-
-        // 수익 통계
-        const totalRevenue = revenueAnalysis.totalRevenue || 0;
-
-        // 평균 평점 계산
-        const averageRating = ratingAnalysis.averageRating || 0;
-
-        setStats({
-          totalUsers,
-          totalJobs,
-          averageRating,
-          activeContractors,
-          totalRevenue,
-          pendingApprovals,
-          completedJobs,
-          inProgressJobs
-        });
-
-      } catch (error) {
-        console.error('대시보드 데이터 로드 실패:', error);
-        setError('데이터를 불러오는데 실패했습니다.');
-      } finally {
-        setLoading(false);
-      }
-    };
-
     loadDashboardData();
   }, []);
 
@@ -176,7 +177,7 @@ const Dashboard: React.FC = () => {
   };
 
   const formatCurrency = (amount: number) => {
-    return new Intl.NumberFormat('ko-KR').format(amount);
+    return new Intl.NumberFormat('ko-KR').format(Math.floor(amount));
   };
 
 
@@ -384,6 +385,18 @@ const Dashboard: React.FC = () => {
 
   return (
     <Box>
+      {/* 새로고침 버튼 */}
+      <Box display="flex" justifyContent="flex-end" alignItems="center" mb={3}>
+        <Button
+          variant="outlined"
+          startIcon={<Refresh />}
+          onClick={loadDashboardData}
+          disabled={loading}
+        >
+          새로고침
+        </Button>
+      </Box>
+
       {/* 성공/에러 메시지 */}
       {success && (
         <Alert severity="success" sx={{ mb: 2 }} onClose={() => setSuccess(null)}>
@@ -695,8 +708,8 @@ const Dashboard: React.FC = () => {
                   <strong>수익 계산 예시:</strong><br />
                   • 100,000원 작업 완료 시<br />
                   • 판매자 수수료: {Math.round(100000 * feeSettings.sellerCommissionRate / 100).toLocaleString()}원 ({feeSettings.sellerCommissionRate}%)<br />
-                  • 시공자 수수료: {Math.round((100000 - 100000 * feeSettings.sellerCommissionRate / 100) * feeSettings.contractorCommissionRate / 100).toLocaleString()}원 ({(100000 - 100000 * feeSettings.sellerCommissionRate / 100).toLocaleString()}원의 {feeSettings.contractorCommissionRate}%)<br />
-                  • 플랫폼 총 수익: {(Math.round(100000 * feeSettings.sellerCommissionRate / 100) + Math.round((100000 - 100000 * feeSettings.sellerCommissionRate / 100) * feeSettings.contractorCommissionRate / 100)).toLocaleString()}원
+                  • 시공자 수수료: {Math.round(100000 * feeSettings.contractorCommissionRate / 100).toLocaleString()}원 (100,000원의 {feeSettings.contractorCommissionRate}%)<br />
+                  • 플랫폼 총 수익: {(Math.round(100000 * feeSettings.sellerCommissionRate / 100) + Math.round(100000 * feeSettings.contractorCommissionRate / 100)).toLocaleString()}원
                 </Typography>
               </Alert>
             </CardContent>

@@ -58,7 +58,7 @@ import { ConstructionJob } from '../../../types';
 import CreateJobDialog from '../components/CreateJobDialog';
 import ChatArea from '../components/ChatArea';
 import ExcelJobUpload from './ExcelJobUpload';
-import { useNavigate } from 'react-router-dom';
+import { useNavigate, useLocation } from 'react-router-dom';
 import { NotificationService } from '../../../shared/services/notificationService';
 import { PointService } from '../../../shared/services/pointService';
 
@@ -91,6 +91,7 @@ function TabPanel(props: TabPanelProps) {
 const JobManagement: React.FC = () => {
   const { user } = useAuth();
   const navigate = useNavigate();
+  const location = useLocation();
   const [createDialogOpen, setCreateDialogOpen] = useState(false);
   const [detailDialogOpen, setDetailDialogOpen] = useState(false);
   const [selectedJob, setSelectedJob] = useState<ConstructionJob | null>(null);
@@ -209,6 +210,43 @@ const JobManagement: React.FC = () => {
       fetchPointBalance();
     }
   }, [user]);
+
+  // URL 파라미터에서 작업 ID를 받아서 해당 작업을 자동 선택
+  useEffect(() => {
+    console.log('🔍 JobManagement - URL 파라미터 처리:', { location: location.pathname, search: location.search });
+    
+    // URL에서 작업 ID 추출 (useParams 대신 직접 추출)
+    const pathParts = location.pathname.split('/');
+    const extractedJobId = pathParts[pathParts.length - 1];
+    console.log('🔍 JobManagement - 추출된 작업 ID:', extractedJobId);
+    
+    if (extractedJobId && jobs.length > 0) {
+      const targetJob = jobs.find(job => job.id === extractedJobId);
+      console.log('🔍 JobManagement - 찾은 작업:', targetJob);
+      
+      if (targetJob) {
+        setSelectedJob(targetJob);
+        
+        // URL 쿼리 파라미터 확인하여 어떤 모달을 열지 결정
+        const urlParams = new URLSearchParams(location.search);
+        const modalType = urlParams.get('modal');
+        console.log('🔍 JobManagement - 모달 타입:', modalType);
+        
+        if (modalType === 'chat') {
+          console.log('🔍 JobManagement - 채팅 모달 열기');
+          setChatJob(targetJob);
+          setChatDialogOpen(true);
+        } else {
+          console.log('🔍 JobManagement - 상세보기 모달 열기');
+          // 기본값은 상세보기 모달
+          setDetailDialogOpen(true);
+        }
+        
+        // URL을 정리 (작업 ID와 쿼리 파라미터 제거)
+        navigate('/seller/jobs', { replace: true });
+      }
+    }
+  }, [location.pathname, location.search, jobs, navigate]);
 
   // 기간 변경 핸들러
   const handlePeriodChange = async (newPeriod: '1day' | '1week' | '1month' | '3months' | '6months' | '1year' | 'all') => {
@@ -427,6 +465,10 @@ const JobManagement: React.FC = () => {
       case 'completed': return '완료';
       case 'cancelled': return '취소';
       case 'reschedule_requested': return '일정 재조정 요청';
+      case 'compensation_completed': return '보상완료';
+      case 'product_not_ready': return '제품 미준비';
+      case 'customer_absent': return '고객 부재';
+      case 'schedule_changed': return '일정 변경';
       default: return '알 수 없음';
     }
   };
@@ -443,6 +485,10 @@ const JobManagement: React.FC = () => {
       case 'completed': return 'success';
       case 'cancelled': return 'error';
       case 'reschedule_requested': return 'warning';
+      case 'compensation_completed': return 'success';
+      case 'product_not_ready': return 'error';
+      case 'customer_absent': return 'error';
+      case 'schedule_changed': return 'warning';
       default: return 'default';
     }
   };
@@ -590,6 +636,10 @@ const JobManagement: React.FC = () => {
 
   // 날짜 포맷팅
   const formatDateTime = (date: Date) => {
+    if (!date || isNaN(date.getTime())) {
+      return '시간 정보 없음';
+    }
+    
     const year = date.getFullYear();
     const month = String(date.getMonth() + 1).padStart(2, '0');
     const day = String(date.getDate()).padStart(2, '0');
@@ -1485,7 +1535,13 @@ const JobManagement: React.FC = () => {
                       </Typography>
                     </Box>
                     <List dense sx={{ ml: 3 }}>
-                      {selectedJob.progressHistory.map((step, index) => (
+                      {selectedJob.progressHistory
+                        .sort((a, b) => {
+                          const dateA = a.timestamp ? new Date(a.timestamp).getTime() : 0;
+                          const dateB = b.timestamp ? new Date(b.timestamp).getTime() : 0;
+                          return dateA - dateB; // 오래된 순서대로 정렬
+                        })
+                        .map((step, index) => (
                         <ListItem key={index} sx={{ py: 0.5 }}>
                           <Box sx={{ width: '100%' }}>
                             <Box display="flex" justifyContent="space-between" alignItems="center" mb={1}>
@@ -1502,7 +1558,7 @@ const JobManagement: React.FC = () => {
                                 )}
                               </Box>
                               <Typography variant="caption" color="textSecondary">
-                                {formatDateTime(step.timestamp)}
+                                {step.timestamp ? formatDateTime(new Date(step.timestamp)) : '시간 정보 없음'}
                               </Typography>
                             </Box>
                             {step.note && (

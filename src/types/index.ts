@@ -2,6 +2,20 @@
 export type UserRole = 'seller' | 'contractor' | 'admin' | 'customer';
 export type ApprovalStatus = 'pending' | 'approved' | 'rejected';
 
+// 생체인증 관련 타입
+export interface BiometricSettings {
+  enabled: boolean;
+  available: boolean;
+  lastUsed?: Date;
+}
+
+// 자동 로그인 관련 타입
+export interface AutoLoginSettings {
+  enabled: boolean;
+  rememberMe: boolean;
+  lastLoginTime?: Date;
+}
+
 export interface User {
   id: string;
   email: string;
@@ -36,6 +50,7 @@ export interface User {
     contractorGuidanceVersion?: number; // 시공자 안내사항 확인 버전
     sellerGuidanceVersion?: number; // 판매자 안내사항 확인 버전
     confirmedAt?: Date; // 확인 시간
+    lastDailyVisit?: Date; // 마지막 일일 방문 확인 시간
   };
 }
 
@@ -76,6 +91,50 @@ export interface AdminInfo {
     maxFileSize: number;
     allowedFileTypes: string[];
   };
+}
+
+// 게시판 관련 타입
+export type BoardType = 'notice' | 'admin-chat' | 'suggestion';
+export type BoardCategory = 'notice' | 'admin-chat' | 'suggestion';
+
+export interface BoardPost {
+  id: string;
+  title: string;
+  content: string;
+  authorId: string;
+  authorName: string;
+  authorRole: UserRole;
+  boardType: BoardType;
+  category: BoardCategory;
+  createdAt: Date;
+  updatedAt: Date;
+  isPinned?: boolean; // 공지사항 고정
+  isRead?: boolean; // 읽음 여부
+  viewCount: number;
+  replyCount: number;
+  // 건의하기 관련
+  status?: 'pending' | 'in-progress' | 'completed'; // 건의 상태
+  adminReply?: string; // 관리자 답변
+  adminReplyAt?: Date; // 관리자 답변 시간
+  adminReplyBy?: string; // 답변한 관리자 ID
+  // 채팅 관련
+  chatRoomId?: string; // 채팅방 ID
+  lastMessage?: string; // 마지막 메시지
+  lastMessageAt?: Date; // 마지막 메시지 시간
+  lastMessageBy?: string; // 마지막 메시지 작성자 ID
+  unreadCount?: number; // 안읽은 메시지 수
+}
+
+export interface BoardReply {
+  id: string;
+  postId: string;
+  content: string;
+  authorId: string;
+  authorName: string;
+  authorRole: UserRole;
+  createdAt: Date;
+  updatedAt: Date;
+  isAdminReply?: boolean; // 관리자 답변 여부
 }
 
 // 시공자 정보 타입
@@ -423,6 +482,7 @@ export interface SatisfactionSurvey {
   jobId: string;
   customerId: string;
   contractorId: string;
+  accessToken?: string; // 접근 토큰 (로그인 없이 접근 가능하도록)
   responses: SurveyResponse[];
   isCompleted: boolean;
   completedAt?: Date;
@@ -521,19 +581,37 @@ export interface PointBalance {
   totalWithdrawn?: number; // 총 인출 금액
 }
 
+// 평점 기반 수수료율 정책 타입
+export interface RatingBasedCommissionPolicy {
+  id: string;
+  minRating: number; // 최소 평점
+  maxRating: number; // 최대 평점 (선택사항)
+  commissionRate: number; // 수수료율 (%)
+  description: string; // 정책 설명
+  isActive: boolean;
+  createdAt: Date;
+  updatedAt: Date;
+}
+
+// 평점 기반 정지 정책 타입
+export interface RatingBasedSuspensionPolicy {
+  id: string;
+  minRating: number; // 최소 평점
+  maxRating: number; // 최대 평점 (선택사항)
+  suspensionDays: number; // 정지 일수 (0: 정지 없음, -1: 영구정지)
+  description: string; // 정책 설명
+  isActive: boolean;
+  createdAt: Date;
+  updatedAt: Date;
+}
+
 // 시공자 레벨 관리 타입
 export interface ContractorLevel {
   id: string;
   level: number;
   name: string; // 레벨 명칭 (예: 신입시공자, 최고급시공자)
-  commissionRate: number; // 수수료율 (%)
-  hourlyRateMultiplier: number; // 시급 배수
+  completedJobsCount: number; // 완료 시공건 수
   benefits: string[]; // 혜택 목록
-  requirements: {
-    minExperience: number; // 최소 경력 (개월)
-    minJobs: number; // 최소 완료 작업 수
-    minRating: number; // 최소 평점
-  };
   isActive: boolean;
   createdAt: Date;
   updatedAt: Date;

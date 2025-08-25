@@ -1,4 +1,4 @@
-import React, { useState } from 'react';
+import React, { useState, useEffect } from 'react';
 import { useNavigate, Link } from 'react-router-dom';
 import {
   Container,
@@ -11,10 +11,22 @@ import {
   Card,
   CardContent,
   Grid,
-  Divider
+  Divider,
+  FormControlLabel,
+  Checkbox,
+  CircularProgress,
+  IconButton,
+  Tooltip
 } from '@mui/material';
+import { 
+  Fingerprint, 
+  Visibility, 
+  VisibilityOff,
+  AutoAwesome
+} from '@mui/icons-material';
 import { useAuth } from '../contexts/AuthContext';
 import { AuthService } from '../services/authService';
+import { BiometricService } from '../services/biometricService';
 
 import { UserRole } from '../../types';
 
@@ -26,8 +38,46 @@ const LoginPage: React.FC = () => {
   const [creatingTestAccount, setCreatingTestAccount] = useState(false);
   const [updatingRole, setUpdatingRole] = useState(false);
   
-  const { login, user } = useAuth();
+  // 자동 로그인 및 생체인증 관련 상태
+  const [rememberMe, setRememberMe] = useState(false);
+  const [showPassword, setShowPassword] = useState(false);
+  const [biometricAvailable, setBiometricAvailable] = useState(false);
+  const [biometricEnabled, setBiometricEnabled] = useState(false);
+  const [biometricLoading, setBiometricLoading] = useState(false);
+  
+  const { 
+    login, 
+    loginWithBiometric,
+    user, 
+    autoLoginLoading,
+    enableBiometric,
+    isBiometricEnabled,
+    isBiometricAvailable,
+    getAutoLoginInfo
+  } = useAuth();
   const navigate = useNavigate();
+
+  // 생체인증 상태 확인
+  useEffect(() => {
+    const checkBiometricStatus = async () => {
+      const available = await isBiometricAvailable();
+      const enabled = isBiometricEnabled();
+      setBiometricAvailable(available);
+      setBiometricEnabled(enabled);
+    };
+
+    checkBiometricStatus();
+  }, [isBiometricAvailable, isBiometricEnabled]);
+
+  // 저장된 로그인 정보 불러오기
+  useEffect(() => {
+    const savedInfo = getAutoLoginInfo();
+    if (savedInfo) {
+      setEmail(savedInfo.email);
+      setPassword(savedInfo.password);
+      setRememberMe(savedInfo.rememberMe);
+    }
+  }, [getAutoLoginInfo]);
 
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
@@ -40,7 +90,7 @@ const LoginPage: React.FC = () => {
     try {
       setError('');
       setLoading(true);
-      const userData = await login(email, password);
+      const userData = await login(email, password, rememberMe);
       
       console.log('로그인 성공:', userData);
       
@@ -61,6 +111,57 @@ const LoginPage: React.FC = () => {
       setError('로그인에 실패했습니다. 이메일과 비밀번호를 확인해주세요.');
     } finally {
       setLoading(false);
+    }
+  };
+
+  // 생체인증 로그인 처리
+  const handleBiometricLogin = async () => {
+    try {
+      setError('');
+      setBiometricLoading(true);
+      const userData = await loginWithBiometric();
+      
+      console.log('생체인증 로그인 성공:', userData);
+      
+      // 로그인 성공 후 사용자 역할에 따라 리다이렉트
+      const roleRoutes: { [key: string]: string } = {
+        admin: '/admin',
+        seller: '/seller',
+        contractor: '/contractor',
+        customer: '/login'
+      };
+      
+      const targetRoute = roleRoutes[userData.role] || '/login';
+      console.log(`사용자 역할: ${userData.role}, 이동할 경로: ${targetRoute}`);
+      navigate(targetRoute);
+      
+    } catch (error) {
+      console.error('생체인증 로그인 실패:', error);
+      setError('생체인증 로그인에 실패했습니다.');
+    } finally {
+      setBiometricLoading(false);
+    }
+  };
+
+  // 생체인증 활성화
+  const handleEnableBiometric = async () => {
+    if (!email || !password) {
+      setError('이메일과 비밀번호를 먼저 입력해주세요.');
+      return;
+    }
+
+    try {
+      setError('');
+      const success = await enableBiometric(email, password);
+      if (success) {
+        setBiometricEnabled(true);
+        setError(''); // 성공 메시지 대신 에러 메시지 초기화
+      } else {
+        setError('생체인증 활성화에 실패했습니다.');
+      }
+    } catch (error) {
+      console.error('생체인증 활성화 실패:', error);
+      setError('생체인증 활성화에 실패했습니다.');
     }
   };
 
@@ -280,23 +381,94 @@ const LoginPage: React.FC = () => {
                 fullWidth
                 name="password"
                 label="비밀번호"
-                type="password"
+                type={showPassword ? 'text' : 'password'}
                 id="password"
                 autoComplete="current-password"
                 value={password}
                 onChange={(e) => setPassword(e.target.value)}
+                InputProps={{
+                  endAdornment: (
+                    <IconButton
+                      onClick={() => setShowPassword(!showPassword)}
+                      edge="end"
+                    >
+                      {showPassword ? <VisibilityOff /> : <Visibility />}
+                    </IconButton>
+                  )
+                }}
               />
+              
+              {/* 자동 로그인 및 생체인증 옵션 */}
+              <Box sx={{ mt: 2, display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
+                <FormControlLabel
+                  control={
+                    <Checkbox
+                      checked={rememberMe}
+                      onChange={(e) => setRememberMe(e.target.checked)}
+                      color="primary"
+                    />
+                  }
+                  label="로그인 정보 저장"
+                />
+                
+                {biometricAvailable && (
+                  <Tooltip title={biometricEnabled ? "생체인증 활성화됨" : "생체인증 활성화"}>
+                    <span>
+                      <IconButton
+                        onClick={handleEnableBiometric}
+                        color={biometricEnabled ? "primary" : "default"}
+                        disabled={!email || !password}
+                      >
+                        <Fingerprint />
+                      </IconButton>
+                    </span>
+                  </Tooltip>
+                )}
+              </Box>
+
+              {/* 생체인증 로그인 버튼 */}
+              {biometricAvailable && biometricEnabled && (
+                <Button
+                  fullWidth
+                  variant="outlined"
+                  startIcon={<Fingerprint />}
+                  onClick={handleBiometricLogin}
+                  disabled={biometricLoading}
+                  sx={{ mt: 2, mb: 2 }}
+                >
+                  {biometricLoading ? (
+                    <CircularProgress size={20} sx={{ mr: 1 }} />
+                  ) : null}
+                  생체인증으로 로그인
+                </Button>
+              )}
+
               <Button
                 type="submit"
                 fullWidth
                 variant="contained"
-                sx={{ mt: 3, mb: 2 }}
+                sx={{ mt: 2, mb: 2 }}
                 disabled={loading}
               >
-                {loading ? '로그인 중...' : '로그인'}
+                {loading ? (
+                  <>
+                    <CircularProgress size={20} sx={{ mr: 1 }} />
+                    로그인 중...
+                  </>
+                ) : (
+                  '로그인'
+                )}
               </Button>
 
-
+              {/* 자동 로그인 상태 표시 */}
+              {autoLoginLoading && (
+                <Box textAlign="center" sx={{ mt: 2 }}>
+                  <CircularProgress size={20} sx={{ mr: 1 }} />
+                  <Typography variant="body2" color="textSecondary">
+                    자동 로그인 중...
+                  </Typography>
+                </Box>
+              )}
               
               <Box textAlign="center">
                 <Link to="/register" style={{ textDecoration: 'none' }}>
@@ -306,6 +478,17 @@ const LoginPage: React.FC = () => {
                 </Link>
               </Box>
             </Box>
+
+            {/* 생체인증 상태 정보 */}
+            {biometricAvailable && (
+              <Box sx={{ mt: 2, p: 2, bgcolor: 'info.light', borderRadius: 1 }}>
+                <Typography variant="body2" color="info.contrastText" align="center">
+                  <AutoAwesome sx={{ fontSize: 16, mr: 0.5, verticalAlign: 'middle' }} />
+                  생체인증을 지원하는 기기입니다
+                  {biometricEnabled && ' (활성화됨)'}
+                </Typography>
+              </Box>
+            )}
 
             <Divider sx={{ my: 3 }} />
             

@@ -200,10 +200,10 @@ const NotificationsPage: React.FC = () => {
                       }
                       secondary={
                         <>
-                          <Typography variant="body2" color="textSecondary" display="block">
+                          <Typography variant="body2" color="textSecondary" component="span" display="block">
                             {notification.message}
                           </Typography>
-                          <Typography variant="caption" color="textSecondary" display="block">
+                          <Typography variant="caption" color="textSecondary" component="span" display="block">
                             {formatTime(notification.createdAt)}
                           </Typography>
                         </>

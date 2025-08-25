@@ -50,6 +50,8 @@ const Chat: React.FC = () => {
   const isMobile = useMediaQuery(theme.breakpoints.down('md'));
   const navigate = useNavigate();
 
+  console.log('🔍 Chat 컴포넌트 렌더링 - jobId:', jobId);
+
   // 총 예산 계산 함수
   const calculateTotalBudget = (job: ConstructionJob): number => {
     if (job.items && job.items.length > 0) {
@@ -198,10 +200,14 @@ const Chat: React.FC = () => {
       case 'pending': return '대기중';
       case 'assigned': return '배정됨';
       case 'product_preparing': return '자재준비';
-              case 'product_ready': return '제품준비완료';
+      case 'product_ready': return '제품준비완료';
       case 'pickup_completed': return '픽업완료';
       case 'in_progress': return '시공중';
       case 'completed': return '완료';
+      case 'compensation_completed': return '보상완료';
+      case 'product_not_ready': return '제품 미준비';
+      case 'customer_absent': return '고객 부재';
+      case 'schedule_changed': return '일정 변경';
       default: return '알 수 없음';
     }
   };
@@ -215,6 +221,10 @@ const Chat: React.FC = () => {
       case 'pickup_completed': return 'secondary';
       case 'in_progress': return 'success';
       case 'completed': return 'success';
+      case 'compensation_completed': return 'success';
+      case 'product_not_ready': return 'error';
+      case 'customer_absent': return 'error';
+      case 'schedule_changed': return 'warning';
       default: return 'default';
     }
   };
@@ -670,9 +680,9 @@ const Chat: React.FC = () => {
                        <AttachMoney sx={{ fontSize: 16, color: 'primary.main' }} />
                        <Typography variant="body2" color="primary.main" fontWeight={600}>
                          {job.finalAmount 
-                           ? `${job.finalAmount.toLocaleString()}원` 
+                           ? `${job.finalAmount.toLocaleString()} P` 
                            : calculateTotalBudget(job) > 0 
-                             ? `${calculateTotalBudget(job).toLocaleString()}원`
+                             ? `${calculateTotalBudget(job).toLocaleString()} P`
                              : '예산 미정'
                          }
                        </Typography>
@@ -744,19 +754,20 @@ const Chat: React.FC = () => {
                         </Box>
                       }
                       secondary={
-                        <Box>
-                          <Typography variant="body2" color="textSecondary" noWrap>
+                        <>
+                          <Typography variant="body2" color="textSecondary" noWrap component="span">
                             {job.address}
                           </Typography>
-                          <Typography variant="caption" color="textSecondary">
+                          <br />
+                          <Typography variant="caption" color="textSecondary" component="span">
                             총금액: {job.finalAmount 
-                              ? `${job.finalAmount.toLocaleString()}원` 
+                              ? `${job.finalAmount.toLocaleString()} P` 
                               : calculateTotalBudget(job) > 0 
-                                ? `${calculateTotalBudget(job).toLocaleString()}원`
+                                ? `${calculateTotalBudget(job).toLocaleString()} P`
                                 : '예산 미정'
                             }
                           </Typography>
-                        </Box>
+                        </>
                       }
                     />
                   </ListItem>

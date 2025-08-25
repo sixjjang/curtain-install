@@ -459,10 +459,14 @@ user.profileImage || ''
       case 'pending': return '대기중';
       case 'assigned': return '배정됨';
       case 'product_preparing': return '자재준비';
-              case 'product_ready': return '제품준비완료';
+      case 'product_ready': return '제품준비완료';
       case 'pickup_completed': return '픽업완료';
       case 'in_progress': return '시공중';
       case 'completed': return '완료';
+      case 'compensation_completed': return '보상완료';
+      case 'product_not_ready': return '제품 미준비';
+      case 'customer_absent': return '고객 부재';
+      case 'schedule_changed': return '일정 변경';
       default: return '알 수 없음';
     }
   };
@@ -477,6 +481,10 @@ user.profileImage || ''
       case 'pickup_completed': return 'secondary';
       case 'in_progress': return 'success';
       case 'completed': return 'success';
+      case 'compensation_completed': return 'success';
+      case 'product_not_ready': return 'error';
+      case 'customer_absent': return 'error';
+      case 'schedule_changed': return 'warning';
       default: return 'default';
     }
   };
@@ -522,7 +530,14 @@ user.profileImage || ''
   // 모바일에서 채팅창 표시
   if (isMobile && showChat && selectedJob) {
     return (
-      <Box sx={{ height: '100vh', display: 'flex', flexDirection: 'column' }}>
+      <Box sx={{ 
+        height: '100vh', 
+        width: '100vw',
+        maxWidth: '100%',
+        display: 'flex', 
+        flexDirection: 'column',
+        overflow: 'hidden'
+      }}>
         {/* 채팅 헤더 */}
         <Box sx={{ 
           position: 'sticky',
@@ -614,7 +629,7 @@ user.profileImage || ''
           flexGrow: 1, 
           p: 2, 
           overflow: 'auto',
-          bgcolor: 'grey.50'
+          bgcolor: (theme) => theme.palette.mode === 'dark' ? 'background.default' : 'grey.50'
         }}>
           {messages.length === 0 ? (
             <Box textAlign="center" py={4}>
@@ -721,7 +736,7 @@ user.profileImage || ''
           p: 2, 
           borderTop: 1, 
           borderColor: 'divider',
-          bgcolor: 'background.paper'
+          bgcolor: (theme) => theme.palette.mode === 'dark' ? 'background.paper' : 'background.paper'
         }}>
           <Box display="flex" gap={1}>
             <TextField
@@ -767,7 +782,11 @@ user.profileImage || ''
   // 모바일에서 작업 목록 표시
   if (isMobile) {
     return (
-      <Box>
+      <Box sx={{ 
+        width: '100vw',
+        maxWidth: '100%',
+        overflow: 'hidden'
+      }}>
 
         {error && (
           <Alert severity="error" sx={{ mb: 2, mx: 2 }}>
@@ -775,7 +794,7 @@ user.profileImage || ''
           </Alert>
         )}
 
-        <Box sx={{ p: 2 }}>
+        <Box sx={{ p: { xs: 1, sm: 2 } }}>
           <Box display="flex" justifyContent="space-between" alignItems="center" mb={2}>
             <Typography variant="h6">
               내 시공 작업
@@ -808,7 +827,7 @@ user.profileImage || ''
                   }}
                   onClick={() => handleJobSelect(job)}
                 >
-                  <CardContent>
+                  <CardContent sx={{ p: { xs: 1.5, sm: 2 } }}>
                     <Box display="flex" justifyContent="space-between" alignItems="flex-start" mb={1}>
                       <Typography variant="subtitle1" sx={{ fontWeight: 'medium' }}>
                         {formatJobTitle(job)}
@@ -842,7 +861,11 @@ user.profileImage || ''
 
   // 데스크톱 레이아웃 (기존과 동일)
   return (
-    <Box>
+    <Box sx={{ 
+      width: '100%',
+      maxWidth: '100%',
+      overflow: 'hidden'
+    }}>
       {error && (
         <Alert severity="error" sx={{ mb: 2 }}>
           {error}
@@ -990,7 +1013,13 @@ user.profileImage || ''
                 </Box>
 
                 {/* 메시지 목록 */}
-                <Box sx={{ flexGrow: 1, p: 2, overflow: 'auto', maxHeight: 'calc(100vh - 400px)' }}>
+                <Box sx={{ 
+                  flexGrow: 1, 
+                  p: 2, 
+                  overflow: 'auto', 
+                  maxHeight: 'calc(100vh - 400px)',
+                  bgcolor: (theme) => theme.palette.mode === 'dark' ? 'background.default' : 'grey.50'
+                }}>
                   {messages.length === 0 ? (
                     <Box textAlign="center" py={4}>
                       <Typography color="textSecondary">

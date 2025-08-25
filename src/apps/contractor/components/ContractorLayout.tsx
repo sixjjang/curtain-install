@@ -18,7 +18,8 @@ import {
   Badge,
   Chip,
   Divider,
-  Alert
+  Alert,
+  Collapse
 } from '@mui/material';
 import {
   Menu as MenuIcon,
@@ -33,13 +34,18 @@ import {
   Warning,
   Block,
   Brightness4,
-  Brightness7
+  Brightness7,
+  Forum as ForumIcon,
+  Announcement as NoticeIcon,
+  Feedback as SuggestionIcon,
+  ExpandMore,
+  ExpandLess
 } from '@mui/icons-material';
 import { useAuth } from '../../../shared/contexts/AuthContext';
 import { useTheme as useCustomTheme } from '../../../shared/contexts/ThemeContext';
 import { ContractorInfo } from '../../../types';
 
-const drawerWidth = 240;
+const drawerWidth = { xs: 280, sm: 240 };
 
 interface ContractorLayoutProps {
   children: React.ReactNode;
@@ -48,6 +54,7 @@ interface ContractorLayoutProps {
 const ContractorLayout: React.FC<ContractorLayoutProps> = ({ children }) => {
   const [mobileOpen, setMobileOpen] = useState(false);
   const [anchorEl, setAnchorEl] = useState<null | HTMLElement>(null);
+  const [boardMenuExpanded, setBoardMenuExpanded] = useState(false);
   const { user, logout } = useAuth();
   const navigate = useNavigate();
   const location = useLocation();
@@ -59,10 +66,16 @@ const ContractorLayout: React.FC<ContractorLayoutProps> = ({ children }) => {
   const menuItems = [
     { text: '대시보드', icon: <Dashboard />, path: '/contractor' },
     { text: '시공건 찾기', icon: <Work />, path: '/contractor/jobs' },
-    { text: '내 작업', icon: <Assignment />, path: '/contractor/my-jobs' },
+    { text: '내 시공건', icon: <Assignment />, path: '/contractor/my-jobs' },
     { text: '판매자와 채팅', icon: <Chat />, path: '/contractor/seller-chat' },
     { text: '포인트 관리', icon: <AccountBalance />, path: '/contractor/points' },
     { text: '프로필', icon: <Person />, path: '/contractor/profile' },
+  ];
+
+  const boardMenuItems = [
+    { text: '공지사항', icon: <NoticeIcon />, path: '/contractor/notices' },
+    { text: '관리자와 채팅', icon: <Chat />, path: '/contractor/admin-chat' },
+    { text: '건의하기', icon: <SuggestionIcon />, path: '/contractor/suggestions' },
   ];
 
   const handleDrawerToggle = () => {
@@ -88,13 +101,13 @@ const ContractorLayout: React.FC<ContractorLayoutProps> = ({ children }) => {
 
   const drawer = (
     <Box>
-      <Box sx={{ p: 2, textAlign: 'center' }}>
-        <Typography variant="h6" color="primary">
-          {contractor?.businessName || `${user?.name || '시공자'}님의 공간`}
-        </Typography>
-        <Typography variant="caption" color="textSecondary">
-          {contractor?.businessName ? '전문가의 손길' : '시공자 대시보드'}
-        </Typography>
+             <Box sx={{ p: 2, textAlign: 'center' }}>
+         <Typography variant="h6" color="primary">
+           {user?.name || '시공자'}님의 공간
+         </Typography>
+                   <Typography variant="caption" color="textSecondary">
+            {contractor?.businessName || '개인시공자'}
+          </Typography>
         {contractor && (
           <Box sx={{ mt: 2 }}>
             <Avatar sx={{ width: 56, height: 56, mx: 'auto', mb: 1 }}>
@@ -144,18 +157,75 @@ const ContractorLayout: React.FC<ContractorLayoutProps> = ({ children }) => {
           </ListItem>
         ))}
       </List>
+      
+      {/* 게시판 메뉴 */}
+      <Divider />
+      <ListItem disablePadding>
+        <ListItemButton
+          onClick={() => setBoardMenuExpanded(!boardMenuExpanded)}
+          sx={{ justifyContent: 'space-between' }}
+        >
+          <Box sx={{ display: 'flex', alignItems: 'center' }}>
+            <ForumIcon sx={{ mr: 1 }} />
+            <Typography variant="subtitle2" color="primary" fontWeight="bold">
+              게시판
+            </Typography>
+          </Box>
+          {boardMenuExpanded ? <ExpandLess /> : <ExpandMore />}
+        </ListItemButton>
+      </ListItem>
+      <Collapse in={boardMenuExpanded} timeout="auto" unmountOnExit>
+        <List component="div" disablePadding>
+          {boardMenuItems.map((item) => (
+            <ListItem key={item.text} disablePadding>
+              <ListItemButton
+                onClick={() => {
+                  console.log('🔍 ContractorLayout - 게시판 메뉴 클릭:', item.text, item.path);
+                  console.log('🔍 ContractorLayout - 사용자 승인 상태:', user?.approvalStatus);
+                  
+                  // 승인 대기 상태에서는 공지사항만 접근 가능
+                  if (user?.approvalStatus === 'pending' && item.path !== '/contractor/notices') {
+                    alert('승인 대기 중입니다. 승인 완료 후 이용 가능한 기능입니다.');
+                    return;
+                  }
+                  // 승인 거부 상태에서는 공지사항만 접근 가능
+                  if (user?.approvalStatus === 'rejected' && item.path !== '/contractor/notices') {
+                    alert('승인이 거부되었습니다. 관리자에게 문의해주세요.');
+                    return;
+                  }
+                  navigate(item.path);
+                  setMobileOpen(false);
+                }}
+                selected={location.pathname === item.path}
+                sx={{
+                  pl: 4,
+                  '&.Mui-selected': {
+                    backgroundColor: 'primary.light',
+                    '&:hover': {
+                      backgroundColor: 'primary.light',
+                    },
+                  },
+                }}
+              >
+                <ListItemIcon>{item.icon}</ListItemIcon>
+                <ListItemText primary={item.text} />
+              </ListItemButton>
+            </ListItem>
+          ))}
+        </List>
+      </Collapse>
     </Box>
   );
 
   return (
     <Box sx={{ display: 'flex' }}>
-      <AppBar
-        position="fixed"
-        sx={{
-          width: { sm: `calc(100% - ${drawerWidth}px)` },
-          ml: { sm: `${drawerWidth}px` },
-        }}
-      >
+             <AppBar
+         position="fixed"
+         sx={{
+           width: { sm: `calc(100% - ${drawerWidth.sm}px)` },
+           ml: { sm: `${drawerWidth.sm}px` },
+         }}
+       >
         <Toolbar>
           <IconButton
             color="inherit"
@@ -170,7 +240,7 @@ const ContractorLayout: React.FC<ContractorLayoutProps> = ({ children }) => {
             {(() => {
               // 현재 경로에 따라 제목 결정
               if (location.pathname === '/contractor' || location.pathname === '/contractor/') {
-                return contractor?.businessName ? `${contractor.businessName} 대시보드` : '시공자 대시보드';
+                return contractor?.businessName ? `${contractor.businessName} 대시보드` : '전문가의 손길';
               }
               if (location.pathname === '/contractor/jobs') {
                 return '시공건 찾기';
@@ -179,7 +249,7 @@ const ContractorLayout: React.FC<ContractorLayoutProps> = ({ children }) => {
                 return '시공건 상세';
               }
               if (location.pathname === '/contractor/my-jobs') {
-                return '내 작업';
+                return '내 시공건';
               }
               if (location.pathname === '/contractor/chat') {
                 return '고객과 채팅';
@@ -196,8 +266,18 @@ const ContractorLayout: React.FC<ContractorLayoutProps> = ({ children }) => {
               if (location.pathname === '/contractor/profile') {
                 return '프로필';
               }
+              // 게시판 메뉴들
+              if (location.pathname === '/contractor/notices') {
+                return '공지사항';
+              }
+              if (location.pathname === '/contractor/admin-chat') {
+                return '관리자와 채팅';
+              }
+              if (location.pathname === '/contractor/suggestions') {
+                return '건의하기';
+              }
               // 기본값
-              return contractor?.businessName ? `${contractor.businessName} 대시보드` : '시공자 대시보드';
+              return contractor?.businessName ? `${contractor.businessName} 대시보드` : '전문가의 손길';
             })()}
           </Typography>
           
@@ -249,35 +329,35 @@ const ContractorLayout: React.FC<ContractorLayoutProps> = ({ children }) => {
         </Toolbar>
       </AppBar>
 
-      <Box
-        component="nav"
-        sx={{ width: { sm: drawerWidth }, flexShrink: { sm: 0 } }}
-      >
-        <Drawer
-          variant="temporary"
-          open={mobileOpen}
-          onClose={handleDrawerToggle}
-          ModalProps={{
-            keepMounted: true,
-          }}
-          sx={{
-            display: { xs: 'block', sm: 'none' },
-            '& .MuiDrawer-paper': { boxSizing: 'border-box', width: drawerWidth },
-          }}
-        >
-          {drawer}
-        </Drawer>
-        <Drawer
-          variant="permanent"
-          sx={{
-            display: { xs: 'none', sm: 'block' },
-            '& .MuiDrawer-paper': { boxSizing: 'border-box', width: drawerWidth },
-          }}
-          open
-        >
-          {drawer}
-        </Drawer>
-      </Box>
+             <Box
+         component="nav"
+         sx={{ width: { sm: drawerWidth.sm }, flexShrink: { sm: 0 } }}
+       >
+         <Drawer
+           variant="temporary"
+           open={mobileOpen}
+           onClose={handleDrawerToggle}
+           ModalProps={{
+             keepMounted: true,
+           }}
+           sx={{
+             display: { xs: 'block', sm: 'none' },
+             '& .MuiDrawer-paper': { boxSizing: 'border-box', width: drawerWidth.xs },
+           }}
+         >
+           {drawer}
+         </Drawer>
+         <Drawer
+           variant="permanent"
+           sx={{
+             display: { xs: 'none', sm: 'block' },
+             '& .MuiDrawer-paper': { boxSizing: 'border-box', width: drawerWidth.sm },
+           }}
+           open
+         >
+           {drawer}
+         </Drawer>
+       </Box>
 
       <Menu
         anchorEl={anchorEl}
@@ -298,15 +378,15 @@ const ContractorLayout: React.FC<ContractorLayoutProps> = ({ children }) => {
         </MenuItem>
       </Menu>
 
-      <Box
-        component="main"
-        sx={{
-          flexGrow: 1,
-          p: 3,
-          width: { sm: `calc(100% - ${drawerWidth}px)` },
-          mt: 8,
-        }}
-      >
+             <Box
+         component="main"
+         sx={{
+           flexGrow: 1,
+           p: { xs: 1, sm: 2, md: 3 },
+           width: { sm: `calc(100% - ${drawerWidth.sm}px)` },
+           mt: 8,
+         }}
+       >
         {/* 승인 상태 경고 메시지 */}
         {user?.approvalStatus === 'pending' && (
           <Alert 

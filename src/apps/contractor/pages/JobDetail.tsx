@@ -60,9 +60,24 @@ import { ConstructionJob } from '../../../types';
 import { useAuth } from '../../../shared/contexts/AuthContext';
 
 const JobDetail: React.FC = () => {
-  const { jobId } = useParams<{ jobId: string }>();
+  const { jobId: paramJobId } = useParams<{ jobId: string }>();
   const navigate = useNavigate();
   const { user } = useAuth();
+  
+  // URL에서 jobId 추출 (useParams가 작동하지 않으므로 직접 추출)
+  const getJobIdFromUrl = () => {
+    // URL에서 직접 추출
+    const pathSegments = window.location.pathname.split('/');
+    const jobIdIndex = pathSegments.findIndex(segment => segment === 'jobs') + 1;
+    if (jobIdIndex > 0 && jobIdIndex < pathSegments.length) {
+      return pathSegments[jobIdIndex];
+    }
+    return null;
+  };
+  
+  const jobId = getJobIdFromUrl();
+  
+  console.log('🔍 JobDetail 컴포넌트 렌더링 - paramJobId:', paramJobId, 'extracted jobId:', jobId);
   const [job, setJob] = useState<ConstructionJob | null>(null);
   const [customerInfo, setCustomerInfo] = useState<CustomerInfo | null>(null);
   const [loading, setLoading] = useState(true);
@@ -203,7 +218,14 @@ const JobDetail: React.FC = () => {
 
   useEffect(() => {
     const fetchJobAndCustomer = async () => {
-      if (!jobId) return;
+      if (!jobId) {
+        console.error('❌ JobDetail - jobId가 없습니다:', { paramJobId, extractedJobId: jobId });
+        setError('작업 ID를 찾을 수 없습니다.');
+        setLoading(false);
+        return;
+      }
+      
+      console.log('🔍 JobDetail - 작업 정보 로딩 시작:', jobId);
       
       try {
         setLoading(true);
@@ -211,6 +233,7 @@ const JobDetail: React.FC = () => {
         
         // 작업 정보 가져오기
         const jobData = await JobService.getJobById(jobId);
+        console.log('✅ JobDetail - 작업 정보 로딩 완료:', jobData);
         setJob(jobData);
         
         // 고객 정보 가져오기
@@ -225,7 +248,7 @@ const JobDetail: React.FC = () => {
           console.error('고객 정보 가져오기 실패:', error);
         }
       } catch (error) {
-        console.error('작업 상세 정보 가져오기 실패:', error);
+        console.error('❌ JobDetail - 작업 상세 정보 가져오기 실패:', error);
         setError(error instanceof Error ? error.message : '작업을 불러올 수 없습니다.');
       } finally {
         setLoading(false);
@@ -233,7 +256,7 @@ const JobDetail: React.FC = () => {
     };
 
     fetchJobAndCustomer();
-  }, [jobId]);
+  }, [jobId, window.location.pathname]);
 
   const getStatusColor = (status: string) => {
     switch (status) {
@@ -244,6 +267,10 @@ const JobDetail: React.FC = () => {
       case 'pickup_completed': return 'secondary';
       case 'in_progress': return 'primary';
       case 'completed': return 'success';
+      case 'compensation_completed': return 'success';
+      case 'product_not_ready': return 'error';
+      case 'customer_absent': return 'error';
+      case 'schedule_changed': return 'warning';
       default: return 'default';
     }
   };
@@ -257,6 +284,10 @@ const JobDetail: React.FC = () => {
       case 'pickup_completed': return '픽업완료';
       case 'in_progress': return '진행중';
       case 'completed': return '완료';
+      case 'compensation_completed': return '보상완료';
+      case 'product_not_ready': return '제품 미준비';
+      case 'customer_absent': return '고객 부재';
+      case 'schedule_changed': return '일정 변경';
       default: return '알 수 없음';
     }
   };
@@ -310,15 +341,19 @@ const JobDetail: React.FC = () => {
           'current-contractor-id' // 실제로는 현재 로그인한 시공자 ID
         );
         
+        // 만족도 조사 정보 조회하여 토큰 가져오기
+        const surveyInfo = await SatisfactionService.getSurvey(surveyId);
+        
         // 고객 정보 조회
         if (job!.customerId) {
           const customerInfo = await CustomerService.getCustomerInfo(job!.customerId);
           if (customerInfo && customerInfo.phone) {
-            // 카카오톡으로 만족도 조사 링크 발송
+            // 카카오톡으로 만족도 조사 링크 발송 (토큰 포함)
             await SatisfactionService.sendSurveyLink(
               customerInfo.phone,
               surveyId,
-              customerInfo.name || '고객님'
+              customerInfo.name || '고객님',
+              surveyInfo?.accessToken
             );
             alert('고객에게 만족도 조사 링크를 전송했습니다.');
           }

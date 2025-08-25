@@ -80,7 +80,8 @@ const UserGuidanceDialog: React.FC<UserGuidanceDialogProps> = ({
       // 사용자의 안내사항 확인 상태 업데이트
       const updateData: any = {
         guidanceConfirmed: {
-          confirmedAt: new Date()
+          confirmedAt: new Date(),
+          lastDailyVisit: new Date() // 일일 방문 확인 시간 업데이트
         }
       };
       

@@ -115,6 +115,10 @@ const CalendarView: React.FC = () => {
       case 'in_progress': return '시공중';
       case 'completed': return '완료';
       case 'reschedule_requested': return '일정 재조정 요청';
+      case 'compensation_completed': return '보상완료';
+      case 'product_not_ready': return '제품 미준비';
+      case 'customer_absent': return '고객 부재';
+      case 'schedule_changed': return '일정 변경';
       default: return '알 수 없음';
     }
   };
@@ -130,6 +134,10 @@ const CalendarView: React.FC = () => {
       case 'in_progress': return 'success';
       case 'completed': return 'success';
       case 'reschedule_requested': return 'warning';
+      case 'compensation_completed': return 'success';
+      case 'product_not_ready': return 'error';
+      case 'customer_absent': return 'error';
+      case 'schedule_changed': return 'warning';
       default: return 'default';
     }
   };

@@ -12,7 +12,8 @@ import {
   getDocs
 } from 'firebase/firestore';
 
-import { TOSS_PAYMENTS_CONFIG } from '../../config/toss';
+import { TOSS_PAYMENTS_CONFIG, isTossApiKeySet } from '../../config/toss';
+import { KakaoPayService } from './kakaoPayService';
 
 export interface PaymentRequest {
   amount: number;
@@ -27,6 +28,7 @@ export interface PaymentResult {
   orderId?: string;
   error?: string;
   redirectUrl?: string;
+  paymentMethod?: string;
 }
 
 export class PaymentService {
@@ -151,6 +153,10 @@ export class PaymentService {
   // 토스페이먼츠 결제 요청
   static async requestTossPayments(payment: PaymentRequest, paymentMethod: string): Promise<PaymentResult> {
     try {
+      if (!isTossApiKeySet()) {
+        throw new Error('토스페이먼츠 API 키가 설정되지 않았습니다.');
+      }
+
       // 1. 결제 요청 정보를 Firebase에 저장
       const paymentRef = await addDoc(collection(db, 'payments'), {
         ...payment,
@@ -189,7 +195,8 @@ export class PaymentService {
         return {
           success: true,
           orderId: payment.orderId,
-          redirectUrl: result.checkoutPage
+          redirectUrl: result.checkoutPage,
+          paymentMethod: 'toss_payments'
         };
       } else {
         throw new Error(result.message || '토스페이먼츠 결제 요청에 실패했습니다.');
@@ -206,6 +213,10 @@ export class PaymentService {
   // 토스페이먼츠 결제 승인
   static async confirmTossPayments(paymentKey: string, orderId: string, amount: number): Promise<PaymentResult> {
     try {
+      if (!isTossApiKeySet()) {
+        throw new Error('토스페이먼츠 API 키가 설정되지 않았습니다.');
+      }
+
       // 1. 결제 정보 조회
       const paymentsRef = collection(db, 'payments');
       const q = query(paymentsRef, where('orderId', '==', orderId));
@@ -264,5 +275,61 @@ export class PaymentService {
         error: error instanceof Error ? error.message : '토스페이먼츠 결제 승인에 실패했습니다.'
       };
     }
+  }
+
+  // 카카오페이 결제 요청
+  static async requestKakaoPay(payment: PaymentRequest): Promise<PaymentResult> {
+    try {
+      if (!KakaoPayService.isApiKeySet()) {
+        throw new Error('카카오페이 API 키가 설정되지 않았습니다.');
+      }
+
+      const result = await KakaoPayService.preparePayment(payment);
+      
+      if (result.success) {
+        return {
+          ...result,
+          paymentMethod: 'kakao_pay'
+        };
+      } else {
+        return result;
+      }
+    } catch (error) {
+      console.error('카카오페이 결제 요청 실패:', error);
+      return {
+        success: false,
+        error: error instanceof Error ? error.message : '카카오페이 결제 요청에 실패했습니다.'
+      };
+    }
+  }
+
+  // 카카오페이 결제 승인
+  static async confirmKakaoPay(pgToken: string, orderId: string): Promise<PaymentResult> {
+    try {
+      if (!KakaoPayService.isApiKeySet()) {
+        throw new Error('카카오페이 API 키가 설정되지 않았습니다.');
+      }
+
+      return await KakaoPayService.approvePayment(pgToken, orderId);
+    } catch (error) {
+      console.error('카카오페이 결제 승인 실패:', error);
+      return {
+        success: false,
+        error: error instanceof Error ? error.message : '카카오페이 결제 승인에 실패했습니다.'
+      };
+    }
+  }
+
+  // 결제 수단별 API 키 설정 확인
+  static getAvailablePaymentMethods(): {
+    simulation: boolean;
+    tossPayments: boolean;
+    kakaoPay: boolean;
+  } {
+    return {
+      simulation: true, // 항상 사용 가능
+      tossPayments: isTossApiKeySet(),
+      kakaoPay: KakaoPayService.isApiKeySet()
+    };
   }
 }

@@ -29,6 +29,7 @@ import { Schedule, LocationOn, ExpandMore, ExpandLess, Cancel, AttachFile, Delet
 import { JobService } from '../../../shared/services/jobService';
 import { JobCancellationService } from '../../../shared/services/jobCancellationService';
 import { ContractorService, PreferredRegion } from '../../../shared/services/contractorService';
+import { SystemSettingsService } from '../../../shared/services/systemSettingsService';
 import { ConstructionJob } from '../../../types';
 import { useAuth } from '../../../shared/contexts/AuthContext';
 
@@ -36,6 +37,7 @@ import { useAuth } from '../../../shared/contexts/AuthContext';
 const JobList: React.FC = () => {
   const navigate = useNavigate();
   const { user } = useAuth();
+  const [sellerCommissionRate, setSellerCommissionRate] = useState<number>(2.5);
 
   // 총 예산 계산 함수
   const calculateTotalBudget = (job: ConstructionJob): number => {
@@ -43,6 +45,11 @@ const JobList: React.FC = () => {
       return job.items.reduce((sum, item) => sum + item.totalPrice, 0);
     }
     return 0;
+  };
+
+  // 시공비 계산 함수 (전체 금액 표시)
+  const calculateNetBudget = (job: ConstructionJob): number => {
+    return job.finalAmount || calculateTotalBudget(job);
   };
 
   // 품목 정보 포맷팅 함수
@@ -176,12 +183,26 @@ const JobList: React.FC = () => {
     '제주특별자치도': ['제주시', '서귀포시']
   };
 
+  // 시스템 설정에서 수수료율 로드
+  const loadCommissionRate = async () => {
+    try {
+      const settings = await SystemSettingsService.getSystemSettings();
+      setSellerCommissionRate(settings.feeSettings.sellerCommissionRate);
+    } catch (error) {
+      console.error('수수료율 로드 실패:', error);
+      // 기본값 2.5% 사용
+    }
+  };
+
   // 데이터 로드
   const loadData = async () => {
     if (!user) return;
     
     try {
       setLoading(true);
+      
+      // 수수료율 로드
+      await loadCommissionRate();
       
       // 모든 작업 조회
       const allJobs = await JobService.getAllJobs();
@@ -791,7 +812,7 @@ const JobList: React.FC = () => {
        </Card>
 
       {/* 작업 목록 */}
-      <Grid container spacing={{ xs: 1, sm: 2, md: 2 }}>
+      <Grid container spacing={{ xs: 0.5, sm: 1, md: 2 }}>
         {filteredJobs.length === 0 ? (
           <Grid item xs={12}>
             <Card>
@@ -826,7 +847,7 @@ const JobList: React.FC = () => {
                 }
               }}>
                 <CardContent sx={{ 
-                  p: { xs: 1, sm: 1.5 },
+                  p: { xs: 0.75, sm: 1, md: 1.5 },
                   flexGrow: 1,
                   display: 'flex',
                   flexDirection: 'column'
@@ -897,11 +918,11 @@ const JobList: React.FC = () => {
                           fontWeight: 'bold'
                         }}
                       >
-                        예산: {job.finalAmount 
-                          ? `${job.finalAmount.toLocaleString()}원` 
+                        시공비: {job.finalAmount 
+                          ? `${calculateNetBudget(job).toLocaleString()} P` 
                           : calculateTotalBudget(job) > 0 
-                            ? `${calculateTotalBudget(job).toLocaleString()}원`
-                            : '예산 미정'
+                            ? `${calculateNetBudget(job).toLocaleString()} P`
+                            : '시공비 미정'
                         }
                       </Typography>
                     </Box>

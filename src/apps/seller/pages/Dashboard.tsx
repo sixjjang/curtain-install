@@ -46,6 +46,7 @@ import { useAuth } from '../../../shared/contexts/AuthContext';
 import { JobService } from '../../../shared/services/jobService';
 import { NotificationService } from '../../../shared/services/notificationService';
 import { PointService } from '../../../shared/services/pointService';
+import { SystemSettingsService } from '../../../shared/services/systemSettingsService';
 import { ConstructionJob } from '../../../types';
 import { useNavigate } from 'react-router-dom';
 import CreateJobDialog from '../components/CreateJobDialog';
@@ -66,6 +67,7 @@ const Dashboard: React.FC = () => {
     pointBalance: 0,
     unreadNotifications: 0
   });
+  const [sellerCommissionRate, setSellerCommissionRate] = useState(3); // 기본값 3%
   const [createJobDialogOpen, setCreateJobDialogOpen] = useState(false);
 
   useEffect(() => {
@@ -98,6 +100,14 @@ const Dashboard: React.FC = () => {
   }, [user?.id]);
 
   const loadDashboardData = async () => {
+    try {
+      // 시스템 설정에서 판매자 수수료율 가져오기
+      const settings = await SystemSettingsService.getSystemSettings();
+      setSellerCommissionRate(settings.feeSettings?.sellerCommissionRate || 3);
+    } catch (error) {
+      console.error('시스템 설정 로드 실패:', error);
+    }
+    
     try {
       setLoading(true);
       
@@ -180,6 +190,10 @@ const Dashboard: React.FC = () => {
       case 'completed': return '완료';
       case 'cancelled': return '취소됨';
       case 'reschedule_requested': return '일정 재조정 요청';
+      case 'compensation_completed': return '보상완료';
+      case 'product_not_ready': return '제품 미준비';
+      case 'customer_absent': return '고객 부재';
+      case 'schedule_changed': return '일정 변경';
       default: return status;
     }
   };
@@ -195,6 +209,10 @@ const Dashboard: React.FC = () => {
       case 'completed': return 'success';
       case 'cancelled': return 'error';
       case 'reschedule_requested': return 'warning';
+      case 'compensation_completed': return 'success';
+      case 'product_not_ready': return 'error';
+      case 'customer_absent': return 'error';
+      case 'schedule_changed': return 'warning';
       default: return 'default';
     }
   };
@@ -262,7 +280,7 @@ const Dashboard: React.FC = () => {
         <Typography variant="h6" sx={{ color: 'white', mb: 2 }}>
           빠른 액션
         </Typography>
-        <Grid container spacing={2}>
+        <Grid container spacing={{ xs: 1, sm: 2, md: 2 }}>
           <Grid item xs={12} sm={6} md={3}>
             <Button
               fullWidth
@@ -327,13 +345,13 @@ const Dashboard: React.FC = () => {
       </Paper>
 
       {/* 통계 카드 */}
-      <Grid container spacing={3} sx={{ mb: 3 }}>
+      <Grid container spacing={{ xs: 1, sm: 2, md: 3 }} sx={{ mb: 3 }}>
         <Grid item xs={12} sm={6} md={3}>
           <Card sx={{ 
             background: 'linear-gradient(135deg, #667eea 0%, #764ba2 100%)',
             color: 'white'
           }}>
-            <CardContent>
+            <CardContent sx={{ p: { xs: 1.5, sm: 2, md: 2 } }}>
               <Box sx={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between' }}>
                 <Box>
                   <Typography variant="h4" sx={{ fontWeight: 'bold' }}>
@@ -354,7 +372,7 @@ const Dashboard: React.FC = () => {
             background: 'linear-gradient(135deg, #f093fb 0%, #f5576c 100%)',
             color: 'white'
           }}>
-            <CardContent>
+            <CardContent sx={{ p: { xs: 1.5, sm: 2, md: 2 } }}>
               <Box sx={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between' }}>
                 <Box>
                   <Typography variant="h4" sx={{ fontWeight: 'bold' }}>
@@ -414,7 +432,7 @@ const Dashboard: React.FC = () => {
       </Grid>
 
       {/* 작업 진행률 */}
-      <Grid container spacing={3} sx={{ mb: 3 }}>
+      <Grid container spacing={{ xs: 1, sm: 2, md: 3 }} sx={{ mb: 3 }}>
         <Grid item xs={12} md={8}>
           <Card>
             <CardContent>
@@ -434,7 +452,7 @@ const Dashboard: React.FC = () => {
                   sx={{ height: 8, borderRadius: 4 }}
                 />
               </Box>
-              <Grid container spacing={2} sx={{ mt: 2 }}>
+              <Grid container spacing={{ xs: 1, sm: 2 }} sx={{ mt: 2 }}>
                 <Grid item xs={6}>
                   <Box sx={{ textAlign: 'center' }}>
                     <Typography variant="h6" color="warning.main">
@@ -460,39 +478,49 @@ const Dashboard: React.FC = () => {
           </Card>
         </Grid>
         
+        {/* 시공건 등록 수수료율 안내 */}
         <Grid item xs={12} md={4}>
           <Card>
             <CardContent>
               <Typography variant="h6" gutterBottom>
-                알림 현황
+                수수료 안내
               </Typography>
-              <Box sx={{ textAlign: 'center', py: 2 }}>
-                <Badge badgeContent={stats.unreadNotifications} color="error">
-                  <NotificationsActive sx={{ fontSize: 60, color: 'primary.main' }} />
-                </Badge>
-                <Typography variant="h6" sx={{ mt: 1 }}>
-                  {stats.unreadNotifications}개
+              <Box sx={{ mt: 2 }}>
+                <Box sx={{ 
+                  display: 'flex', 
+                  alignItems: 'center', 
+                  gap: 1, 
+                  mb: 2,
+                  p: 2,
+                  bgcolor: 'info.light',
+                  borderRadius: 1
+                }}>
+                  <MonetizationOn color="info" />
+                  <Box>
+                    <Typography variant="body1" fontWeight="bold" color="info.dark">
+                      시공건 등록 수수료
+                    </Typography>
+                    <Typography variant="h5" color="info.dark" fontWeight="bold">
+                      {sellerCommissionRate}%
+                    </Typography>
+                  </Box>
+                </Box>
+                <Typography variant="body2" color="text.secondary" sx={{ mb: 1 }}>
+                  • 시공건 등록 시 총 시공비의 {sellerCommissionRate}%가 수수료로 차감됩니다
                 </Typography>
                 <Typography variant="body2" color="text.secondary">
-                  읽지 않은 알림
+                  • 수수료는 시공비와 별도로 차감됩니다
                 </Typography>
               </Box>
-              <Button
-                fullWidth
-                variant="outlined"
-                onClick={() => navigate('/seller/notifications')}
-                endIcon={<ArrowForward />}
-              >
-                알림 확인하기
-              </Button>
             </CardContent>
           </Card>
         </Grid>
+
       </Grid>
 
       {/* 최근 작업 및 채팅 알림 */}
-      <Grid container spacing={3}>
-        <Grid item xs={12} md={6}>
+      <Grid container spacing={{ xs: 1, sm: 2, md: 3 }}>
+        <Grid item xs={12}>
           <Card>
             <CardContent>
               <Box sx={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', mb: 2 }}>
@@ -530,22 +558,38 @@ const Dashboard: React.FC = () => {
                           </Box>
                         }
                         secondary={
-                          <Box>
-                            <Typography variant="body2" color="text.secondary">
+                          <>
+                            <Typography variant="body2" color="text.secondary" component="span" display="block">
                               {job.address}
                             </Typography>
-                            <Typography variant="body2" color="text.secondary">
+                            <Typography variant="body2" color="text.secondary" component="span" display="block">
                               {new Date(job.createdAt).toLocaleDateString()}
                             </Typography>
-                          </Box>
+                          </>
                         }
                       />
-                      <IconButton
-                        size="small"
-                        onClick={() => navigate(`/seller/jobs`)}
-                      >
-                        <Visibility />
-                      </IconButton>
+                      <Box sx={{ display: 'flex', gap: 0.5 }}>
+                        <IconButton
+                          size="small"
+                          onClick={() => {
+                            console.log('작업 상세 페이지로 이동:', job.id);
+                            navigate(`/seller/jobs/${job.id}?modal=detail`);
+                          }}
+                          title="작업 상세보기"
+                        >
+                          <Visibility />
+                        </IconButton>
+                        <IconButton
+                          size="small"
+                          onClick={() => {
+                            console.log('작업 채팅 페이지로 이동:', job.id);
+                            navigate(`/seller/jobs/${job.id}?modal=chat`);
+                          }}
+                          title="시공자와 채팅"
+                        >
+                          <Chat />
+                        </IconButton>
+                      </Box>
                     </ListItem>
                     {index < getRecentJobs().length - 1 && <Divider />}
                   </React.Fragment>
@@ -555,79 +599,7 @@ const Dashboard: React.FC = () => {
           </Card>
         </Grid>
 
-        <Grid item xs={12} md={6}>
-          <Card>
-            <CardContent>
-              <Box sx={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', mb: 2 }}>
-                <Typography variant="h6">
-                  채팅 알림
-                </Typography>
-                <Button
-                  size="small"
-                  onClick={() => navigate('/seller/contractor-chat')}
-                  endIcon={<ArrowForward />}
-                >
-                  전체보기
-                </Button>
-              </Box>
-              {getJobsWithChatNotifications().length > 0 ? (
-                <List>
-                  {getJobsWithChatNotifications().map((job, index) => (
-                    <React.Fragment key={job.id}>
-                      <ListItem>
-                        <ListItemAvatar>
-                          <Badge badgeContent={chatNotifications[job.id]} color="error">
-                            <Avatar sx={{ bgcolor: 'primary.main' }}>
-                              <Chat />
-                            </Avatar>
-                          </Badge>
-                        </ListItemAvatar>
-                        <ListItemText
-                          primary={
-                            <Box sx={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
-                              <Typography variant="subtitle2" noWrap>
-                                {job.title || '제목 없음'}
-                              </Typography>
-                              <Chip
-                                label={`${chatNotifications[job.id]}개`}
-                                color="error"
-                                size="small"
-                              />
-                            </Box>
-                          }
-                          secondary={
-                            <Box>
-                              <Typography variant="body2" color="text.secondary">
-                                {job.address}
-                              </Typography>
-                              <Typography variant="body2" color="text.secondary">
-                                {new Date(job.createdAt).toLocaleDateString()}
-                              </Typography>
-                            </Box>
-                          }
-                        />
-                        <IconButton
-                          size="small"
-                          onClick={() => navigate(`/seller/contractor-chat`)}
-                        >
-                          <ArrowForward />
-                        </IconButton>
-                      </ListItem>
-                      {index < getJobsWithChatNotifications().length - 1 && <Divider />}
-                    </React.Fragment>
-                  ))}
-                </List>
-              ) : (
-                <Box sx={{ textAlign: 'center', py: 4 }}>
-                  <Chat sx={{ fontSize: 60, color: 'text.secondary', mb: 2 }} />
-                  <Typography variant="body1" color="text.secondary">
-                    새로운 채팅 알림이 없습니다
-                  </Typography>
-                </Box>
-              )}
-            </CardContent>
-          </Card>
-        </Grid>
+
       </Grid>
 
       {/* 새 작업 등록 다이얼로그 */}

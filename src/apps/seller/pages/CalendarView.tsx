@@ -68,11 +68,12 @@ const CalendarView: React.FC = () => {
       case 'pending': return '대기중';
       case 'assigned': return '배정됨';
       case 'product_preparing': return '자재준비';
-              case 'product_ready': return '제품준비완료';
+      case 'product_ready': return '제품준비완료';
       case 'pickup_completed': return '픽업완료';
       case 'in_progress': return '시공중';
       case 'completed': return '완료';
       case 'cancelled': return '취소됨';
+      case 'compensation_completed': return '보상완료';
       case 'product_not_ready': return '제품 미준비';
       case 'customer_absent': return '고객 부재';
       case 'schedule_changed': return '일정 변경';
@@ -91,6 +92,7 @@ const CalendarView: React.FC = () => {
       case 'in_progress': return 'success';
       case 'completed': return 'success';
       case 'cancelled': return 'error';
+      case 'compensation_completed': return 'success';
       case 'product_not_ready': return 'warning';
       case 'customer_absent': return 'error';
       case 'schedule_changed': return 'info';

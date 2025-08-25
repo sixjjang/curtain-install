@@ -103,53 +103,29 @@ export class LevelService {
         {
           level: 1,
           name: '신입시공자',
-          commissionRate: 15,
-          hourlyRateMultiplier: 1.0,
+          completedJobsCount: 0,
           benefits: ['기본 혜택 제공'],
-          requirements: {
-            minExperience: 0,
-            minJobs: 0,
-            minRating: 0
-          },
           isActive: true
         },
         {
           level: 2,
           name: '일반시공자',
-          commissionRate: 12,
-          hourlyRateMultiplier: 1.2,
+          completedJobsCount: 10,
           benefits: ['우선 매칭', '수수료 할인'],
-          requirements: {
-            minExperience: 6,
-            minJobs: 10,
-            minRating: 4.0
-          },
           isActive: true
         },
         {
           level: 3,
           name: '고급시공자',
-          commissionRate: 10,
-          hourlyRateMultiplier: 1.5,
+          completedJobsCount: 30,
           benefits: ['우선 매칭', '수수료 할인', '프리미엄 배지'],
-          requirements: {
-            minExperience: 12,
-            minJobs: 30,
-            minRating: 4.5
-          },
           isActive: true
         },
         {
           level: 4,
           name: '최고급시공자',
-          commissionRate: 8,
-          hourlyRateMultiplier: 2.0,
+          completedJobsCount: 100,
           benefits: ['최우선 매칭', '최저 수수료', 'VIP 배지', '전용 고객 지원'],
-          requirements: {
-            minExperience: 24,
-            minJobs: 100,
-            minRating: 4.8
-          },
           isActive: true
         }
       ];

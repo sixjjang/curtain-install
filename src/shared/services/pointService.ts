@@ -179,16 +179,25 @@ export class PointService {
     currentBalance: number;
     requiredAmount: number;
     shortage: number;
+    feeAmount: number;
+    totalRequiredAmount: number;
   }> {
     try {
       const currentBalance = await this.getPointBalance(userId, 'seller');
-      const shortage = requiredAmount - currentBalance;
+      
+      // 수수료 계산
+      const feeCalculation = await this.calculateFees(requiredAmount, 'seller');
+      const totalRequiredAmount = requiredAmount + feeCalculation.feeAmount;
+      
+      const shortage = totalRequiredAmount - currentBalance;
       
       return {
-        isValid: currentBalance >= requiredAmount,
+        isValid: currentBalance >= totalRequiredAmount,
         currentBalance,
         requiredAmount,
-        shortage
+        shortage,
+        feeAmount: feeCalculation.feeAmount,
+        totalRequiredAmount
       };
     } catch (error) {
       console.error('포인트 잔액 검증 실패:', error);
@@ -495,6 +504,17 @@ export class PointService {
             return; // 이 기간에 포함되지 않는 거래는 제외
           }
           
+          // 제목에서 작업 ID 제거 (기존 데이터 호환성을 위해)
+          let cleanDescription = data.description;
+          if (data.description && data.jobId) {
+            // 작업 수락취소 수수료 (작업: XXX) -> 작업 수락취소 수수료
+            cleanDescription = data.description.replace(` (작업: ${data.jobId})`, '');
+            // 소비자 부재 보상 (작업: XXX) -> 소비자 부재 보상
+            cleanDescription = cleanDescription.replace(` (작업: ${data.jobId})`, '');
+            // 제품 미준비 보상 (작업: XXX) -> 제품 미준비 보상
+            cleanDescription = cleanDescription.replace(` (작업: ${data.jobId})`, '');
+          }
+          
           transactions.push({
             id: doc.id,
             userId: data.userId,
@@ -502,7 +522,7 @@ export class PointService {
             type: data.type,
             amount: data.amount,
             balance: data.balance,
-            description: data.description,
+            description: cleanDescription,
             jobId: data.jobId,
             status: data.status,
             createdAt,
@@ -1003,6 +1023,230 @@ export class PointService {
     } catch (error) {
       console.error('포인트 차감 실패:', error);
       throw new Error('포인트 차감에 실패했습니다.');
+    }
+  }
+
+  // 관리자용: 모든 포인트 거래 조회
+  static async getAllPointTransactions(
+    dateRange?: 'all' | 'week' | 'month' | 'quarter' | 'year',
+    userRole?: 'all' | 'seller' | 'contractor'
+  ): Promise<PointTransaction[]> {
+    try {
+      console.log('🔍 PointService - 모든 포인트 거래 조회 시작');
+      
+      // 기간별 필터링을 위한 날짜 계산
+      let startDate: Date | null = null;
+      if (dateRange && dateRange !== 'all') {
+        const now = new Date();
+        switch (dateRange) {
+          case 'week':
+            startDate = new Date(now.getTime() - 7 * 24 * 60 * 60 * 1000);
+            break;
+          case 'month':
+            startDate = new Date(now.getFullYear(), now.getMonth(), 1);
+            break;
+          case 'quarter':
+            startDate = new Date(now.getFullYear(), Math.floor(now.getMonth() / 3) * 3, 1);
+            break;
+          case 'year':
+            startDate = new Date(now.getFullYear(), 0, 1);
+            break;
+        }
+      }
+      
+      // 모든 거래 조회
+      const q = query(
+        collection(db, 'pointTransactions'),
+        orderBy('createdAt', 'desc')
+      );
+      
+      const querySnapshot = await getDocs(q);
+      const transactions: PointTransaction[] = [];
+      
+      querySnapshot.forEach((doc) => {
+        const data = doc.data();
+        const createdAt = data.createdAt?.toDate() || new Date();
+        
+        // 기간별 필터링
+        if (startDate && createdAt < startDate) {
+          return;
+        }
+        
+        // 역할별 필터링
+        if (userRole && userRole !== 'all' && data.userRole !== userRole) {
+          return;
+        }
+        
+        transactions.push({
+          id: doc.id,
+          userId: data.userId,
+          userRole: data.userRole,
+          type: data.type,
+          amount: data.amount,
+          balance: data.balance,
+          description: data.description,
+          jobId: data.jobId,
+          status: data.status,
+          createdAt,
+          completedAt: data.completedAt?.toDate(),
+          adminId: data.adminId,
+          notes: data.notes,
+          bankInfo: data.bankInfo,
+          relatedTransactionId: data.relatedTransactionId
+        });
+      });
+      
+      // 사용자 정보 조회를 위한 고유 사용자 ID 목록 생성
+      const uniqueUserIds = Array.from(new Set(transactions.map(t => t.userId)));
+      const userInfoMap = new Map<string, { name: string; role: string }>();
+      
+      // 각 사용자의 기본 정보 조회
+      for (const userId of uniqueUserIds) {
+        try {
+          const userDoc = await getDoc(doc(db, 'users', userId));
+          if (userDoc.exists()) {
+            const userData = userDoc.data();
+            userInfoMap.set(userId, {
+              name: userData.name || userData.companyName || '알 수 없음',
+              role: userData.role || 'unknown'
+            });
+          } else {
+            userInfoMap.set(userId, { name: '알 수 없음', role: 'unknown' });
+          }
+        } catch (error) {
+          console.error(`사용자 정보 조회 실패 (${userId}):`, error);
+          userInfoMap.set(userId, { name: '알 수 없음', role: 'unknown' });
+        }
+      }
+      
+      // 사용자 이름 추가
+      const transactionsWithUserNames = transactions.map(transaction => {
+        const userInfo = userInfoMap.get(transaction.userId) || { name: '알 수 없음', role: 'unknown' };
+        return {
+          ...transaction,
+          userName: userInfo.name
+        };
+      });
+      
+      console.log('🔍 PointService - 모든 포인트 거래 조회 완료:', transactionsWithUserNames.length, '건');
+      return transactionsWithUserNames;
+    } catch (error) {
+      console.error('모든 포인트 거래 조회 실패:', error);
+      return [];
+    }
+  }
+
+    // 관리자용: 사용자별 포인트 요약 조회
+  static async getUserPointSummaries(
+    dateRange?: 'all' | 'week' | 'month' | 'quarter' | 'year',
+    userRole?: 'all' | 'seller' | 'contractor'
+  ): Promise<{
+    userId: string;
+    userName: string;
+    userRole: string;
+    totalEarned: number;
+    totalSpent: number;
+    totalWithdrawn: number;
+    totalCharged: number;
+    currentBalance: number;
+    transactionCount: number;
+  }[]> {
+    try {
+      console.log('🔍 PointService - 사용자별 포인트 요약 조회 시작');
+      
+      // 모든 거래 조회
+      const transactions = await this.getAllPointTransactions(dateRange, userRole);
+      
+      // 사용자별로 그룹화
+      const userMap = new Map<string, {
+        userId: string;
+        userName: string;
+        userRole: string;
+        totalEarned: number;
+        totalSpent: number;
+        totalWithdrawn: number;
+        totalCharged: number;
+        currentBalance: number;
+        transactionCount: number;
+      }>();
+      
+      // 사용자 정보 조회를 위한 고유 사용자 ID 목록 생성
+      const uniqueUserIds = Array.from(new Set(transactions.map(t => t.userId)));
+      const userInfoMap = new Map<string, { name: string; role: string }>();
+      
+      // 각 사용자의 기본 정보 조회
+      for (const userId of uniqueUserIds) {
+        try {
+          const userDoc = await getDoc(doc(db, 'users', userId));
+          if (userDoc.exists()) {
+            const userData = userDoc.data();
+            userInfoMap.set(userId, {
+              name: userData.name || userData.companyName || '알 수 없음',
+              role: userData.role || 'unknown'
+            });
+          } else {
+            userInfoMap.set(userId, { name: '알 수 없음', role: 'unknown' });
+          }
+        } catch (error) {
+          console.error(`사용자 정보 조회 실패 (${userId}):`, error);
+          userInfoMap.set(userId, { name: '알 수 없음', role: 'unknown' });
+        }
+      }
+      
+      transactions.forEach(transaction => {
+        if (!userMap.has(transaction.userId)) {
+          const userInfo = userInfoMap.get(transaction.userId) || { name: '알 수 없음', role: 'unknown' };
+          userMap.set(transaction.userId, {
+            userId: transaction.userId,
+            userName: userInfo.name,
+            userRole: transaction.userRole,
+            totalEarned: 0,
+            totalSpent: 0,
+            totalWithdrawn: 0,
+            totalCharged: 0,
+            currentBalance: 0,
+            transactionCount: 0
+          });
+        }
+        
+        const summary = userMap.get(transaction.userId)!;
+        summary.transactionCount++;
+        
+        // 거래 유형별로 분류
+        switch (transaction.type) {
+          case 'charge':
+            summary.totalCharged += Math.abs(transaction.amount);
+            break;
+          case 'escrow':
+            summary.totalSpent += Math.abs(transaction.amount);
+            break;
+          case 'release':
+          case 'payment':
+          case 'compensation':
+            summary.totalEarned += Math.abs(transaction.amount);
+            break;
+          case 'withdraw':
+            summary.totalWithdrawn += Math.abs(transaction.amount);
+            break;
+          case 'refund':
+            if (transaction.amount > 0) {
+              summary.totalCharged += transaction.amount;
+            } else {
+              summary.totalSpent += Math.abs(transaction.amount);
+            }
+            break;
+        }
+        
+        // 현재 잔액 계산 (마지막 거래의 잔액 사용)
+        summary.currentBalance = transaction.balance || 0;
+      });
+      
+      const summaries = Array.from(userMap.values());
+      console.log('🔍 PointService - 사용자별 포인트 요약 조회 완료:', summaries.length, '명');
+      return summaries;
+    } catch (error) {
+      console.error('사용자별 포인트 요약 조회 실패:', error);
+      return [];
     }
   }
 

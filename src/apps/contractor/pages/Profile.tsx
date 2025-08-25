@@ -25,9 +25,12 @@ import {
   DialogActions,
   Snackbar,
   Alert,
-  CircularProgress
+  CircularProgress,
+  Accordion,
+  AccordionSummary,
+  AccordionDetails
 } from '@mui/material';
-import { Edit, Save, PhotoCamera, Info as InfoIcon } from '@mui/icons-material';
+import { Edit, Save, PhotoCamera, Info as InfoIcon, ExpandMore } from '@mui/icons-material';
 import { useAuth } from '../../../shared/contexts/AuthContext';
 import { ContractorInfo } from '../../../types';
 import { ContractorService, ContractorBasicInfo } from '../../../shared/services/contractorService';
@@ -109,6 +112,12 @@ const Profile: React.FC = () => {
   const [selectedBank, setSelectedBank] = useState(contractor?.bankName || '');
   const [bankAccount, setBankAccount] = useState(contractor?.bankAccount || '');
   const [experience, setExperience] = useState(contractor?.experience || '');
+  const [businessName, setBusinessName] = useState(contractor?.businessName || '');
+  const [businessNumber, setBusinessNumber] = useState(contractor?.businessNumber || '');
+  const [businessAddress, setBusinessAddress] = useState(contractor?.businessAddress || '');
+  const [businessType, setBusinessType] = useState(contractor?.businessType || '');
+  const [businessCategory, setBusinessCategory] = useState(contractor?.businessCategory || '');
+  const [accountHolder, setAccountHolder] = useState(contractor?.accountHolder || contractor?.name || '');
   const [optimizationDialog, setOptimizationDialog] = useState(false);
   const [optimizationInfo, setOptimizationInfo] = useState<{
     originalSize: number;
@@ -136,17 +145,38 @@ const Profile: React.FC = () => {
       }
       
       // 시공자 정보 업데이트 (contractor 필드 또는 직접 필드에서)
-      const contractorData = user.contractor || {
+      const contractorData: ContractorInfo = user.contractor || {
+        name: user.name || '',
+        phone: user.phone || '',
+        email: user.email || '',
         serviceAreas: [],
         bankName: '',
         bankAccount: '',
-        experience: ''
+        experience: '',
+        accountHolder: '',
+        businessName: '',
+        businessNumber: '',
+        businessAddress: '',
+        businessType: '',
+        businessCategory: '',
+        rating: 0,
+        completedJobs: 0,
+        totalJobs: 0,
+        totalEarnings: 0,
+        level: 1,
+        points: 0
       };
       
       setSelectedRegions(contractorData.serviceAreas || []);
       setSelectedBank(contractorData.bankName || '');
       setBankAccount(contractorData.bankAccount || '');
       setExperience(contractorData.experience || '');
+      setBusinessName(contractorData.businessName || '');
+      setBusinessNumber(contractorData.businessNumber || '');
+      setBusinessAddress(contractorData.businessAddress || '');
+      setBusinessType(contractorData.businessType || '');
+      setBusinessCategory(contractorData.businessCategory || '');
+      setAccountHolder(contractorData.accountHolder || contractorData.name || '');
       
       console.log('✅ 시공자 프로필 - 상태 업데이트 완료');
     }
@@ -311,17 +341,38 @@ const Profile: React.FC = () => {
           setSelectedRegions(savedBasicInfo.serviceAreas);
           setSelectedBank(savedBasicInfo.bankName);
           setBankAccount(savedBasicInfo.bankAccount);
+          setBusinessName(savedBasicInfo.businessName || '');
+          setBusinessNumber(savedBasicInfo.businessNumber || '');
+          setBusinessAddress(savedBasicInfo.businessAddress || '');
+          setBusinessType(savedBasicInfo.businessType || '');
+          setBusinessCategory(savedBasicInfo.businessCategory || '');
+          setAccountHolder(savedBasicInfo.accountHolder || '');
           if (savedBasicInfo.profileImage) {
             setProfileImage(savedBasicInfo.profileImage);
           }
         } else {
           console.log('⚠️ 저장된 시공자 정보 없음, users 컬렉션에서 확인');
           // users 컬렉션에서 시공자 정보 확인 (contractor 필드 또는 직접 필드)
-          const contractorData = user.contractor || {
+          const contractorData: ContractorInfo = user.contractor || {
+            name: user.name || '',
+            phone: user.phone || '',
+            email: user.email || '',
             experience: '',
             serviceAreas: [],
             bankName: '',
-            bankAccount: ''
+            bankAccount: '',
+            accountHolder: '',
+            businessName: '',
+            businessNumber: '',
+            businessAddress: '',
+            businessType: '',
+            businessCategory: '',
+            rating: 0,
+            completedJobs: 0,
+            totalJobs: 0,
+            totalEarnings: 0,
+            level: 1,
+            points: 0
           };
           
           console.log('✅ users 컬렉션의 시공자 정보:', contractorData);
@@ -329,6 +380,12 @@ const Profile: React.FC = () => {
           setSelectedRegions(contractorData.serviceAreas || []);
           setSelectedBank(contractorData.bankName || '');
           setBankAccount(contractorData.bankAccount || '');
+          setBusinessName(contractorData.businessName || '');
+          setBusinessNumber(contractorData.businessNumber || '');
+          setBusinessAddress(contractorData.businessAddress || '');
+          setBusinessType(contractorData.businessType || '');
+          setBusinessCategory(contractorData.businessCategory || '');
+          setAccountHolder(contractorData.accountHolder || '');
           if (user.profileImage) {
             setProfileImage(user.profileImage);
           }
@@ -336,17 +393,38 @@ const Profile: React.FC = () => {
       } catch (error) {
         console.error('❌ 저장된 정보 불러오기 실패:', error);
         // 오류 발생 시 사용자 정보로 초기화
-        const contractorData = user.contractor || {
+        const contractorData: ContractorInfo = user.contractor || {
+          name: user.name || '',
+          phone: user.phone || '',
+          email: user.email || '',
           experience: '',
           serviceAreas: [],
           bankName: '',
-          bankAccount: ''
+          bankAccount: '',
+          accountHolder: '',
+          businessName: '',
+          businessNumber: '',
+          businessAddress: '',
+          businessType: '',
+          businessCategory: '',
+          rating: 0,
+          completedJobs: 0,
+          totalJobs: 0,
+          totalEarnings: 0,
+          level: 1,
+          points: 0
         };
         
         setExperience(contractorData.experience || '');
         setSelectedRegions(contractorData.serviceAreas || []);
         setSelectedBank(contractorData.bankName || '');
         setBankAccount(contractorData.bankAccount || '');
+        setBusinessName(contractorData.businessName || '');
+        setBusinessNumber(contractorData.businessNumber || '');
+        setBusinessAddress(contractorData.businessAddress || '');
+        setBusinessType(contractorData.businessType || '');
+        setBusinessCategory(contractorData.businessCategory || '');
+        setAccountHolder(contractorData.accountHolder || '');
         if (user.profileImage) {
           setProfileImage(user.profileImage);
         }
@@ -376,6 +454,12 @@ const Profile: React.FC = () => {
         serviceAreas: selectedRegions,
         bankName: selectedBank,
         bankAccount: bankAccount,
+        accountHolder: accountHolder,
+        businessName: businessName,
+        businessNumber: businessNumber,
+        businessAddress: businessAddress,
+        businessType: businessType,
+        businessCategory: businessCategory,
         ...(profileImage && { profileImage })
       };
 
@@ -413,288 +497,370 @@ const Profile: React.FC = () => {
 
   return (
     <Box sx={{ 
-      padding: '20px',
+      padding: '16px',
       minHeight: '500px',
       backgroundColor: 'background.paper',
       borderRadius: '8px',
       boxShadow: '0 2px 4px rgba(0,0,0,0.1)'
     }}>
-      <Box display="flex" justifyContent="flex-end" alignItems="center" mb={3}>
+      {/* 헤더 섹션 */}
+      <Box display="flex" justifyContent="space-between" alignItems="center" mb={2}>
+        <Box display="flex" alignItems="center" gap={2}>
+          <Box position="relative">
+            <Avatar 
+              sx={{ width: 80, height: 80 }}
+              src={profileImage || undefined}
+            >
+              {contractor?.name?.charAt(0)}
+            </Avatar>
+            {isEditing && (
+              <IconButton
+                sx={{
+                  position: 'absolute',
+                  bottom: 0,
+                  right: 0,
+                  bgcolor: 'primary.main',
+                  color: 'white',
+                  width: 28,
+                  height: 28,
+                  '&:hover': { bgcolor: 'primary.dark' }
+                }}
+                onClick={handlePhotoClick}
+                disabled={imageLoading}
+              >
+                {imageLoading ? (
+                  <CircularProgress size={16} color="inherit" />
+                ) : (
+                  <PhotoCamera sx={{ fontSize: 16 }} />
+                )}
+              </IconButton>
+            )}
+          </Box>
+                     <Box>
+             <Typography variant="h5" gutterBottom={false}>
+               {contractor?.name}
+             </Typography>
+             <Box display="flex" alignItems="center" gap={1} flexWrap="wrap">
+               <Chip label={`Lv. ${contractor.level || 1}`} color="primary" size="small" />
+               <Typography variant="body2" color="textSecondary">
+                 시공 경력: {contractor.experience || '입력 필요'}
+               </Typography>
+             </Box>
+             {contractor?.businessName && (
+               <Typography variant="body2" color="primary" sx={{ mt: 0.5, fontWeight: 'medium' }}>
+                 상호명: {contractor.businessName}
+               </Typography>
+             )}
+           </Box>
+        </Box>
         <Button
           variant={isEditing ? "contained" : "outlined"}
           startIcon={isEditing ? <Save /> : <Edit />}
           onClick={isEditing ? handleSave : () => setIsEditing(true)}
+          size="small"
         >
           {isEditing ? '저장' : '편집'}
         </Button>
       </Box>
-      
 
+      {/* 숨겨진 파일 입력 */}
+      <input
+        ref={fileInputRef}
+        type="file"
+        accept="image/*"
+        onChange={handleImageChange}
+        style={{ display: 'none' }}
+      />
 
-      <Grid container spacing={3}>
-        <Grid item xs={12} md={4}>
-          <Card>
-            <CardContent sx={{ textAlign: 'center' }}>
-              <Box position="relative" display="inline-block">
-                <Avatar 
-                  sx={{ width: 120, height: 120, mx: 'auto', mb: 2 }}
-                  src={profileImage || undefined}
-                >
-                  {contractor?.name?.charAt(0)}
-                </Avatar>
-                {isEditing && (
-                  <IconButton
-                    sx={{
-                      position: 'absolute',
-                      bottom: 8,
-                      right: 8,
-                      bgcolor: 'primary.main',
-                      color: 'white',
-                      '&:hover': { bgcolor: 'primary.dark' }
-                    }}
-                    onClick={handlePhotoClick}
-                    disabled={imageLoading}
-                  >
-                    {imageLoading ? (
-                      <CircularProgress size={20} color="inherit" />
-                    ) : (
-                      <PhotoCamera />
-                    )}
-                  </IconButton>
-                )}
-              </Box>
-              
-              {/* 숨겨진 파일 입력 */}
-              <input
-                ref={fileInputRef}
-                type="file"
-                accept="image/*"
-                onChange={handleImageChange}
-                style={{ display: 'none' }}
+      {/* 기본 정보 카드 */}
+      <Card sx={{ mb: 2 }}>
+        <CardContent sx={{ pb: 2 }}>
+          <Typography variant="h6" gutterBottom sx={{ mb: 2 }}>
+            기본 정보
+          </Typography>
+          <Grid container spacing={2}>
+            <Grid item xs={12} sm={6}>
+              <TextField
+                fullWidth
+                label="이름"
+                defaultValue={contractor?.name}
+                size="small"
+                InputProps={{ readOnly: !isEditing }}
               />
-              <Typography variant="h5" gutterBottom>
-                {contractor?.name}
+            </Grid>
+            <Grid item xs={12} sm={6}>
+              <TextField
+                fullWidth
+                label="연락처"
+                defaultValue={contractor?.phone}
+                size="small"
+                InputProps={{ readOnly: !isEditing }}
+              />
+            </Grid>
+            <Grid item xs={12}>
+              <TextField
+                fullWidth
+                label="이메일"
+                defaultValue={contractor?.email}
+                size="small"
+                InputProps={{ readOnly: true }}
+              />
+            </Grid>
+            <Grid item xs={12}>
+              <TextField
+                fullWidth
+                label="주소"
+                defaultValue={contractor?.location?.address || ''}
+                size="small"
+                InputProps={{ readOnly: !isEditing }}
+              />
+            </Grid>
+          </Grid>
+        </CardContent>
+      </Card>
+
+      {/* 아코디언 스타일의 정보 섹션들 */}
+      <Accordion defaultExpanded>
+        <AccordionSummary expandIcon={<ExpandMore />}>
+          <Typography variant="h6">시공 정보</Typography>
+        </AccordionSummary>
+        <AccordionDetails>
+          <Grid container spacing={2}>
+            <Grid item xs={12} sm={6}>
+              <TextField
+                fullWidth
+                label="시공경력"
+                value={experience}
+                onChange={(e) => setExperience(e.target.value)}
+                size="small"
+                placeholder="예: 5년, 3년 6개월"
+                InputProps={{ readOnly: !isEditing }}
+              />
+            </Grid>
+            <Grid item xs={12} sm={6}>
+              <TextField
+                fullWidth
+                label="총 시공 건수"
+                defaultValue={`${contractor?.totalJobs || 0}건`}
+                size="small"
+                InputProps={{ readOnly: true }}
+              />
+            </Grid>
+            <Grid item xs={12} sm={6}>
+              <TextField
+                fullWidth
+                label="평균 평점"
+                defaultValue={`${Number(contractor.rating || 0).toFixed(1)}/5.0`}
+                size="small"
+                InputProps={{ readOnly: true }}
+              />
+            </Grid>
+            <Grid item xs={12} sm={6}>
+              <TextField
+                fullWidth
+                label="현재 레벨"
+                defaultValue={`Lv. ${contractor.level || 1}`}
+                size="small"
+                InputProps={{ readOnly: true }}
+              />
+            </Grid>
+          </Grid>
+        </AccordionDetails>
+      </Accordion>
+
+      <Accordion>
+        <AccordionSummary expandIcon={<ExpandMore />}>
+          <Typography variant="h6">시공 가능지역</Typography>
+        </AccordionSummary>
+        <AccordionDetails>
+          <Grid container spacing={2}>
+            <Grid item xs={12} sm={6}>
+              <FormControl fullWidth size="small">
+                <InputLabel>시/도 선택</InputLabel>
+                <Select
+                  value={selectedCity || ''}
+                  onChange={(e) => setSelectedCity(e.target.value)}
+                  label="시/도 선택"
+                  disabled={!isEditing}
+                >
+                  {Object.keys(regionData).map((city) => (
+                    <MenuItem key={city} value={city}>
+                      {city}
+                    </MenuItem>
+                  ))}
+                </Select>
+              </FormControl>
+            </Grid>
+            <Grid item xs={12} sm={6}>
+              <FormControl fullWidth size="small">
+                <InputLabel>구/군 선택</InputLabel>
+                <Select
+                  multiple
+                  value={selectedRegions}
+                  onChange={handleRegionChange}
+                  input={<OutlinedInput label="구/군 선택" />}
+                  renderValue={(selected) => (
+                    <Box sx={{ display: 'flex', flexWrap: 'wrap', gap: 0.5 }}>
+                      {selected.map((value) => (
+                        <Chip key={value} label={value} size="small" />
+                      ))}
+                    </Box>
+                  )}
+                  disabled={!isEditing || !selectedCity}
+                  MenuProps={{
+                    PaperProps: {
+                      style: {
+                        maxHeight: 300,
+                      },
+                    },
+                  }}
+                >
+                  {selectedCity && regionData[selectedCity]?.map((district) => (
+                    <MenuItem key={district} value={district}>
+                      <Checkbox checked={selectedRegions.indexOf(district) > -1} />
+                      <ListItemText primary={district} />
+                    </MenuItem>
+                  ))}
+                </Select>
+              </FormControl>
+            </Grid>
+          </Grid>
+          
+          {selectedRegions.length > 0 && (
+            <Box sx={{ mt: 2 }}>
+              <Typography variant="body2" color="textSecondary" gutterBottom>
+                선택된 지역:
               </Typography>
-              <Chip label={`Lv. ${contractor.level || 1}`} color="primary" sx={{ mb: 2 }} />
-              <Typography variant="body2" color="textSecondary">
-                시공 경력: {contractor.experience || '입력 필요'}
-              </Typography>
-            </CardContent>
-          </Card>
-        </Grid>
+              <Box sx={{ display: 'flex', flexWrap: 'wrap', gap: 0.5 }}>
+                {selectedRegions.map((region) => (
+                  <Chip 
+                    key={region} 
+                    label={region} 
+                    size="small" 
+                    onDelete={isEditing ? () => {
+                      setSelectedRegions(selectedRegions.filter(r => r !== region));
+                    } : undefined}
+                  />
+                ))}
+              </Box>
+            </Box>
+          )}
+        </AccordionDetails>
+      </Accordion>
 
-        <Grid item xs={12} md={8}>
-          <Card>
-            <CardContent>
-              <Typography variant="h6" gutterBottom>
-                기본 정보
-              </Typography>
-              
-              <Grid container spacing={2}>
-                <Grid item xs={12} sm={6}>
-                  <TextField
-                    fullWidth
-                    label="이름"
-                    defaultValue={contractor?.name}
-                    margin="normal"
-                    InputProps={{ readOnly: !isEditing }}
-                  />
-                </Grid>
-                <Grid item xs={12} sm={6}>
-                  <TextField
-                    fullWidth
-                    label="연락처"
-                    defaultValue={contractor?.phone}
-                    margin="normal"
-                    InputProps={{ readOnly: !isEditing }}
-                  />
-                </Grid>
-                <Grid item xs={12}>
-                  <TextField
-                    fullWidth
-                    label="이메일"
-                    defaultValue={contractor?.email}
-                    margin="normal"
-                    InputProps={{ readOnly: true }}
-                  />
-                </Grid>
-                <Grid item xs={12}>
-                  <TextField
-                    fullWidth
-                    label="주소"
-                    defaultValue={contractor?.location?.address || ''}
-                    margin="normal"
-                    InputProps={{ readOnly: !isEditing }}
-                  />
-                </Grid>
-              </Grid>
+      <Accordion>
+        <AccordionSummary expandIcon={<ExpandMore />}>
+          <Typography variant="h6">사업 정보 (선택사항)</Typography>
+        </AccordionSummary>
+        <AccordionDetails>
+          <Grid container spacing={2}>
+            <Grid item xs={12}>
+              <TextField
+                fullWidth
+                label="상호명"
+                value={businessName}
+                onChange={(e) => setBusinessName(e.target.value)}
+                size="small"
+                placeholder="예: 홍길동 커튼"
+                InputProps={{ readOnly: !isEditing }}
+              />
+            </Grid>
+            <Grid item xs={12} sm={6}>
+              <TextField
+                fullWidth
+                label="사업자등록번호"
+                value={businessNumber}
+                onChange={(e) => setBusinessNumber(e.target.value)}
+                size="small"
+                placeholder="000-00-00000"
+                InputProps={{ readOnly: !isEditing }}
+              />
+            </Grid>
+            <Grid item xs={12} sm={6}>
+              <TextField
+                fullWidth
+                label="사업장 주소"
+                value={businessAddress}
+                onChange={(e) => setBusinessAddress(e.target.value)}
+                size="small"
+                placeholder="사업장 주소를 입력하세요"
+                InputProps={{ readOnly: !isEditing }}
+              />
+            </Grid>
+            <Grid item xs={12} sm={6}>
+              <TextField
+                fullWidth
+                label="업태"
+                value={businessType}
+                onChange={(e) => setBusinessType(e.target.value)}
+                size="small"
+                placeholder="예: 도소매업"
+                InputProps={{ readOnly: !isEditing }}
+              />
+            </Grid>
+            <Grid item xs={12} sm={6}>
+              <TextField
+                fullWidth
+                label="종목"
+                value={businessCategory}
+                onChange={(e) => setBusinessCategory(e.target.value)}
+                size="small"
+                placeholder="예: 커튼도소매"
+                InputProps={{ readOnly: !isEditing }}
+              />
+            </Grid>
+          </Grid>
+        </AccordionDetails>
+      </Accordion>
 
-              <Divider sx={{ my: 3 }} />
-
-              <Typography variant="h6" gutterBottom>
-                시공 정보
-              </Typography>
-              
-              <Grid container spacing={2}>
-                <Grid item xs={12} sm={6}>
-                  <TextField
-                    fullWidth
-                    label="시공경력"
-                    value={experience}
-                    onChange={(e) => setExperience(e.target.value)}
-                    margin="normal"
-                    placeholder="예: 5년, 3년 6개월"
-                    InputProps={{ readOnly: !isEditing }}
-                  />
-                </Grid>
-                <Grid item xs={12} sm={6}>
-                  <TextField
-                    fullWidth
-                    label="총 시공 건수"
-                    defaultValue={`${contractor?.totalJobs || 0}건`}
-                    margin="normal"
-                    InputProps={{ readOnly: true }}
-                  />
-                </Grid>
-                <Grid item xs={12} sm={6}>
-                  <TextField
-                    fullWidth
-                    label="평균 평점"
-                    defaultValue={`${Number(contractor.rating || 0).toFixed(1)}/5.0`}
-                    margin="normal"
-                    InputProps={{ readOnly: true }}
-                  />
-                </Grid>
-                <Grid item xs={12} sm={6}>
-                  <TextField
-                    fullWidth
-                    label="현재 레벨"
-                    defaultValue={`Lv. ${contractor.level || 1}`}
-                    margin="normal"
-                    InputProps={{ readOnly: true }}
-                  />
-                </Grid>
-              </Grid>
-
-              <Divider sx={{ my: 3 }} />
-
-                             <Typography variant="h6" gutterBottom>
-                 시공 가능지역
-               </Typography>
-               
-               <Grid container spacing={2}>
-                 <Grid item xs={12} sm={6}>
-                   <FormControl fullWidth margin="normal">
-                     <InputLabel>시/도 선택</InputLabel>
-                     <Select
-                       value={selectedCity || ''}
-                       onChange={(e) => setSelectedCity(e.target.value)}
-                       label="시/도 선택"
-                       disabled={!isEditing}
-                     >
-                       {Object.keys(regionData).map((city) => (
-                         <MenuItem key={city} value={city}>
-                           {city}
-                         </MenuItem>
-                       ))}
-                     </Select>
-                   </FormControl>
-                 </Grid>
-                 <Grid item xs={12} sm={6}>
-                   <FormControl fullWidth margin="normal">
-                     <InputLabel>구/군 선택</InputLabel>
-                     <Select
-                       multiple
-                       value={selectedRegions}
-                       onChange={handleRegionChange}
-                       input={<OutlinedInput label="구/군 선택" />}
-                       renderValue={(selected) => (
-                         <Box sx={{ display: 'flex', flexWrap: 'wrap', gap: 0.5 }}>
-                           {selected.map((value) => (
-                             <Chip key={value} label={value} size="small" />
-                           ))}
-                         </Box>
-                       )}
-                       disabled={!isEditing || !selectedCity}
-                       MenuProps={{
-                         PaperProps: {
-                           style: {
-                             maxHeight: 300,
-                           },
-                         },
-                       }}
-                     >
-                       {selectedCity && regionData[selectedCity]?.map((district) => (
-                         <MenuItem key={district} value={district}>
-                           <Checkbox checked={selectedRegions.indexOf(district) > -1} />
-                           <ListItemText primary={district} />
-                         </MenuItem>
-                       ))}
-                     </Select>
-                   </FormControl>
-                 </Grid>
-               </Grid>
-               
-               {selectedRegions.length > 0 && (
-                 <Box sx={{ mt: 2 }}>
-                   <Typography variant="body2" color="textSecondary" gutterBottom>
-                     선택된 지역:
-                   </Typography>
-                   <Box sx={{ display: 'flex', flexWrap: 'wrap', gap: 0.5 }}>
-                     {selectedRegions.map((region) => (
-                       <Chip 
-                         key={region} 
-                         label={region} 
-                         size="small" 
-                         onDelete={isEditing ? () => {
-                           setSelectedRegions(selectedRegions.filter(r => r !== region));
-                         } : undefined}
-                       />
-                     ))}
-                   </Box>
-                 </Box>
-               )}
-
-              <Divider sx={{ my: 3 }} />
-
-              <Typography variant="h6" gutterBottom>
-                계좌 정보
-              </Typography>
-              
-              <Grid container spacing={2}>
-                                 <Grid item xs={12} sm={6}>
-                   <FormControl fullWidth margin="normal">
-                     <InputLabel>은행 선택</InputLabel>
-                     <Select
-                       value={selectedBank}
-                       onChange={(e) => setSelectedBank(e.target.value)}
-                       label="은행 선택"
-                       disabled={!isEditing}
-                     >
-                       {banks.map((bank) => (
-                         <MenuItem key={bank} value={bank}>
-                           {bank}
-                         </MenuItem>
-                       ))}
-                     </Select>
-                   </FormControl>
-                 </Grid>
-                <Grid item xs={12} sm={6}>
-                  <TextField
-                    fullWidth
-                    label="계좌번호"
-                    value={bankAccount}
-                    onChange={(e) => setBankAccount(e.target.value)}
-                    margin="normal"
-                    placeholder="계좌번호를 입력하세요"
-                    InputProps={{ readOnly: !isEditing }}
-                  />
-                </Grid>
-              </Grid>
-            </CardContent>
-          </Card>
-        </Grid>
-      </Grid>
+      <Accordion>
+        <AccordionSummary expandIcon={<ExpandMore />}>
+          <Typography variant="h6">계좌 정보</Typography>
+        </AccordionSummary>
+        <AccordionDetails>
+          <Grid container spacing={2}>
+            <Grid item xs={12} sm={6}>
+              <FormControl fullWidth size="small">
+                <InputLabel>은행 선택</InputLabel>
+                <Select
+                  value={selectedBank}
+                  onChange={(e) => setSelectedBank(e.target.value)}
+                  label="은행 선택"
+                  disabled={!isEditing}
+                >
+                  {banks.map((bank) => (
+                    <MenuItem key={bank} value={bank}>
+                      {bank}
+                    </MenuItem>
+                  ))}
+                </Select>
+              </FormControl>
+            </Grid>
+            <Grid item xs={12} sm={6}>
+              <TextField
+                fullWidth
+                label="계좌번호"
+                value={bankAccount}
+                onChange={(e) => setBankAccount(e.target.value)}
+                size="small"
+                placeholder="계좌번호를 입력하세요"
+                InputProps={{ readOnly: !isEditing }}
+              />
+            </Grid>
+            <Grid item xs={12} sm={6}>
+              <TextField
+                fullWidth
+                label="예금주"
+                value={accountHolder}
+                onChange={(e) => setAccountHolder(e.target.value)}
+                size="small"
+                placeholder="예금주명을 입력하세요"
+                InputProps={{ readOnly: !isEditing }}
+              />
+            </Grid>
+          </Grid>
+        </AccordionDetails>
+      </Accordion>
 
       {/* Snackbar for notifications */}
       <Snackbar

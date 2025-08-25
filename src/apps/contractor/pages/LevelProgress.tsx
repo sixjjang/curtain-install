@@ -44,24 +44,24 @@ const LevelProgress: React.FC = () => {
           if (currentLevelData) {
             setLevelInfo({
               level: currentLevelData.level,
-              experience: currentLevelData.requirements?.minExperience || 0,
-              experienceToNext: nextLevelData?.requirements?.minExperience || 0,
+              experience: currentLevelData.completedJobsCount || 0,
+              experienceToNext: nextLevelData?.completedJobsCount || 0,
               title: currentLevelData.name,
               benefits: currentLevelData.benefits || [],
-              hourlyRateMultiplier: currentLevelData.hourlyRateMultiplier || 1,
-              commissionRate: currentLevelData.commissionRate || 0.1
+              hourlyRateMultiplier: 1, // 기본값 사용
+              commissionRate: 0.1 // 기본값 사용
             });
           }
           
           if (nextLevelData) {
             setNextLevelInfo({
               level: nextLevelData.level,
-              experience: nextLevelData.requirements?.minExperience || 0,
+              experience: nextLevelData.completedJobsCount || 0,
               experienceToNext: 0,
               title: nextLevelData.name,
               benefits: nextLevelData.benefits || [],
-              hourlyRateMultiplier: nextLevelData.hourlyRateMultiplier || 1,
-              commissionRate: nextLevelData.commissionRate || 0.1
+              hourlyRateMultiplier: 1, // 기본값 사용
+              commissionRate: 0.1 // 기본값 사용
             });
           }
         } catch (error) {
@@ -89,14 +89,31 @@ const LevelProgress: React.FC = () => {
     );
   }
 
-  // experience가 string이므로 숫자로 변환 (예: "5년" -> 5)
-  const experienceValue = typeof contractor.experience === 'string' 
-    ? parseInt(contractor.experience.replace(/[^0-9]/g, '')) || 0
-    : contractor.experience || 0;
+  // 완료된 작업 수를 기준으로 진행률 계산
+  const completedJobs = contractor?.totalJobs || 0;
 
-  const progressPercentage = contractor.level < 100 && nextLevelInfo
-    ? ((experienceValue - levelInfo.experience) / (nextLevelInfo.experience - levelInfo.experience)) * 100
-    : 100;
+  let progressPercentage = 100;
+  
+  if (contractor.level < 100 && nextLevelInfo && levelInfo) {
+    const currentLevelRequirement = levelInfo.experience || 0;
+    const nextLevelRequirement = nextLevelInfo.experience || 0;
+    const difference = nextLevelRequirement - currentLevelRequirement;
+    
+    console.log('레벨 진행률 계산:', {
+      completedJobs,
+      currentLevelRequirement,
+      nextLevelRequirement,
+      difference,
+      contractorLevel: contractor.level
+    });
+    
+    if (difference > 0) {
+      const progress = ((completedJobs - currentLevelRequirement) / difference) * 100;
+      progressPercentage = Math.max(0, Math.min(100, progress));
+    } else {
+      progressPercentage = 100; // 다음 레벨이 없거나 요구사항이 동일한 경우
+    }
+  }
 
   const getLevelColor = (level: number) => {
     if (level >= 90) return 'error';
@@ -131,33 +148,33 @@ const LevelProgress: React.FC = () => {
                 {levelInfo.title}
               </Typography>
               <Typography variant="body1">
-                레벨 {contractor.level} • 경험치 {experienceValue}점
+                레벨 {contractor.level} • 완료 작업 {completedJobs}건
               </Typography>
             </Box>
           </Box>
 
           {contractor.level < 100 && nextLevelInfo && (
             <Box>
-              <Box display="flex" justifyContent="space-between" mb={1}>
-                <Typography variant="body2">
-                  다음 레벨까지: {nextLevelInfo.experience - experienceValue}점
-                </Typography>
-                <Typography variant="body2">
-                  {Math.round(progressPercentage)}%
-                </Typography>
-              </Box>
-              <LinearProgress 
-                variant="determinate" 
-                value={progressPercentage} 
-                sx={{ 
-                  height: 8, 
-                  borderRadius: 4,
-                  backgroundColor: 'rgba(255,255,255,0.3)',
-                  '& .MuiLinearProgress-bar': {
-                    backgroundColor: 'white'
-                  }
-                }} 
-              />
+                             <Box display="flex" justifyContent="space-between" mb={1}>
+                 <Typography variant="body2">
+                   다음 레벨까지: {Math.max(0, (nextLevelInfo.experience || 0) - completedJobs)}건
+                 </Typography>
+                 <Typography variant="body2">
+                   {Math.round(progressPercentage)}%
+                 </Typography>
+               </Box>
+                             <LinearProgress 
+                 variant="determinate" 
+                 value={progressPercentage} 
+                 sx={{ 
+                   height: 8, 
+                   borderRadius: 4,
+                   backgroundColor: 'rgba(255,255,255,0.3)',
+                   '& .MuiLinearProgress-bar': {
+                     backgroundColor: 'white'
+                   }
+                 }} 
+               />
             </Box>
           )}
         </CardContent>
@@ -278,9 +295,9 @@ const LevelProgress: React.FC = () => {
                     <Typography variant="subtitle1" fontWeight="bold">
                       {nextLevelInfo.title}
                     </Typography>
-                    <Typography variant="body2" color="textSecondary">
-                      필요 경험치: {nextLevelInfo.experience}점
-                    </Typography>
+                                         <Typography variant="body2" color="textSecondary">
+                       필요 완료 작업: {nextLevelInfo.experience || 0}건
+                     </Typography>
                   </Box>
                 </Box>
                 <Typography variant="body2" color="textSecondary" gutterBottom>

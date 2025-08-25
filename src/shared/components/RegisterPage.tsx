@@ -33,7 +33,8 @@ import {
   Person,
   Upload,
   CheckCircle,
-  Warning
+  Warning,
+  AdminPanelSettings
 } from '@mui/icons-material';
 import { useAuth } from '../contexts/AuthContext';
 import { UserRole } from '../../types';
@@ -266,18 +267,22 @@ const RegisterPage: React.FC = () => {
         break;
       
       case 2: // 상세 정보
-                 if (formData.role === 'seller') {
-           if (!formData.companyName || !formData.businessNumber || !formData.businessAddress || 
-               !formData.businessType || !formData.businessCategory) {
-             setError('판매자 정보를 모두 입력해주세요.');
-             return false;
-           }
-         } else if (formData.role === 'contractor') {
-          if (formData.serviceAreas.length === 0 || !formData.experience || 
-              !formData.bankAccount || !formData.bankName || !formData.accountHolder || !formData.idCardImage) {
-            setError('시공자 정보를 모두 입력해주세요. (본인 반명함판 사진 포함)');
+        if (formData.role === 'seller') {
+          if (!formData.companyName || !formData.businessNumber || !formData.businessAddress || 
+              !formData.businessType || !formData.businessCategory) {
+            setError('판매자 정보를 모두 입력해주세요.');
             return false;
           }
+        } else if (formData.role === 'contractor') {
+          if (formData.serviceAreas.length === 0 || !formData.experience || 
+              !formData.bankAccount || !formData.bankName || !formData.accountHolder || 
+              !formData.idCardImage || !formData.profileImage) {
+            setError('시공자 정보를 모두 입력해주세요. (프로필 사진, 본인 반명함판 사진 포함)');
+            return false;
+          }
+        } else if (formData.role === 'admin') {
+          // 관리자는 추가 정보 없이 바로 승인
+          return true;
         }
         break;
     }
@@ -342,8 +347,14 @@ const RegisterPage: React.FC = () => {
         formData.pickupAddress
       );
       
-      // 회원가입 성공 후 승인 대기 페이지로
-      setActiveStep(3);
+      // 회원가입 성공 후 처리
+      if (formData.role === 'admin') {
+        // 관리자는 바로 로그인 페이지로 이동
+        navigate('/login');
+      } else {
+        // 판매자/시공자는 승인 대기 페이지로
+        setActiveStep(3);
+      }
          } catch (error: any) {
        console.error('회원가입 오류:', error);
        // AuthService에서 전달된 사용자 친화적 메시지 사용
@@ -506,6 +517,31 @@ const RegisterPage: React.FC = () => {
           </CardContent>
         </Card>
       </Grid>
+      
+      {/* 개발용 관리자 옵션 */}
+      {process.env.NODE_ENV === 'development' && (
+        <Grid item xs={12} md={6}>
+          <Card 
+            sx={{ 
+              cursor: 'pointer', 
+              border: formData.role === 'admin' ? 2 : 1,
+              borderColor: formData.role === 'admin' ? 'error.main' : 'divider',
+              bgcolor: formData.role === 'admin' ? 'error.50' : 'background.paper'
+            }}
+            onClick={() => setFormData(prev => ({ ...prev, role: 'admin' }))}
+          >
+            <CardContent sx={{ textAlign: 'center', p: 3 }}>
+              <AdminPanelSettings sx={{ fontSize: 60, color: 'error.main', mb: 2 }} />
+              <Typography variant="h6" gutterBottom color="error">
+                관리자 (개발용)
+              </Typography>
+              <Typography variant="body2" color="textSecondary">
+                시스템 관리 및 설정 담당
+              </Typography>
+            </CardContent>
+          </Card>
+        </Grid>
+      )}
     </Grid>
   );
 
@@ -689,6 +725,44 @@ const RegisterPage: React.FC = () => {
     </Grid>
   );
 
+  const renderAdminInfo = () => (
+    <Grid container spacing={2}>
+      <Grid item xs={12}>
+        <Typography variant="h6" gutterBottom color="error">
+          관리자 정보
+        </Typography>
+        <Alert severity="warning" sx={{ mb: 2 }}>
+          <Typography variant="body2">
+            ⚠️ 관리자 계정은 시스템 전체를 관리할 수 있는 권한을 가집니다.
+            신중하게 생성해주세요.
+          </Typography>
+        </Alert>
+      </Grid>
+      
+      <Grid item xs={12}>
+        <TextField
+          fullWidth
+          label="관리자 이름"
+          name="name"
+          value={formData.name}
+          onChange={handleChange}
+          placeholder="관리자 실명을 입력하세요"
+        />
+      </Grid>
+      
+      <Grid item xs={12}>
+        <TextField
+          fullWidth
+          label="연락처"
+          name="phone"
+          value={formData.phone}
+          onChange={handleChange}
+          placeholder="010-1234-5678"
+        />
+      </Grid>
+    </Grid>
+  );
+
   const renderContractorInfo = () => (
     <Grid container spacing={2}>
       <Grid item xs={12}>
@@ -697,14 +771,17 @@ const RegisterPage: React.FC = () => {
         </Typography>
       </Grid>
 
-      {/* 프로필 사진 */}
+      {/* 프로필 사진 (필수) */}
       <Grid item xs={12}>
+        <Typography variant="subtitle1" gutterBottom color="error.main">
+          프로필 사진 업로드 (필수)
+        </Typography>
         <Box display="flex" alignItems="center" gap={2}>
           <Avatar
-            sx={{ width: 80, height: 80 }}
+            sx={{ width: 80, height: 80, border: '2px solid #f44336' }}
             src={formData.profileImage ? URL.createObjectURL(formData.profileImage) : undefined}
           >
-            {formData.name ? formData.name.charAt(0) : <PhotoCamera />}
+            {formData.profileImage ? <CheckCircle color="success" /> : <Warning color="error" />}
           </Avatar>
           <Box>
             <input
@@ -716,16 +793,25 @@ const RegisterPage: React.FC = () => {
             />
             <label htmlFor="profile-image-upload">
               <Button
-                variant="outlined"
+                variant="contained"
+                color="error"
                 component="span"
                 startIcon={<PhotoCamera />}
               >
-                프로필 사진 업로드 (선택)
+                프로필 사진 업로드
               </Button>
             </label>
             <Typography variant="caption" display="block" color="textSecondary">
-              {formData.profileImage ? formData.profileImage.name : '사진을 선택해주세요'}
+              {formData.profileImage ? formData.profileImage.name : '프로필 사진을 업로드해주세요 (필수)'}
             </Typography>
+            <Alert severity="info" sx={{ mt: 1 }}>
+              <Typography variant="caption">
+                <strong>📋 프로필 사진 업로드 안내:</strong><br />
+                • 시공자 신원확인을 위한 프로필 사진을 업로드해주세요<br />
+                • 5MB 이하의 이미지 파일만 업로드 가능합니다<br />
+                • 명확하게 얼굴이 보이는 사진을 사용해주세요
+              </Typography>
+            </Alert>
           </Box>
         </Box>
       </Grid>
@@ -1014,7 +1100,11 @@ const RegisterPage: React.FC = () => {
             <strong>이메일:</strong> {formData.email}
           </Typography>
           <Typography variant="body2">
-            <strong>역할:</strong> {formData.role === 'seller' ? '판매자' : '시공자'}
+            <strong>역할:</strong> {
+              formData.role === 'seller' ? '판매자' : 
+              formData.role === 'contractor' ? '시공자' : 
+              formData.role === 'admin' ? '관리자' : '시공자'
+            }
           </Typography>
           {formData.role === 'seller' && (
             <>
@@ -1033,6 +1123,12 @@ const RegisterPage: React.FC = () => {
               </Typography>
               <Typography variant="body2">
                 <strong>시공가능지역:</strong> {formData.serviceAreas.length}개 지역
+              </Typography>
+              <Typography variant="body2">
+                <strong>프로필사진:</strong> {formData.profileImage ? '업로드 완료' : '미업로드'}
+              </Typography>
+              <Typography variant="body2">
+                <strong>본인반명함판:</strong> {formData.idCardImage ? '업로드 완료' : '미업로드'}
               </Typography>
             </>
           )}
@@ -1056,7 +1152,14 @@ const RegisterPage: React.FC = () => {
       case 1:
         return renderRoleSelection();
       case 2:
-        return formData.role === 'seller' ? renderSellerInfo() : renderContractorInfo();
+        if (formData.role === 'seller') {
+          return renderSellerInfo();
+        } else if (formData.role === 'contractor') {
+          return renderContractorInfo();
+        } else if (formData.role === 'admin') {
+          return renderAdminInfo();
+        }
+        return renderContractorInfo();
       case 3:
         return renderApprovalWaiting();
       default:

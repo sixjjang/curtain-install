@@ -27,6 +27,7 @@ import {
 } from '@mui/icons-material';
 import { ConstructionJob, User } from '../../../types';
 import { AuthService } from '../../../shared/services/authService';
+import { SystemSettingsService } from '../../../shared/services/systemSettingsService';
 
 interface JobDetailDialogProps {
   open: boolean;
@@ -38,27 +39,34 @@ const JobDetailDialog: React.FC<JobDetailDialogProps> = ({ open, onClose, job })
   const [sellerInfo, setSellerInfo] = useState<User | null>(null);
   const [contractorInfo, setContractorInfo] = useState<User | null>(null);
   const [customerInfo, setCustomerInfo] = useState<User | null>(null);
+  const [feeSettings, setFeeSettings] = useState({ sellerCommissionRate: 3, contractorCommissionRate: 2 });
 
   useEffect(() => {
-    const loadUserInfo = async () => {
+    const loadData = async () => {
       if (job) {
         try {
-          const [seller, contractor, customer] = await Promise.all([
+          // 사용자 정보와 수수료 설정을 병렬로 로드
+          const [seller, contractor, customer, systemSettings] = await Promise.all([
             AuthService.getUserById(job.sellerId),
             job.contractorId ? AuthService.getUserById(job.contractorId) : null,
-            job.customerId ? AuthService.getUserById(job.customerId) : null
+            job.customerId && !job.customerName ? AuthService.getUserById(job.customerId) : null,
+            SystemSettingsService.getSystemSettings()
           ]);
           
           setSellerInfo(seller);
           setContractorInfo(contractor);
           setCustomerInfo(customer);
+          setFeeSettings({
+            sellerCommissionRate: systemSettings.feeSettings.sellerCommissionRate,
+            contractorCommissionRate: systemSettings.feeSettings.contractorCommissionRate
+          });
         } catch (error) {
-          console.error('사용자 정보 로드 실패:', error);
+          console.error('데이터 로드 실패:', error);
         }
       }
     };
 
-    loadUserInfo();
+    loadData();
   }, [job]);
 
   if (!job) return null;
@@ -195,7 +203,7 @@ const JobDetailDialog: React.FC<JobDetailDialogProps> = ({ open, onClose, job })
                   예산 정보
                 </Typography>
                 <Typography variant="body1" fontWeight="bold" color="primary">
-                  {job.budget?.min?.toLocaleString() || 0} ~ {job.budget?.max?.toLocaleString() || 0}만원
+                  총 금액: {(job.finalAmount || job.items?.reduce((sum, item) => sum + item.totalPrice, 0) || 0).toLocaleString()}원
                 </Typography>
               </CardContent>
             </Card>
@@ -251,7 +259,7 @@ const JobDetailDialog: React.FC<JobDetailDialogProps> = ({ open, onClose, job })
                    <Box sx={{ mt: 2, p: 2, bgcolor: 'primary.main', borderRadius: 1 }}>
                      <Typography variant="h6" color="white" sx={{ display: 'flex', alignItems: 'center', gap: 1 }}>
                        <CalculateIcon />
-                       총 품목 금액: {job.items.reduce((sum, item) => sum + item.totalPrice, 0).toLocaleString()}원
+                       총품목 금액: {job.items.reduce((sum, item) => sum + item.totalPrice, 0).toLocaleString()}원 (수수료 {feeSettings.sellerCommissionRate}% : {Math.round(job.items.reduce((sum, item) => sum + item.totalPrice, 0) * feeSettings.sellerCommissionRate / 100).toLocaleString()}원 포함)
                      </Typography>
                    </Box>
                  </CardContent>
@@ -333,9 +341,25 @@ const JobDetailDialog: React.FC<JobDetailDialogProps> = ({ open, onClose, job })
                       역할: {customerInfo.role}
                     </Typography>
                   </Box>
+                ) : job.customerId ? (
+                  <Typography variant="body2" color="textSecondary">
+                    고객 정보를 불러올 수 없습니다. (ID: {job.customerId})
+                  </Typography>
+                ) : job.customerName ? (
+                  <Box>
+                    <Typography variant="subtitle2" fontWeight="bold">
+                      {job.customerName}
+                    </Typography>
+                    <Typography variant="body2" color="textSecondary">
+                      연락처: {job.customerPhone || '연락처 없음'}
+                    </Typography>
+                    <Typography variant="body2" color="textSecondary">
+                      역할: 고객
+                    </Typography>
+                  </Box>
                 ) : (
                   <Typography variant="body2" color="textSecondary">
-                    고객 정보를 불러올 수 없습니다.
+                    고객 정보가 없습니다.
                   </Typography>
                 )}
               </CardContent>

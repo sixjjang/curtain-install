@@ -279,8 +279,8 @@ export class AnalyticsService {
       // 판매자 수수료 (예: 100,000원 작업에서 3,000원)
       const sellerFee = jobAmount * (sellerCommissionRate / 100);
       
-      // 시공자 수수료 (예: 97,000원에서 2% = 1,940원)
-      const contractorFee = (jobAmount - sellerFee) * (contractorCommissionRate / 100);
+      // 시공자 수수료 (예: 100,000원에서 0% = 0원)
+      const contractorFee = jobAmount * (contractorCommissionRate / 100);
       
       // 플랫폼 총 수익 = 판매자 수수료 + 시공자 수수료
       return sum + sellerFee + contractorFee;

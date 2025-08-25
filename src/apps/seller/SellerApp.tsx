@@ -9,10 +9,14 @@ import PointCharge from './pages/PointCharge';
 import PaymentSimulation from './pages/PaymentSimulation';
 import PaymentComplete from './pages/PaymentComplete';
 import PaymentFail from './pages/PaymentFail';
+import KakaoPayComplete from './pages/KakaoPayComplete';
 import Profile from './pages/Profile';
 import ContractorChat from './pages/ContractorChat';
 import Notifications from './pages/Notifications';
 import UserGuidanceDialog from '../../shared/components/UserGuidanceDialog';
+import NoticeBoard from '../../shared/components/NoticeBoard';
+import AdminChat from '../../shared/components/AdminChat';
+import SuggestionBoard from '../../shared/components/SuggestionBoard';
 
 
 const SellerApp: React.FC = () => {
@@ -32,12 +36,20 @@ const SellerApp: React.FC = () => {
     approvalStatus: user?.approvalStatus
   });
 
-  // 안내사항 확인 필요 여부 체크
+  // 안내사항 확인 필요 여부 체크 (하루에 한번)
   useEffect(() => {
     if (user && user.approvalStatus === 'approved') {
-      // 안내사항을 확인하지 않았거나 버전이 업데이트된 경우
-      const needsGuidance = !user.guidanceConfirmed?.sellerGuidanceVersion || 
-                           user.guidanceConfirmed.sellerGuidanceVersion < 1;
+      const today = new Date();
+      today.setHours(0, 0, 0, 0); // 오늘 자정으로 설정
+      
+      const lastVisit = user.guidanceConfirmed?.lastDailyVisit 
+        ? new Date(user.guidanceConfirmed.lastDailyVisit)
+        : null;
+      
+      const lastVisitDate = lastVisit ? new Date(lastVisit.setHours(0, 0, 0, 0)) : null;
+      
+      // 오늘 방문하지 않았거나 안내사항을 확인하지 않은 경우
+      const needsGuidance = !lastVisitDate || lastVisitDate < today;
       
       if (needsGuidance) {
         setShowGuidanceDialog(true);
@@ -79,7 +91,7 @@ const SellerApp: React.FC = () => {
     if (location.pathname === '/seller' || location.pathname === '/seller/') {
       return canAccessFeature('/') ? <Dashboard /> : <Profile />;
     }
-    if (location.pathname === '/seller/jobs') {
+    if (location.pathname === '/seller/jobs' || location.pathname.startsWith('/seller/jobs/')) {
       return canAccessFeature('/jobs') ? <JobManagement /> : <Profile />;
     }
 
@@ -95,6 +107,9 @@ const SellerApp: React.FC = () => {
     if (location.pathname === '/seller/payment-fail') {
       return canAccessFeature('/payment-fail') ? <PaymentFail /> : <Profile />;
     }
+    if (location.pathname === '/seller/kakao-pay-complete') {
+      return canAccessFeature('/kakao-pay-complete') ? <KakaoPayComplete /> : <Profile />;
+    }
     if (location.pathname.startsWith('/seller/chat/')) {
       return canAccessFeature('/chat') ? <ContractorChat /> : <Profile />;
     }
@@ -103,6 +118,17 @@ const SellerApp: React.FC = () => {
     }
     if (location.pathname === '/seller/notifications') {
       return canAccessFeature('/notifications') ? <Notifications /> : <Profile />;
+    }
+    
+    // 게시판 페이지들
+    if (location.pathname === '/seller/notices') {
+      return <NoticeBoard />; // 공지사항은 모든 상태에서 접근 가능
+    }
+    if (location.pathname === '/seller/admin-chat') {
+      return canAccessFeature('/admin-chat') ? <AdminChat /> : <Profile />;
+    }
+    if (location.pathname === '/seller/suggestions') {
+      return canAccessFeature('/suggestions') ? <SuggestionBoard /> : <Profile />;
     }
     
     // 기본값 - 대시보드 또는 프로필

@@ -351,12 +351,16 @@ const ChatArea: React.FC<ChatAreaProps> = ({
 
   return (
     <Box sx={{ display: 'flex', flexDirection: 'column', height: '100%' }}>
-      {/* 채팅 헤더 */}
+      {/* 채팅 헤더 - 고정 */}
       <Box sx={{ 
         p: 2, 
         borderBottom: 1, 
         borderColor: 'divider',
-        bgcolor: 'background.paper'
+        bgcolor: 'background.paper',
+        flexShrink: 0,
+        position: 'sticky',
+        top: 0,
+        zIndex: 10
       }}>
         <Box display="flex" justifyContent="space-between" alignItems="flex-start">
           <Box sx={{ flexGrow: 1, minWidth: 0 }}>
@@ -432,7 +436,7 @@ const ChatArea: React.FC<ChatAreaProps> = ({
         flexGrow: 1, 
         p: 2, 
         overflow: 'auto', 
-        maxHeight: isModal ? 'calc(80vh - 200px)' : 'calc(100vh - 400px)',
+        maxHeight: isModal ? 'calc(80vh - 200px)' : 'calc(100vh - 350px)',
         bgcolor: theme.palette.mode === 'dark' ? 'grey.900' : 'grey.50'
       }}>
         {messages.length === 0 ? (
@@ -533,12 +537,13 @@ const ChatArea: React.FC<ChatAreaProps> = ({
         <div ref={messagesEndRef} />
       </Box>
 
-      {/* 메시지 입력 */}
+      {/* 메시지 입력 - 고정 */}
       <Box sx={{ 
         p: 2, 
         borderTop: 1, 
         borderColor: 'divider',
-        bgcolor: 'background.paper'
+        bgcolor: 'background.paper',
+        flexShrink: 0
       }}>
         <Box display="flex" gap={1}>
           <TextField

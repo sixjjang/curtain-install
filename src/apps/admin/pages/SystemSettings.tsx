@@ -131,6 +131,37 @@ const SystemSettings: React.FC = () => {
     loadSettings();
   }, []);
 
+  // 수수료 설정 저장
+  const handleSaveFeeSettings = async () => {
+    if (!user?.id) {
+      setError('로그인이 필요합니다.');
+      return;
+    }
+
+    try {
+      setSaving(true);
+      setError('');
+      setSuccess('');
+
+      // 수수료 설정 저장
+      await SystemSettingsService.updateFeeSettings(
+        sellerCommissionRate,
+        contractorCommissionRate,
+        user.id
+      );
+      
+      setSuccess('수수료 설정이 성공적으로 저장되었습니다.');
+      
+      // 성공 메시지 3초 후 자동 제거
+      setTimeout(() => setSuccess(''), 3000);
+    } catch (error) {
+      console.error('수수료 설정 저장 실패:', error);
+      setError('수수료 설정 저장에 실패했습니다: ' + (error as Error).message);
+    } finally {
+      setSaving(false);
+    }
+  };
+
   // 설정 저장
   const handleSave = async () => {
     if (!user?.id) {
@@ -175,14 +206,14 @@ const SystemSettings: React.FC = () => {
       } else {
         console.log('⚠️ 토스페이먼츠 계좌 설정 저장 건너뜀 - 필수 필드 누락');
       }
-      
+
       // 수수료 설정 저장
       await SystemSettingsService.updateFeeSettings(
         sellerCommissionRate,
         contractorCommissionRate,
         user.id
       );
-
+      
       // 사용자 안내사항 설정 저장
       await SystemSettingsService.updateUserGuidanceSettings(
         contractorGuidance,
@@ -192,8 +223,8 @@ const SystemSettings: React.FC = () => {
       
       setSuccess('시스템 설정이 성공적으로 저장되었습니다.');
       
-      // 설정 다시 로드
-      await loadSettings();
+      // 성공 메시지 3초 후 자동 제거
+      setTimeout(() => setSuccess(''), 3000);
     } catch (error) {
       console.error('설정 저장 실패:', error);
       setError('설정 저장에 실패했습니다: ' + (error as Error).message);
@@ -747,7 +778,7 @@ const SystemSettings: React.FC = () => {
                       max: 100,
                       step: 0.1
                     }}
-                    helperText="판매자 수익에서 차감되는 수수료율 (예: 3% = 100,000원 작업에서 3,000원 차감)"
+                    helperText="판매자 수익에서 차감되는 수수료율 (0% 가능, 예: 3% = 100,000원 작업에서 3,000원 차감)"
                   />
                 </Grid>
                 
@@ -763,7 +794,7 @@ const SystemSettings: React.FC = () => {
                       max: 100,
                       step: 0.1
                     }}
-                    helperText="시공자 수익에서 차감되는 수수료율 (예: 2% = 97,000원 작업에서 1,940원 차감)"
+                    helperText="시공자 수익에서 차감되는 수수료율 (0% 가능, 예: 2% = 97,000원 작업에서 1,940원 차감)"
                   />
                 </Grid>
               </Grid>
@@ -785,15 +816,15 @@ const SystemSettings: React.FC = () => {
                 <Typography variant="body2">
                   <strong>수수료 적용 예시:</strong><br />
                   • 100,000원 작업의 경우<br />
-                  • 판매자 수수료 {sellerCommissionRate}% 적용: {Math.round(100000 * sellerCommissionRate / 100).toLocaleString()}원 차감<br />
-                  • 시공자 수수료 {contractorCommissionRate}% 적용: {Math.round((100000 - 100000 * sellerCommissionRate / 100) * contractorCommissionRate / 100).toLocaleString()}원 차감
+                  • 판매자 수수료 {sellerCommissionRate}% 적용: {sellerCommissionRate === 0 ? '0원 차감 (수수료 없음)' : `${Math.round(100000 * sellerCommissionRate / 100).toLocaleString()}원 차감`}<br />
+                  • 시공자 수수료 {contractorCommissionRate}% 적용: {contractorCommissionRate === 0 ? '0원 차감 (수수료 없음)' : `${Math.round((100000 - 100000 * sellerCommissionRate / 100) * contractorCommissionRate / 100).toLocaleString()}원 차감`}
                 </Typography>
               </Alert>
 
               <Button
                 variant="contained"
                 startIcon={<Save />}
-                onClick={handleSave}
+                onClick={handleSaveFeeSettings}
                 disabled={saving || sellerCommissionRate < 0 || sellerCommissionRate > 100 || contractorCommissionRate < 0 || contractorCommissionRate > 100}
                 fullWidth
                 sx={{ mt: 3 }}

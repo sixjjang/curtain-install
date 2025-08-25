@@ -29,7 +29,11 @@ import {
   FormControlLabel,
   Alert,
   CircularProgress,
-  Tooltip
+  Tooltip,
+  Accordion,
+  AccordionSummary,
+  AccordionDetails,
+  Divider
 } from '@mui/material';
 import {
   Search,
@@ -43,7 +47,9 @@ import {
   Check,
   Close,
   Warning,
-  Delete
+  Delete,
+  AdminPanelSettings,
+  ExpandMore
 } from '@mui/icons-material';
 import { collection, getDocs, doc, updateDoc, deleteDoc, query, where, orderBy, Timestamp } from 'firebase/firestore';
 import { db } from '../../../firebase/config';
@@ -198,6 +204,44 @@ const UserManagement: React.FC = () => {
     }
   };
 
+  // 역할 변경 처리
+  const handleRoleChange = async (userId: string, newRole: UserRole) => {
+    try {
+      setUpdateLoading(true);
+      const userRef = doc(db, 'users', userId);
+      const updateData: any = {
+        role: newRole,
+        updatedAt: new Date()
+      };
+
+      // 관리자로 변경하는 경우 승인 상태도 자동으로 승인으로 변경
+      if (newRole === 'admin') {
+        updateData.approvalStatus = 'approved';
+        updateData.approvalDate = new Date();
+        updateData.approvedBy = 'admin';
+      }
+
+      await updateDoc(userRef, updateData);
+      
+      // 로컬 상태 업데이트
+      setUsers(prev => prev.map(user => 
+        user.id === userId ? { ...user, ...updateData } : user
+      ));
+      
+      // 선택된 사용자 정보도 업데이트
+      if (selectedUser?.id === userId) {
+        setSelectedUser(prev => prev ? { ...prev, ...updateData } : null);
+      }
+
+      alert(`${newRole === 'admin' ? '관리자' : newRole === 'seller' ? '판매자' : newRole === 'contractor' ? '시공자' : '고객'}로 역할이 변경되었습니다.`);
+    } catch (error) {
+      console.error('역할 변경 실패:', error);
+      alert('역할 변경 중 오류가 발생했습니다.');
+    } finally {
+      setUpdateLoading(false);
+    }
+  };
+
   // 사용자 삭제
   const handleDeleteUser = async () => {
     if (!userToDelete) return;
@@ -247,6 +291,7 @@ const UserManagement: React.FC = () => {
     const activeUsers = users.filter(user => user.isActive).length;
     const inactiveUsers = totalUsers - activeUsers;
     
+    const admins = users.filter(user => user.role === 'admin');
     const sellers = users.filter(user => user.role === 'seller');
     const contractors = users.filter(user => user.role === 'contractor');
     const customers = users.filter(user => user.role === 'customer');
@@ -259,9 +304,11 @@ const UserManagement: React.FC = () => {
       total: totalUsers,
       active: activeUsers,
       inactive: inactiveUsers,
+      admins: admins.length,
       sellers: sellers.length,
       contractors: contractors.length,
       customers: customers.length,
+      activeAdmins: admins.filter(user => user.isActive).length,
       activeSellers: sellers.filter(user => user.isActive).length,
       activeContractors: contractors.filter(user => user.isActive).length,
       pendingUsers,
@@ -274,6 +321,7 @@ const UserManagement: React.FC = () => {
 
   const getRoleIcon = (role: UserRole) => {
     switch (role) {
+      case 'admin': return <AdminPanelSettings />;
       case 'seller': return <Business />;
       case 'contractor': return <Engineering />;
       case 'customer': return <Person />;
@@ -283,6 +331,7 @@ const UserManagement: React.FC = () => {
 
   const getRoleColor = (role: UserRole) => {
     switch (role) {
+      case 'admin': return 'error';
       case 'seller': return 'primary';
       case 'contractor': return 'secondary';
       case 'customer': return 'default';
@@ -292,6 +341,7 @@ const UserManagement: React.FC = () => {
 
   const getRoleLabel = (role: UserRole) => {
     switch (role) {
+      case 'admin': return '관리자';
       case 'seller': return '판매자';
       case 'contractor': return '시공자';
       case 'customer': return '고객';
@@ -355,6 +405,22 @@ const UserManagement: React.FC = () => {
               </Typography>
               <Box sx={{ mt: 1 }}>
                 <Chip label="활성 사용자" color="success" size="small" />
+              </Box>
+            </CardContent>
+          </Card>
+        </Grid>
+
+        <Grid item xs={12} md={2}>
+          <Card>
+            <CardContent>
+              <Typography variant="h6" gutterBottom>
+                관리자
+              </Typography>
+              <Typography variant="h4" color="error">
+                {stats.admins}명
+              </Typography>
+              <Box sx={{ mt: 1 }}>
+                <Chip label={`활성: ${stats.activeAdmins}명`} color="success" size="small" />
               </Box>
             </CardContent>
           </Card>
@@ -430,6 +496,7 @@ const UserManagement: React.FC = () => {
                   label="역할"
                 >
                   <MenuItem value="all">전체</MenuItem>
+                  <MenuItem value="admin">관리자</MenuItem>
                   <MenuItem value="seller">판매자</MenuItem>
                   <MenuItem value="contractor">시공자</MenuItem>
                   <MenuItem value="customer">고객</MenuItem>
@@ -565,7 +632,8 @@ const UserManagement: React.FC = () => {
                       />
                     </TableCell>
                     <TableCell>
-                      {user.role === 'seller' && user.companyName ? user.companyName : 
+                      {user.role === 'admin' ? '시스템 관리자' :
+                       user.role === 'seller' && user.companyName ? user.companyName : 
                        user.role === 'contractor' && user.businessName ? user.businessName : 
                        '-'}
                     </TableCell>
@@ -610,75 +678,89 @@ const UserManagement: React.FC = () => {
                         size="small"
                       />
                     </TableCell>
-                    <TableCell>
-                      <Box display="flex" gap={1}>
-                        <Tooltip title="상세보기">
-                          <IconButton
-                            size="small"
-                            onClick={() => {
-                              setSelectedUser(user);
-                              setDetailDialogOpen(true);
-                            }}
-                          >
-                            <Visibility />
-                          </IconButton>
-                        </Tooltip>
-                        
-                        {/* 승인 대기 중인 사용자만 승인/거부 버튼 표시 */}
-                        {user.approvalStatus === 'pending' && (
-                          <>
-                            <Tooltip title="승인">
-                              <IconButton
-                                size="small"
-                                color="success"
-                                onClick={() => handleApproval(user.id, 'approved')}
-                                disabled={updateLoading}
-                              >
-                                <Check />
-                              </IconButton>
-                            </Tooltip>
-                            <Tooltip title="거부">
-                              <IconButton
-                                size="small"
-                                color="error"
-                                onClick={() => {
-                                  setSelectedUser(user);
-                                  setRejectionDialogOpen(true);
-                                }}
-                                disabled={updateLoading}
-                              >
-                                <Close />
-                              </IconButton>
-                            </Tooltip>
-                          </>
-                        )}
-                        
-                        <Tooltip title={user.isActive ? '비활성화' : '활성화'}>
-                          <IconButton
-                            size="small"
-                            color={user.isActive ? 'error' : 'success'}
-                            onClick={() => handleStatusChange(user.id, !user.isActive)}
-                            disabled={updateLoading}
-                          >
-                            {user.isActive ? <Block /> : <CheckCircle />}
-                          </IconButton>
-                        </Tooltip>
-                        
-                        <Tooltip title="사용자 삭제">
-                          <IconButton
-                            size="small"
-                            color="error"
-                            onClick={() => {
-                              setUserToDelete(user);
-                              setDeleteDialogOpen(true);
-                            }}
-                            disabled={updateLoading}
-                          >
-                            <Delete />
-                          </IconButton>
-                        </Tooltip>
-                      </Box>
-                    </TableCell>
+                                         <TableCell>
+                       <Box display="flex" gap={1}>
+                         <Tooltip title="상세보기">
+                           <IconButton
+                             size="small"
+                             onClick={() => {
+                               setSelectedUser(user);
+                               setDetailDialogOpen(true);
+                             }}
+                           >
+                             <Visibility />
+                           </IconButton>
+                         </Tooltip>
+                         
+                         {/* 승인 대기 중인 사용자만 승인/거부 버튼 표시 */}
+                         {user.approvalStatus === 'pending' && (
+                           <>
+                             <Tooltip title="승인">
+                               <IconButton
+                                 size="small"
+                                 color="success"
+                                 onClick={() => handleApproval(user.id, 'approved')}
+                                 disabled={updateLoading}
+                               >
+                                 <Check />
+                               </IconButton>
+                             </Tooltip>
+                             <Tooltip title="거부">
+                               <IconButton
+                                 size="small"
+                                 color="error"
+                                 onClick={() => {
+                                   setSelectedUser(user);
+                                   setRejectionDialogOpen(true);
+                                 }}
+                                 disabled={updateLoading}
+                               >
+                                 <Close />
+                               </IconButton>
+                             </Tooltip>
+                           </>
+                         )}
+                         
+                         {/* 승인된 사용자만 역할 변경 버튼 표시 (관리자가 아닌 경우) */}
+                         {user.approvalStatus === 'approved' && user.role !== 'admin' && (
+                           <Tooltip title="관리자로 변경">
+                             <IconButton
+                               size="small"
+                               color="warning"
+                               onClick={() => handleRoleChange(user.id, 'admin')}
+                               disabled={updateLoading}
+                             >
+                               <AdminPanelSettings />
+                             </IconButton>
+                           </Tooltip>
+                         )}
+                         
+                         <Tooltip title={user.isActive ? '비활성화' : '활성화'}>
+                           <IconButton
+                             size="small"
+                             color={user.isActive ? 'error' : 'success'}
+                             onClick={() => handleStatusChange(user.id, !user.isActive)}
+                             disabled={updateLoading}
+                           >
+                             {user.isActive ? <Block /> : <CheckCircle />}
+                           </IconButton>
+                         </Tooltip>
+                         
+                         <Tooltip title="사용자 삭제">
+                           <IconButton
+                             size="small"
+                             color="error"
+                             onClick={() => {
+                               setUserToDelete(user);
+                               setDeleteDialogOpen(true);
+                             }}
+                             disabled={updateLoading}
+                           >
+                             <Delete />
+                           </IconButton>
+                         </Tooltip>
+                       </Box>
+                     </TableCell>
                   </TableRow>
                 ))}
               </TableBody>
@@ -691,185 +773,236 @@ const UserManagement: React.FC = () => {
       <Dialog
         open={detailDialogOpen}
         onClose={() => setDetailDialogOpen(false)}
-        maxWidth="lg"
+        maxWidth="md"
         fullWidth
         PaperProps={{
-          sx: { maxHeight: '90vh' }
+          sx: { maxHeight: '85vh' }
         }}
       >
-        <DialogTitle>
-          사용자 상세 정보
-        </DialogTitle>
-        <DialogContent>
-          {selectedUser && (
-            <Grid container spacing={2} sx={{ mt: 1 }}>
-              <Grid item xs={12} md={6}>
-                <Typography variant="subtitle2" color="textSecondary">이름</Typography>
-                <Typography variant="body1">{selectedUser.name}</Typography>
-              </Grid>
-              <Grid item xs={12} md={6}>
-                <Typography variant="subtitle2" color="textSecondary">이메일</Typography>
-                <Typography variant="body1">{selectedUser.email}</Typography>
-              </Grid>
-              <Grid item xs={12} md={6}>
-                <Typography variant="subtitle2" color="textSecondary">전화번호</Typography>
-                <Typography variant="body1">{selectedUser.phone}</Typography>
-              </Grid>
-              <Grid item xs={12} md={6}>
-                <Typography variant="subtitle2" color="textSecondary">역할</Typography>
+        <DialogTitle sx={{ pb: 1 }}>
+          <Box display="flex" alignItems="center" gap={2}>
+            <Avatar 
+              src={selectedUser?.profileImage} 
+              sx={{ width: 40, height: 40 }}
+            >
+              {selectedUser?.name?.charAt(0)}
+            </Avatar>
+            <Box>
+              <Typography variant="h6">{selectedUser?.name}</Typography>
+              <Box display="flex" alignItems="center" gap={1}>
                 <Chip
-                  icon={getRoleIcon(selectedUser.role)}
-                  label={getRoleLabel(selectedUser.role)}
-                  color={getRoleColor(selectedUser.role)}
+                  icon={selectedUser ? getRoleIcon(selectedUser.role) : undefined}
+                  label={selectedUser ? getRoleLabel(selectedUser.role) : ''}
+                  color={selectedUser ? getRoleColor(selectedUser.role) : 'default'}
+                  size="small"
                 />
-              </Grid>
-                             <Grid item xs={12} md={6}>
-                 <Typography variant="subtitle2" color="textSecondary">가입일</Typography>
-                 <Typography variant="body1">
-                   {selectedUser.createdAt 
-                     ? (selectedUser.createdAt instanceof Timestamp 
-                         ? selectedUser.createdAt.toDate().toLocaleDateString('ko-KR')
-                         : selectedUser.createdAt instanceof Date 
-                         ? selectedUser.createdAt.toLocaleDateString('ko-KR')
-                         : '날짜 없음')
-                     : '날짜 없음'
-                   }
-                 </Typography>
-               </Grid>
-              <Grid item xs={12} md={6}>
-                <Typography variant="subtitle2" color="textSecondary">승인 상태</Typography>
                 <Chip
                   label={
-                    selectedUser.approvalStatus === 'pending' ? '승인 대기' :
-                    selectedUser.approvalStatus === 'approved' ? '승인 완료' :
-                    selectedUser.approvalStatus === 'rejected' ? '승인 거부' : '알 수 없음'
+                    selectedUser?.approvalStatus === 'pending' ? '승인 대기' :
+                    selectedUser?.approvalStatus === 'approved' ? '승인 완료' :
+                    selectedUser?.approvalStatus === 'rejected' ? '승인 거부' : '알 수 없음'
                   }
                   color={
-                    selectedUser.approvalStatus === 'pending' ? 'warning' :
-                    selectedUser.approvalStatus === 'approved' ? 'success' :
-                    selectedUser.approvalStatus === 'rejected' ? 'error' : 'default'
+                    selectedUser?.approvalStatus === 'pending' ? 'warning' :
+                    selectedUser?.approvalStatus === 'approved' ? 'success' :
+                    selectedUser?.approvalStatus === 'rejected' ? 'error' : 'default'
                   }
+                  size="small"
                 />
-              </Grid>
-              <Grid item xs={12} md={6}>
-                <Typography variant="subtitle2" color="textSecondary">활성 상태</Typography>
-                <FormControlLabel
-                  control={
-                    <Switch
-                      checked={selectedUser.isActive}
-                      onChange={(e) => handleStatusChange(selectedUser.id, e.target.checked)}
-                      disabled={updateLoading}
-                    />
-                  }
-                  label={selectedUser.isActive ? '활성' : '비활성'}
-                />
-              </Grid>
+              </Box>
+            </Box>
+          </Box>
+        </DialogTitle>
+        <DialogContent sx={{ pt: 0 }}>
+          {selectedUser && (
+            <Box>
+                             {/* 기본 정보 */}
+               <Accordion defaultExpanded>
+                 <AccordionSummary expandIcon={<ExpandMore />}>
+                   <Typography variant="subtitle1" fontWeight="medium">기본 정보</Typography>
+                 </AccordionSummary>
+                 <AccordionDetails>
+                   <Grid container spacing={2}>
+                     <Grid item xs={12} sm={6}>
+                       <Typography variant="subtitle2" color="textSecondary" gutterBottom>이메일</Typography>
+                       <Typography variant="body2">{selectedUser.email}</Typography>
+                     </Grid>
+                     <Grid item xs={12} sm={6}>
+                       <Typography variant="subtitle2" color="textSecondary" gutterBottom>전화번호</Typography>
+                       <Typography variant="body2">{selectedUser.phone}</Typography>
+                     </Grid>
+                     <Grid item xs={12} sm={6}>
+                       <Typography variant="subtitle2" color="textSecondary" gutterBottom>가입일</Typography>
+                       <Typography variant="body2">
+                         {selectedUser.createdAt 
+                           ? (selectedUser.createdAt instanceof Timestamp 
+                               ? selectedUser.createdAt.toDate().toLocaleDateString('ko-KR')
+                               : selectedUser.createdAt instanceof Date 
+                               ? selectedUser.createdAt.toLocaleDateString('ko-KR')
+                               : '날짜 없음')
+                           : '날짜 없음'
+                         }
+                       </Typography>
+                     </Grid>
+                     <Grid item xs={12} sm={6}>
+                       <Typography variant="subtitle2" color="textSecondary" gutterBottom>활성 상태</Typography>
+                       <FormControlLabel
+                         control={
+                           <Switch
+                             checked={selectedUser.isActive}
+                             onChange={(e) => handleStatusChange(selectedUser.id, e.target.checked)}
+                             disabled={updateLoading}
+                             size="small"
+                           />
+                         }
+                         label={selectedUser.isActive ? '활성' : '비활성'}
+                       />
+                     </Grid>
+                     <Grid item xs={12} sm={6}>
+                       <Typography variant="subtitle2" color="textSecondary" gutterBottom>역할 변경</Typography>
+                       <FormControl fullWidth size="small">
+                         <Select
+                           value={selectedUser.role}
+                           onChange={(e) => handleRoleChange(selectedUser.id, e.target.value as UserRole)}
+                           disabled={updateLoading}
+                         >
+                           <MenuItem value="admin">관리자</MenuItem>
+                           <MenuItem value="seller">판매자</MenuItem>
+                           <MenuItem value="contractor">시공자</MenuItem>
+                           <MenuItem value="customer">고객</MenuItem>
+                         </Select>
+                       </FormControl>
+                       <Typography variant="caption" color="textSecondary" sx={{ mt: 0.5, display: 'block' }}>
+                         관리자로 변경 시 자동으로 승인됩니다
+                       </Typography>
+                     </Grid>
+                   </Grid>
+                 </AccordionDetails>
+               </Accordion>
               
-              {/* 승인 대기 중인 사용자만 승인/거부 버튼 표시 */}
-              {selectedUser.approvalStatus === 'pending' && (
-                <Grid item xs={12}>
-                  <Box sx={{ mt: 2, display: 'flex', gap: 2 }}>
-                    <Button
-                      variant="contained"
-                      color="success"
-                      startIcon={<Check />}
-                      onClick={() => handleApproval(selectedUser.id, 'approved')}
-                      disabled={updateLoading}
-                    >
-                      승인
-                    </Button>
-                    <Button
-                      variant="contained"
-                      color="error"
-                      startIcon={<Close />}
-                      onClick={() => setRejectionDialogOpen(true)}
-                      disabled={updateLoading}
-                    >
-                      거부
-                    </Button>
-                  </Box>
-                </Grid>
+              {/* 승인/거부 버튼 및 거부 사유 */}
+              {(selectedUser.approvalStatus === 'pending' || selectedUser.approvalStatus === 'rejected') && (
+                <Accordion defaultExpanded={selectedUser.approvalStatus === 'pending'}>
+                  <AccordionSummary expandIcon={<ExpandMore />}>
+                    <Typography variant="subtitle1" fontWeight="medium" color="primary">
+                      승인 관리
+                    </Typography>
+                  </AccordionSummary>
+                  <AccordionDetails>
+                    {selectedUser.approvalStatus === 'pending' && (
+                      <Box sx={{ display: 'flex', gap: 2, mb: 2 }}>
+                        <Button
+                          variant="contained"
+                          color="success"
+                          startIcon={<Check />}
+                          onClick={() => handleApproval(selectedUser.id, 'approved')}
+                          disabled={updateLoading}
+                          size="small"
+                        >
+                          승인
+                        </Button>
+                        <Button
+                          variant="contained"
+                          color="error"
+                          startIcon={<Close />}
+                          onClick={() => setRejectionDialogOpen(true)}
+                          disabled={updateLoading}
+                          size="small"
+                        >
+                          거부
+                        </Button>
+                      </Box>
+                    )}
+                    
+                    {selectedUser.approvalStatus === 'rejected' && selectedUser.rejectionReason && (
+                      <Box>
+                        <Typography variant="subtitle2" color="textSecondary" gutterBottom>거부 사유</Typography>
+                        <Typography variant="body2" color="error.main">
+                          {selectedUser.rejectionReason}
+                        </Typography>
+                      </Box>
+                    )}
+                  </AccordionDetails>
+                </Accordion>
               )}
               
-              {/* 거부 사유 표시 */}
-              {selectedUser.approvalStatus === 'rejected' && selectedUser.rejectionReason && (
-                <Grid item xs={12}>
-                  <Typography variant="subtitle2" color="textSecondary">거부 사유</Typography>
-                  <Typography variant="body1" color="error.main">
-                    {selectedUser.rejectionReason}
-                  </Typography>
-                </Grid>
-              )}
-              
-                             {/* 시공자 전용 정보 */}
+              {/* 시공자 전용 정보 */}
               {selectedUser.role === 'contractor' && (
                 <>
-                  <Grid item xs={12}>
-                    <Typography variant="h6" sx={{ mt: 2, mb: 1, color: 'primary.main' }}>
-                      시공자 상세 정보
-                    </Typography>
-                  </Grid>
-                  <Grid item xs={12} md={6}>
-                    <Typography variant="subtitle2" color="textSecondary">상호명</Typography>
-                    <Typography variant="body1">{selectedUser.businessName || '미입력'}</Typography>
-                  </Grid>
-                  <Grid item xs={12} md={6}>
-                    <Typography variant="subtitle2" color="textSecondary">레벨</Typography>
-                    <Typography variant="body1">Lv. {selectedUser.contractor?.level || 1}</Typography>
-                  </Grid>
-                  <Grid item xs={12} md={6}>
-                    <Typography variant="subtitle2" color="textSecondary">총 시공 건수</Typography>
-                    <Typography variant="body1">{selectedUser.contractor?.completedJobs || 0}건</Typography>
-                  </Grid>
-                  <Grid item xs={12} md={6}>
-                    <Typography variant="subtitle2" color="textSecondary">평균 평점</Typography>
-                    <Typography variant="body1">{Number(selectedUser.contractor?.rating || 0).toFixed(1)}/5.0</Typography>
-                  </Grid>
-                  <Grid item xs={12} md={6}>
-                    <Typography variant="subtitle2" color="textSecondary">시공 가능지역</Typography>
-                    <Typography variant="body1">
-                      {selectedUser.contractor?.serviceAreas?.length || 0}개 지역
-                    </Typography>
-                  </Grid>
-                  <Grid item xs={12} md={6}>
-                    <Typography variant="subtitle2" color="textSecondary">경력</Typography>
-                    <Typography variant="body1">{selectedUser.contractor?.experience || '경력 정보 없음'}</Typography>
-                  </Grid>
-                  <Grid item xs={12} md={6}>
-                    <Typography variant="subtitle2" color="textSecondary">은행명</Typography>
-                    <Typography variant="body1">{selectedUser.contractor?.bankName || '미입력'}</Typography>
-                  </Grid>
-                                     <Grid item xs={12} md={6}>
-                     <Typography variant="subtitle2" color="textSecondary">계좌번호</Typography>
-                     <Typography variant="body1">{selectedUser.contractor?.bankAccount || '미입력'}</Typography>
-                   </Grid>
-                                     <Grid item xs={12} md={6}>
-                    <Typography variant="subtitle2" color="textSecondary">예금주</Typography>
-                    <Typography variant="body1">{selectedUser.contractor?.accountHolder || '미입력'}</Typography>
-                  </Grid>
+                  <Accordion>
+                    <AccordionSummary expandIcon={<ExpandMore />}>
+                      <Typography variant="subtitle1" fontWeight="medium">시공자 정보</Typography>
+                    </AccordionSummary>
+                    <AccordionDetails>
+                      <Grid container spacing={2}>
+                        <Grid item xs={12} sm={6}>
+                          <Typography variant="subtitle2" color="textSecondary" gutterBottom>상호명</Typography>
+                          <Typography variant="body2">{selectedUser.businessName || '미입력'}</Typography>
+                        </Grid>
+                        <Grid item xs={12} sm={6}>
+                          <Typography variant="subtitle2" color="textSecondary" gutterBottom>레벨</Typography>
+                          <Typography variant="body2">Lv. {selectedUser.contractor?.level || 1}</Typography>
+                        </Grid>
+                        <Grid item xs={12} sm={6}>
+                          <Typography variant="subtitle2" color="textSecondary" gutterBottom>총 시공 건수</Typography>
+                          <Typography variant="body2">{selectedUser.contractor?.completedJobs || 0}건</Typography>
+                        </Grid>
+                        <Grid item xs={12} sm={6}>
+                          <Typography variant="subtitle2" color="textSecondary" gutterBottom>평균 평점</Typography>
+                          <Typography variant="body2">{Number(selectedUser.contractor?.rating || 0).toFixed(1)}/5.0</Typography>
+                        </Grid>
+                        <Grid item xs={12} sm={6}>
+                          <Typography variant="subtitle2" color="textSecondary" gutterBottom>시공 가능지역</Typography>
+                          <Typography variant="body2">
+                            {selectedUser.contractor?.serviceAreas?.length || 0}개 지역
+                          </Typography>
+                        </Grid>
+                        <Grid item xs={12} sm={6}>
+                          <Typography variant="subtitle2" color="textSecondary" gutterBottom>경력</Typography>
+                          <Typography variant="body2">{selectedUser.contractor?.experience || '경력 정보 없음'}</Typography>
+                        </Grid>
+                        <Grid item xs={12} sm={6}>
+                          <Typography variant="subtitle2" color="textSecondary" gutterBottom>은행명</Typography>
+                          <Typography variant="body2">{selectedUser.contractor?.bankName || '미입력'}</Typography>
+                        </Grid>
+                        <Grid item xs={12} sm={6}>
+                          <Typography variant="subtitle2" color="textSecondary" gutterBottom>계좌번호</Typography>
+                          <Typography variant="body2">{selectedUser.contractor?.bankAccount || '미입력'}</Typography>
+                        </Grid>
+                        <Grid item xs={12} sm={6}>
+                          <Typography variant="subtitle2" color="textSecondary" gutterBottom>예금주</Typography>
+                          <Typography variant="body2">{selectedUser.contractor?.accountHolder || '미입력'}</Typography>
+                        </Grid>
+                      </Grid>
+                    </AccordionDetails>
+                  </Accordion>
                   
                   {/* 시공자 사업 정보 */}
-                  <Grid item xs={12}>
-                    <Typography variant="h6" sx={{ mt: 2, mb: 1, color: 'primary.main' }}>
-                      사업 정보
-                    </Typography>
-                  </Grid>
-                  <Grid item xs={12} md={6}>
-                    <Typography variant="subtitle2" color="textSecondary">사업자등록번호</Typography>
-                    <Typography variant="body1">{selectedUser.businessNumber || '미입력'}</Typography>
-                  </Grid>
-                  <Grid item xs={12} md={6}>
-                    <Typography variant="subtitle2" color="textSecondary">사업장주소</Typography>
-                    <Typography variant="body1">{selectedUser.businessAddress || '미입력'}</Typography>
-                  </Grid>
-                  <Grid item xs={12} md={6}>
-                    <Typography variant="subtitle2" color="textSecondary">업태</Typography>
-                    <Typography variant="body1">{selectedUser.businessType || '미입력'}</Typography>
-                  </Grid>
-                  <Grid item xs={12} md={6}>
-                    <Typography variant="subtitle2" color="textSecondary">종목</Typography>
-                    <Typography variant="body1">{selectedUser.businessCategory || '미입력'}</Typography>
-                  </Grid>
+                  <Accordion>
+                    <AccordionSummary expandIcon={<ExpandMore />}>
+                      <Typography variant="subtitle1" fontWeight="medium">사업 정보</Typography>
+                    </AccordionSummary>
+                    <AccordionDetails>
+                      <Grid container spacing={2}>
+                        <Grid item xs={12} sm={6}>
+                          <Typography variant="subtitle2" color="textSecondary" gutterBottom>사업자등록번호</Typography>
+                          <Typography variant="body2">{selectedUser.businessNumber || '미입력'}</Typography>
+                        </Grid>
+                        <Grid item xs={12} sm={6}>
+                          <Typography variant="subtitle2" color="textSecondary" gutterBottom>사업장주소</Typography>
+                          <Typography variant="body2">{selectedUser.businessAddress || '미입력'}</Typography>
+                        </Grid>
+                        <Grid item xs={12} sm={6}>
+                          <Typography variant="subtitle2" color="textSecondary" gutterBottom>업태</Typography>
+                          <Typography variant="body2">{selectedUser.businessType || '미입력'}</Typography>
+                        </Grid>
+                        <Grid item xs={12} sm={6}>
+                          <Typography variant="subtitle2" color="textSecondary" gutterBottom>종목</Typography>
+                          <Typography variant="body2">{selectedUser.businessCategory || '미입력'}</Typography>
+                        </Grid>
+                      </Grid>
+                    </AccordionDetails>
+                  </Accordion>
                   <Grid item xs={12} md={6}>
                     <Typography variant="subtitle2" color="textSecondary">활성 상태</Typography>
                     <Typography variant="body1">
@@ -877,81 +1010,89 @@ const UserManagement: React.FC = () => {
                     </Typography>
                   </Grid>
                   
-                                     {/* 시공자 서류 확인 */}
-                   <Grid item xs={12}>
-                     <Typography variant="h6" sx={{ mt: 2, mb: 1, color: 'primary.main' }}>
-                       서류 확인
-                     </Typography>
-                   </Grid>
-                   <Grid item xs={12} md={6}>
-                     <Typography variant="subtitle2" color="textSecondary">프로필 이미지</Typography>
-                     {selectedUser.profileImage ? (
-                       <Box sx={{ mt: 1 }}>
-                         <img 
-                           src={selectedUser.profileImage} 
-                           alt="프로필 이미지" 
-                           style={{ width: '100px', height: '100px', objectFit: 'cover', borderRadius: '8px' }}
-                         />
-                       </Box>
-                     ) : (
-                       <Typography variant="body2" color="textSecondary">프로필 이미지 없음</Typography>
-                     )}
-                   </Grid>
-                   <Grid item xs={12} md={6}>
-                     <Typography variant="subtitle2" color="textSecondary">본인 반명함판 사진</Typography>
-                     {selectedUser.contractor?.idCardImage ? (
-                       <Box sx={{ mt: 1 }}>
-                         <img 
-                           src={selectedUser.contractor.idCardImage} 
-                           alt="본인 반명함판 사진" 
-                           style={{ width: '200px', height: '150px', objectFit: 'cover', borderRadius: '8px', border: '1px solid #ddd' }}
-                         />
-                         <Button 
-                           variant="outlined" 
-                           size="small" 
-                           sx={{ mt: 1 }}
-                           onClick={() => window.open(selectedUser.contractor?.idCardImage, '_blank')}
-                         >
-                           새 창에서 보기
-                         </Button>
-                       </Box>
-                     ) : (
-                       <Typography variant="body2" color="error.main">본인 반명함판 사진 미첨부</Typography>
-                     )}
-                   </Grid>
-                   <Grid item xs={12} md={6}>
-                     <Typography variant="subtitle2" color="textSecondary">사업자등록증</Typography>
-                     {selectedUser.businessLicenseImage ? (
-                       <Box sx={{ mt: 1 }}>
-                         <img 
-                           src={selectedUser.businessLicenseImage} 
-                           alt="사업자등록증" 
-                           style={{ width: '200px', height: '150px', objectFit: 'cover', borderRadius: '8px', border: '1px solid #ddd' }}
-                         />
-                         <Button 
-                           variant="outlined" 
-                           size="small" 
-                           sx={{ mt: 1 }}
-                           onClick={() => window.open(selectedUser.businessLicenseImage, '_blank')}
-                         >
-                           새 창에서 보기
-                         </Button>
-                       </Box>
-                     ) : (
-                       <Typography variant="body2" color="textSecondary">사업자등록증 미첨부 (선택사항)</Typography>
-                     )}
-                   </Grid>
+                  {/* 시공자 서류 확인 */}
+                  <Accordion>
+                    <AccordionSummary expandIcon={<ExpandMore />}>
+                      <Typography variant="subtitle1" fontWeight="medium">서류 확인</Typography>
+                    </AccordionSummary>
+                    <AccordionDetails>
+                      <Grid container spacing={2}>
+                        <Grid item xs={12} sm={6}>
+                          <Typography variant="subtitle2" color="textSecondary" gutterBottom>프로필 이미지</Typography>
+                          {selectedUser.profileImage ? (
+                            <Box sx={{ mt: 1 }}>
+                              <img 
+                                src={selectedUser.profileImage} 
+                                alt="프로필 이미지" 
+                                style={{ width: '80px', height: '80px', objectFit: 'cover', borderRadius: '8px' }}
+                              />
+                            </Box>
+                          ) : (
+                            <Typography variant="body2" color="textSecondary">프로필 이미지 없음</Typography>
+                          )}
+                        </Grid>
+                        <Grid item xs={12} sm={6}>
+                          <Typography variant="subtitle2" color="textSecondary" gutterBottom>본인 반명함판 사진</Typography>
+                          {selectedUser.contractor?.idCardImage ? (
+                            <Box sx={{ mt: 1 }}>
+                              <img 
+                                src={selectedUser.contractor.idCardImage} 
+                                alt="본인 반명함판 사진" 
+                                style={{ width: '150px', height: '100px', objectFit: 'cover', borderRadius: '8px', border: '1px solid #ddd' }}
+                              />
+                              <Button 
+                                variant="outlined" 
+                                size="small" 
+                                sx={{ mt: 1 }}
+                                onClick={() => window.open(selectedUser.contractor?.idCardImage, '_blank')}
+                              >
+                                새 창에서 보기
+                              </Button>
+                            </Box>
+                          ) : (
+                            <Typography variant="body2" color="error.main">본인 반명함판 사진 미첨부</Typography>
+                          )}
+                        </Grid>
+                        <Grid item xs={12} sm={6}>
+                          <Typography variant="subtitle2" color="textSecondary" gutterBottom>사업자등록증</Typography>
+                          {selectedUser.businessLicenseImage ? (
+                            <Box sx={{ mt: 1 }}>
+                              <img 
+                                src={selectedUser.businessLicenseImage} 
+                                alt="사업자등록증" 
+                                style={{ width: '150px', height: '100px', objectFit: 'cover', borderRadius: '8px', border: '1px solid #ddd' }}
+                              />
+                              <Button 
+                                variant="outlined" 
+                                size="small" 
+                                sx={{ mt: 1 }}
+                                onClick={() => window.open(selectedUser.businessLicenseImage, '_blank')}
+                              >
+                                새 창에서 보기
+                              </Button>
+                            </Box>
+                          ) : (
+                            <Typography variant="body2" color="textSecondary">사업자등록증 미첨부 (선택사항)</Typography>
+                          )}
+                        </Grid>
+                      </Grid>
+                    </AccordionDetails>
+                  </Accordion>
                   
                   {/* 시공 가능 지역 상세 */}
                   {selectedUser.contractor?.serviceAreas && selectedUser.contractor.serviceAreas.length > 0 && (
-                    <Grid item xs={12}>
-                      <Typography variant="subtitle2" color="textSecondary">시공 가능 지역 상세</Typography>
-                      <Box sx={{ mt: 1 }}>
-                        {selectedUser.contractor.serviceAreas.map((area: string, index: number) => (
-                          <Chip key={index} label={area} size="small" sx={{ mr: 1, mb: 1 }} />
-                        ))}
-                      </Box>
-                    </Grid>
+                    <Accordion>
+                      <AccordionSummary expandIcon={<ExpandMore />}>
+                        <Typography variant="subtitle1" fontWeight="medium">시공 가능 지역</Typography>
+                      </AccordionSummary>
+                      <AccordionDetails>
+                        <Box sx={{ mt: 1 }}>
+                          {selectedUser.contractor.serviceAreas.map((area: string, index: number) => (
+                            <Chip key={index} label={area} size="small" sx={{ mr: 1, mb: 1 }} />
+                          ))}
+                        </Box>
+                      </AccordionDetails>
+                    </Accordion>
                   )}
                 </>
               )}
@@ -959,94 +1100,104 @@ const UserManagement: React.FC = () => {
               {/* 판매자 전용 정보 */}
               {selectedUser.role === 'seller' && (
                 <>
-                  <Grid item xs={12}>
-                    <Typography variant="h6" sx={{ mt: 2, mb: 1, color: 'primary.main' }}>
-                      판매자 상세 정보
-                    </Typography>
-                  </Grid>
-                  <Grid item xs={12} md={6}>
-                    <Typography variant="subtitle2" color="textSecondary">회사명</Typography>
-                    <Typography variant="body1">{(selectedUser as any).companyName || '미입력'}</Typography>
-                  </Grid>
-                  <Grid item xs={12} md={6}>
-                    <Typography variant="subtitle2" color="textSecondary">사업자등록번호</Typography>
-                    <Typography variant="body1">{(selectedUser as any).businessNumber || '미입력'}</Typography>
-                  </Grid>
-                  <Grid item xs={12} md={6}>
-                    <Typography variant="subtitle2" color="textSecondary">사업장 주소</Typography>
-                    <Typography variant="body1">{(selectedUser as any).businessAddress || '미입력'}</Typography>
-                  </Grid>
-                  <Grid item xs={12} md={6}>
-                    <Typography variant="subtitle2" color="textSecondary">업종</Typography>
-                    <Typography variant="body1">{(selectedUser as any).businessType || '미입력'}</Typography>
-                  </Grid>
-                  <Grid item xs={12} md={6}>
-                    <Typography variant="subtitle2" color="textSecondary">업태</Typography>
-                    <Typography variant="body1">{(selectedUser as any).businessCategory || '미입력'}</Typography>
-                  </Grid>
-                  <Grid item xs={12} md={6}>
-                    <Typography variant="subtitle2" color="textSecondary">총 매출</Typography>
-                    <Typography variant="body1">{(selectedUser as any).totalSales || 0}원</Typography>
-                  </Grid>
-                  <Grid item xs={12} md={6}>
-                    <Typography variant="subtitle2" color="textSecondary">평점</Typography>
-                    <Typography variant="body1">{Number((selectedUser as any).rating || 0).toFixed(1)}/5.0</Typography>
-                  </Grid>
+                  <Accordion>
+                    <AccordionSummary expandIcon={<ExpandMore />}>
+                      <Typography variant="subtitle1" fontWeight="medium">판매자 정보</Typography>
+                    </AccordionSummary>
+                    <AccordionDetails>
+                      <Grid container spacing={2}>
+                        <Grid item xs={12} sm={6}>
+                          <Typography variant="subtitle2" color="textSecondary" gutterBottom>회사명</Typography>
+                          <Typography variant="body2">{(selectedUser as any).companyName || '미입력'}</Typography>
+                        </Grid>
+                        <Grid item xs={12} sm={6}>
+                          <Typography variant="subtitle2" color="textSecondary" gutterBottom>사업자등록번호</Typography>
+                          <Typography variant="body2">{(selectedUser as any).businessNumber || '미입력'}</Typography>
+                        </Grid>
+                        <Grid item xs={12} sm={6}>
+                          <Typography variant="subtitle2" color="textSecondary" gutterBottom>사업장 주소</Typography>
+                          <Typography variant="body2">{(selectedUser as any).businessAddress || '미입력'}</Typography>
+                        </Grid>
+                        <Grid item xs={12} sm={6}>
+                          <Typography variant="subtitle2" color="textSecondary" gutterBottom>업종</Typography>
+                          <Typography variant="body2">{(selectedUser as any).businessType || '미입력'}</Typography>
+                        </Grid>
+                        <Grid item xs={12} sm={6}>
+                          <Typography variant="subtitle2" color="textSecondary" gutterBottom>업태</Typography>
+                          <Typography variant="body2">{(selectedUser as any).businessCategory || '미입력'}</Typography>
+                        </Grid>
+                        <Grid item xs={12} sm={6}>
+                          <Typography variant="subtitle2" color="textSecondary" gutterBottom>총 매출</Typography>
+                          <Typography variant="body2">{(selectedUser as any).totalSales || 0}원</Typography>
+                        </Grid>
+                        <Grid item xs={12} sm={6}>
+                          <Typography variant="subtitle2" color="textSecondary" gutterBottom>평점</Typography>
+                          <Typography variant="body2">{Number((selectedUser as any).rating || 0).toFixed(1)}/5.0</Typography>
+                        </Grid>
+                      </Grid>
+                    </AccordionDetails>
+                  </Accordion>
                   
                   {/* 판매자 서류 확인 */}
-                  <Grid item xs={12}>
-                    <Typography variant="h6" sx={{ mt: 2, mb: 1, color: 'primary.main' }}>
-                      서류 확인
-                    </Typography>
-                  </Grid>
-                  <Grid item xs={12} md={6}>
-                    <Typography variant="subtitle2" color="textSecondary">사업자등록증</Typography>
-                    {(selectedUser as any).businessLicenseImage ? (
-                      <Box sx={{ mt: 1 }}>
-                        <img 
-                          src={(selectedUser as any).businessLicenseImage} 
-                          alt="사업자등록증" 
-                          style={{ width: '200px', height: '150px', objectFit: 'cover', borderRadius: '8px', border: '1px solid #ddd' }}
-                        />
-                        <Button 
-                          variant="outlined" 
-                          size="small" 
-                          sx={{ mt: 1 }}
-                          onClick={() => window.open((selectedUser as any).businessLicenseImage, '_blank')}
-                        >
-                          새 창에서 보기
-                        </Button>
-                      </Box>
-                    ) : (
-                      <Typography variant="body2" color="error.main">사업자등록증 미첨부</Typography>
-                    )}
-                  </Grid>
+                  <Accordion>
+                    <AccordionSummary expandIcon={<ExpandMore />}>
+                      <Typography variant="subtitle1" fontWeight="medium">서류 확인</Typography>
+                    </AccordionSummary>
+                    <AccordionDetails>
+                      <Grid container spacing={2}>
+                        <Grid item xs={12} sm={6}>
+                          <Typography variant="subtitle2" color="textSecondary" gutterBottom>사업자등록증</Typography>
+                          {(selectedUser as any).businessLicenseImage ? (
+                            <Box sx={{ mt: 1 }}>
+                              <img 
+                                src={(selectedUser as any).businessLicenseImage} 
+                                alt="사업자등록증" 
+                                style={{ width: '150px', height: '100px', objectFit: 'cover', borderRadius: '8px', border: '1px solid #ddd' }}
+                              />
+                              <Button 
+                                variant="outlined" 
+                                size="small" 
+                                sx={{ mt: 1 }}
+                                onClick={() => window.open((selectedUser as any).businessLicenseImage, '_blank')}
+                              >
+                                새 창에서 보기
+                              </Button>
+                            </Box>
+                          ) : (
+                            <Typography variant="body2" color="error.main">사업자등록증 미첨부</Typography>
+                          )}
+                        </Grid>
+                      </Grid>
+                    </AccordionDetails>
+                  </Accordion>
                   
                   {/* 픽업 정보 */}
                   {(selectedUser as any).pickupInfo && (
-                    <Grid item xs={12}>
-                      <Typography variant="h6" sx={{ mt: 2, mb: 1, color: 'primary.main' }}>
-                        픽업 정보
-                      </Typography>
-                      <Grid container spacing={2}>
-                        <Grid item xs={12} md={4}>
-                          <Typography variant="subtitle2" color="textSecondary">픽업 회사명</Typography>
-                          <Typography variant="body1">{(selectedUser as any).pickupInfo.companyName}</Typography>
+                    <Accordion>
+                      <AccordionSummary expandIcon={<ExpandMore />}>
+                        <Typography variant="subtitle1" fontWeight="medium">픽업 정보</Typography>
+                      </AccordionSummary>
+                      <AccordionDetails>
+                        <Grid container spacing={2}>
+                          <Grid item xs={12} sm={4}>
+                            <Typography variant="subtitle2" color="textSecondary" gutterBottom>픽업 회사명</Typography>
+                            <Typography variant="body2">{(selectedUser as any).pickupInfo.companyName}</Typography>
+                          </Grid>
+                          <Grid item xs={12} sm={4}>
+                            <Typography variant="subtitle2" color="textSecondary" gutterBottom>픽업 연락처</Typography>
+                            <Typography variant="body2">{(selectedUser as any).pickupInfo.phone}</Typography>
+                          </Grid>
+                          <Grid item xs={12} sm={4}>
+                            <Typography variant="subtitle2" color="textSecondary" gutterBottom>픽업 주소</Typography>
+                            <Typography variant="body2">{(selectedUser as any).pickupInfo.address}</Typography>
+                          </Grid>
                         </Grid>
-                        <Grid item xs={12} md={4}>
-                          <Typography variant="subtitle2" color="textSecondary">픽업 연락처</Typography>
-                          <Typography variant="body1">{(selectedUser as any).pickupInfo.phone}</Typography>
-                        </Grid>
-                        <Grid item xs={12} md={4}>
-                          <Typography variant="subtitle2" color="textSecondary">픽업 주소</Typography>
-                          <Typography variant="body1">{(selectedUser as any).pickupInfo.address}</Typography>
-                        </Grid>
-                      </Grid>
-                    </Grid>
+                      </AccordionDetails>
+                    </Accordion>
                   )}
                 </>
               )}
-            </Grid>
+            </Box>
           )}
         </DialogContent>
         <DialogActions>

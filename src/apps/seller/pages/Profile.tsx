@@ -17,13 +17,17 @@ import {
   Dialog,
   DialogTitle,
   DialogContent,
-  DialogActions
+  DialogActions,
+  Accordion,
+  AccordionSummary,
+  AccordionDetails
 } from '@mui/material';
 import { 
   Save as SaveIcon, 
   PhotoCamera as PhotoCameraIcon,
   Edit as EditIcon,
-  Info as InfoIcon
+  Info as InfoIcon,
+  ExpandMore
 } from '@mui/icons-material';
 import { useAuth } from '../../../shared/contexts/AuthContext';
 import { SellerPickupInfo, User } from '../../../types';
@@ -399,7 +403,7 @@ const Profile: React.FC = () => {
   
   return (
     <Box sx={{ 
-      padding: '20px',
+      padding: '16px',
       minHeight: '500px',
       backgroundColor: 'background.paper',
       borderRadius: '8px',
@@ -407,87 +411,81 @@ const Profile: React.FC = () => {
     }}>
       {(() => { console.log('🔍 Profile 컴포넌트 - 판매자 프로필 제목 렌더링'); return null; })()}
       
+      {/* 헤더 섹션 */}
+      <Box display="flex" justifyContent="space-between" alignItems="center" mb={2}>
+        <Box display="flex" alignItems="center" gap={2}>
+          <Box position="relative">
+            <Avatar 
+              sx={{ width: 80, height: 80 }}
+              src={profileImage || undefined}
+            >
+              {basicInfo.name.charAt(0)}
+            </Avatar>
+            {isEditing && (
+              <IconButton
+                sx={{
+                  position: 'absolute',
+                  bottom: 0,
+                  right: 0,
+                  bgcolor: 'primary.main',
+                  color: 'white',
+                  width: 28,
+                  height: 28,
+                  '&:hover': { bgcolor: 'primary.dark' }
+                }}
+                onClick={handlePhotoClick}
+                disabled={imageLoading}
+              >
+                {imageLoading ? (
+                  <CircularProgress size={16} color="inherit" />
+                ) : (
+                  <PhotoCameraIcon sx={{ fontSize: 16 }} />
+                )}
+              </IconButton>
+            )}
+          </Box>
+                     <Box>
+             <Typography variant="h5" gutterBottom={false}>
+               {basicInfo.name}
+             </Typography>
+             <Box display="flex" alignItems="center" gap={1} flexWrap="wrap">
+               <Chip 
+                 label={user?.seller?.rating && user.seller.rating > 0 ? `평점 ${user.seller.rating.toFixed(1)}/5.0` : '평점 없음'} 
+                 color={user?.seller?.rating && user.seller.rating > 0 ? "primary" : "default"} 
+                 size="small"
+               />
+               <Typography variant="body2" color="textSecondary">
+                 {basicInfo.companyName}
+               </Typography>
+             </Box>
+             
+           </Box>
+        </Box>
+        <Button
+          variant={isEditing ? "contained" : "outlined"}
+          startIcon={isEditing ? <SaveIcon /> : <EditIcon />}
+          onClick={isEditing ? handleSaveBasicInfo : () => setIsEditing(true)}
+          size="small"
+        >
+          {isEditing ? '저장' : '편집'}
+        </Button>
+      </Box>
 
+      {/* 숨겨진 파일 입력 */}
+      <input
+        ref={fileInputRef}
+        type="file"
+        accept="image/*"
+        onChange={handleImageUpload}
+        style={{ display: 'none' }}
+      />
 
-      <Grid container spacing={3}>
-        <Grid item xs={12} md={4}>
-          <Card>
-            <CardContent sx={{ textAlign: 'center' }}>
-              <Box sx={{ position: 'relative', display: 'inline-block' }}>
-                <Avatar 
-                  sx={{ 
-                    width: 120, 
-                    height: 120, 
-                    mx: 'auto', 
-                    mb: 2,
-                    fontSize: '2rem'
-                  }}
-                  src={profileImage || undefined}
-                >
-                  {basicInfo.name.charAt(0)}
-                </Avatar>
-                <IconButton
-                  sx={{
-                    position: 'absolute',
-                    bottom: 8,
-                    right: 8,
-                    bgcolor: 'primary.main',
-                    color: 'white',
-                    '&:hover': {
-                      bgcolor: 'primary.dark',
-                    }
-                  }}
-                  onClick={handlePhotoClick}
-                  disabled={imageLoading}
-                >
-                  {imageLoading ? (
-                    <CircularProgress size={20} color="inherit" />
-                  ) : (
-                    <PhotoCameraIcon />
-                  )}
-                </IconButton>
-              </Box>
-              
-              <Typography variant="h5" gutterBottom>
-                {basicInfo.name}
-              </Typography>
-              <Chip 
-                label={user?.seller?.rating && user.seller.rating > 0 ? `평점 ${user.seller.rating.toFixed(1)}/5.0` : '평점 없음'} 
-                color={user?.seller?.rating && user.seller.rating > 0 ? "primary" : "default"} 
-                sx={{ mb: 2 }} 
-              />
-              <Typography variant="body2" color="textSecondary">
-                {basicInfo.companyName}
-              </Typography>
-              
-              {/* 숨겨진 파일 입력 */}
-              <input
-                ref={fileInputRef}
-                type="file"
-                accept="image/*"
-                onChange={handleImageUpload}
-                style={{ display: 'none' }}
-              />
-            </CardContent>
-          </Card>
-        </Grid>
-
-        <Grid item xs={12} md={8}>
-          <Card>
-            <CardContent>
-              <Box display="flex" justifyContent="space-between" alignItems="center" mb={2}>
-                <Typography variant="h6">
-                  기본 정보
-                </Typography>
-                <Button
-                  variant={isEditing ? "outlined" : "contained"}
-                  startIcon={<EditIcon />}
-                  onClick={() => setIsEditing(!isEditing)}
-                  size="small"
-                >
-                  {isEditing ? '편집 취소' : '편집'}
-                </Button>
-              </Box>
+      {/* 기본 정보 카드 */}
+      <Card sx={{ mb: 2 }}>
+        <CardContent sx={{ pb: 2 }}>
+          <Typography variant="h6" gutterBottom sx={{ mb: 2 }}>
+            기본 정보
+          </Typography>
               
               <Grid container spacing={2}>
                 <Grid item xs={12} sm={6}>
@@ -496,7 +494,7 @@ const Profile: React.FC = () => {
                     label="이름"
                     value={basicInfo.name}
                     onChange={(e) => handleBasicInfoChange('name', e.target.value)}
-                    margin="normal"
+                    size="small"
                     disabled={!isEditing}
                   />
                 </Grid>
@@ -506,7 +504,7 @@ const Profile: React.FC = () => {
                     label="상호명"
                     value={basicInfo.companyName}
                     onChange={(e) => handleBasicInfoChange('companyName', e.target.value)}
-                    margin="normal"
+                    size="small"
                     disabled={!isEditing}
                   />
                 </Grid>
@@ -516,7 +514,7 @@ const Profile: React.FC = () => {
                     label="사업자번호"
                     value={basicInfo.businessNumber}
                     onChange={(e) => handleBasicInfoChange('businessNumber', e.target.value)}
-                    margin="normal"
+                    size="small"
                     disabled={!isEditing}
                   />
                 </Grid>
@@ -526,7 +524,7 @@ const Profile: React.FC = () => {
                     label="연락처"
                     value={basicInfo.phone}
                     onChange={(e) => handleBasicInfoChange('phone', e.target.value)}
-                    margin="normal"
+                    size="small"
                     disabled={!isEditing}
                   />
                 </Grid>
@@ -536,7 +534,7 @@ const Profile: React.FC = () => {
                     label="이메일"
                     value={basicInfo.email}
                     onChange={(e) => handleBasicInfoChange('email', e.target.value)}
-                    margin="normal"
+                    size="small"
                     disabled={!isEditing}
                   />
                 </Grid>
@@ -546,33 +544,20 @@ const Profile: React.FC = () => {
                     label="주소"
                     value={basicInfo.address}
                     onChange={(e) => handleBasicInfoChange('address', e.target.value)}
-                    margin="normal"
+                    size="small"
                     disabled={!isEditing}
                   />
                 </Grid>
               </Grid>
-
-              {isEditing && (
-                <Box sx={{ mt: 3, display: 'flex', justifyContent: 'flex-end' }}>
-                  <Button
-                    variant="contained"
-                    startIcon={<SaveIcon />}
-                    onClick={handleSaveBasicInfo}
-                    disabled={loading}
-                  >
-                    {loading ? '저장 중...' : '기본 정보 저장'}
-                  </Button>
-                </Box>
-              )}
             </CardContent>
           </Card>
 
-          {/* 픽업 정보 섹션 */}
-          <Card sx={{ mt: 3 }}>
-            <CardContent>
-              <Typography variant="h6" gutterBottom>
-                픽업 정보 (시공자 전달용)
-              </Typography>
+          {/* 픽업 정보 아코디언 */}
+          <Accordion>
+            <AccordionSummary expandIcon={<ExpandMore />}>
+              <Typography variant="h6">픽업 정보 (시공자 전달용)</Typography>
+            </AccordionSummary>
+            <AccordionDetails>
               <Typography variant="body2" color="textSecondary" paragraph>
                 새 작업 등록 시 자동으로 입력되는 픽업 정보를 설정하세요.
               </Typography>
@@ -585,7 +570,7 @@ const Profile: React.FC = () => {
                     value={pickupInfo.companyName}
                     onChange={(e) => handlePickupInfoChange('companyName', e.target.value)}
                     placeholder="픽업할 업체명을 입력하세요"
-                    margin="normal"
+                    size="small"
                   />
                 </Grid>
                 <Grid item xs={12} sm={6}>
@@ -595,7 +580,7 @@ const Profile: React.FC = () => {
                     value={pickupInfo.phone}
                     onChange={(e) => handlePickupInfoChange('phone', e.target.value)}
                     placeholder="010-0000-0000"
-                    margin="normal"
+                    size="small"
                   />
                 </Grid>
                 <Grid item xs={12}>
@@ -605,25 +590,24 @@ const Profile: React.FC = () => {
                     value={pickupInfo.address}
                     onChange={(e) => handlePickupInfoChange('address', e.target.value)}
                     placeholder="픽업할 장소의 주소를 입력하세요"
-                    margin="normal"
+                    size="small"
                   />
                 </Grid>
               </Grid>
 
-              <Box sx={{ mt: 3, display: 'flex', justifyContent: 'flex-end' }}>
+              <Box sx={{ mt: 2, display: 'flex', justifyContent: 'flex-end' }}>
                 <Button
                   variant="contained"
                   startIcon={<SaveIcon />}
                   onClick={handleSavePickupInfo}
                   disabled={loading}
+                  size="small"
                 >
                   {loading ? '저장 중...' : '픽업 정보 저장'}
                 </Button>
               </Box>
-            </CardContent>
-          </Card>
-        </Grid>
-      </Grid>
+            </AccordionDetails>
+          </Accordion>
 
       {/* Snackbar for notifications */}
       <Snackbar
