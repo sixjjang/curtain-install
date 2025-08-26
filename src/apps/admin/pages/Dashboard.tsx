@@ -48,6 +48,8 @@ import { SystemSettingsService } from '../../../shared/services/systemSettingsSe
 import { AnalyticsService } from '../../../shared/services/analyticsService';
 import { AuthService } from '../../../shared/services/authService';
 import { JobService } from '../../../shared/services/jobService';
+import { AdminNotificationService, AdminNotificationData } from '../../../shared/services/adminNotificationService';
+import AdminNotificationPopup from '../components/AdminNotificationPopup';
 import { ConstructionJob } from '../../../types';
 
 interface DashboardStats {
@@ -95,6 +97,47 @@ const Dashboard: React.FC = () => {
   // 사용자 정보 상태
   const [sellerInfo, setSellerInfo] = useState<{ email: string; name: string; phone: string } | null>(null);
   const [contractorInfo, setContractorInfo] = useState<{ email: string; name: string; phone: string } | null>(null);
+
+  // 알림 시스템 상태
+  const [notifications, setNotifications] = useState<AdminNotificationData>({
+    manualChargeRequests: 0,
+    pointWithdrawals: 0,
+    totalNewRequests: 0
+  });
+  const [notificationPopupOpen, setNotificationPopupOpen] = useState(false);
+  const [lastNotificationCheck, setLastNotificationCheck] = useState<Date | null>(null);
+
+  // 알림 확인 함수
+  const checkNotifications = async () => {
+    try {
+      const newNotifications = await AdminNotificationService.checkForNewNotifications();
+      setNotifications(newNotifications);
+      
+      // 새로운 요청이 있고, 이전에 확인한 적이 없거나 새로운 요청이 증가한 경우 팝업 표시
+      if (newNotifications.totalNewRequests > 0) {
+        if (!lastNotificationCheck || newNotifications.totalNewRequests > notifications.totalNewRequests) {
+          setNotificationPopupOpen(true);
+        }
+      }
+      
+      setLastNotificationCheck(new Date());
+    } catch (error) {
+      console.error('알림 확인 실패:', error);
+    }
+  };
+
+  // 네비게이션 함수들
+  const handleNavigateToManualCharges = () => {
+    setNotificationPopupOpen(false);
+    // 수동 계좌이체 관리 페이지로 이동
+    window.location.href = '/admin/manual-charges';
+  };
+
+  const handleNavigateToWithdrawals = () => {
+    setNotificationPopupOpen(false);
+    // 포인트 인출 관리 페이지로 이동
+    window.location.href = '/admin/point-withdrawals';
+  };
 
   const loadDashboardData = async () => {
     try {
@@ -164,6 +207,16 @@ const Dashboard: React.FC = () => {
 
   useEffect(() => {
     loadDashboardData();
+    
+    // 초기 알림 확인
+    checkNotifications();
+    
+    // 주기적으로 알림 확인 (30초마다)
+    const notificationInterval = setInterval(checkNotifications, 30000);
+    
+    return () => {
+      clearInterval(notificationInterval);
+    };
   }, []);
 
   const formatTimeDisplay = (hours: number) => {
@@ -1153,6 +1206,15 @@ const Dashboard: React.FC = () => {
           </Button>
         </DialogActions>
       </Dialog>
+
+      {/* 관리자 알림 팝업 */}
+      <AdminNotificationPopup
+        open={notificationPopupOpen}
+        onClose={() => setNotificationPopupOpen(false)}
+        notifications={notifications}
+        onNavigateToManualCharges={handleNavigateToManualCharges}
+        onNavigateToWithdrawals={handleNavigateToWithdrawals}
+      />
     </Box>
   );
 };

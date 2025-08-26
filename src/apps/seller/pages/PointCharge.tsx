@@ -19,14 +19,9 @@ import {
   ListItemText,
   Divider,
   FormControl,
-  FormLabel,
-  RadioGroup,
-  FormControlLabel,
-  Radio,
-  Select,
-  MenuItem,
   InputLabel,
-  Paper
+  Select,
+  MenuItem
 } from '@mui/material';
 import { 
   AccountBalance, 
@@ -35,19 +30,21 @@ import {
   Add,
   CheckCircle,
   Warning,
-  CreditCard,
   AccountBalanceWallet,
   Info
 } from '@mui/icons-material';
 import { useAuth } from '../../../shared/contexts/AuthContext';
+import { useTheme } from '../../../shared/contexts/ThemeContext';
 import { PointService } from '../../../shared/services/pointService';
-import { PaymentService } from '../../../shared/services/paymentService';
+
 import { SystemSettingsService } from '../../../shared/services/systemSettingsService';
+import { ManualChargeService } from '../../../shared/services/manualChargeService';
 import { PointBalance, PointTransaction } from '../../../types';
 import { useLocation } from 'react-router-dom';
 
 const PointCharge: React.FC = () => {
   const { user } = useAuth();
+  const { mode } = useTheme();
   const location = useLocation();
   const [balance, setBalance] = useState<PointBalance | null>(null);
   const [transactions, setTransactions] = useState<PointTransaction[]>([]);
@@ -60,11 +57,10 @@ const PointCharge: React.FC = () => {
   const [chargeDialogOpen, setChargeDialogOpen] = useState(false);
   const [chargeAmount, setChargeAmount] = useState('');
   const [selectedAmount, setSelectedAmount] = useState<number | null>(null);
-  const [paymentMethod, setPaymentMethod] = useState<'simulation' | 'toss_payments' | 'kakao_pay'>('simulation');
-  const [tossPaymentMethod, setTossPaymentMethod] = useState('card');
+  const [paymentMethod] = useState<'manual_transfer'>('manual_transfer');
   
-  // 토스페이먼츠 계좌 정보 상태
-  const [tossAccountInfo, setTossAccountInfo] = useState<{
+  // 수동 계좌이체 계좌 정보 상태
+  const [manualAccountInfo, setManualAccountInfo] = useState<{
     bankName: string;
     accountNumber: string;
     accountHolder: string;
@@ -76,13 +72,23 @@ const PointCharge: React.FC = () => {
 
   // 충전 금액 옵션
   const chargeOptions = [
-    { amount: 10000, label: '10,000원 (10,000포인트)' },
-    { amount: 30000, label: '30,000원 (30,000포인트)' },
     { amount: 50000, label: '50,000원 (50,000포인트)' },
     { amount: 100000, label: '100,000원 (100,000포인트)' },
-    { amount: 200000, label: '200,000원 (200,000포인트)' },
+    { amount: 300000, label: '300,000원 (300,000포인트)' },
     { amount: 500000, label: '500,000원 (500,000포인트)' }
   ];
+
+  // 테마별 색상 설정
+  const themeColors = {
+    primary: mode === 'dark' ? '#667eea' : '#1976d2',
+    secondary: mode === 'dark' ? '#764ba2' : '#dc004e',
+    background: mode === 'dark' ? '#1e1e1e' : '#ffffff',
+    text: mode === 'dark' ? '#ffffff' : '#000000',
+    textSecondary: mode === 'dark' ? '#b0b0b0' : '#666666',
+    cardBackground: mode === 'dark' ? '#2d2d2d' : '#ffffff',
+    border: mode === 'dark' ? 'rgba(255,255,255,0.12)' : 'rgba(0,0,0,0.12)',
+    glassBackground: mode === 'dark' ? 'rgba(45,45,45,0.95)' : 'rgba(255,255,255,0.95)',
+  };
 
   // 데이터 로드
   const loadData = async (period: '1month' | '3months' | '6months' | '1year' | 'all' = selectedPeriod) => {
@@ -113,34 +119,19 @@ const PointCharge: React.FC = () => {
     await loadData(newPeriod);
   };
 
-  // 토스페이먼츠 계좌 정보 로드
-  const loadTossAccountInfo = async () => {
+  // 수동 계좌이체 계좌 정보 로드
+  const loadManualAccountInfo = async () => {
     try {
-      const accountInfo = await SystemSettingsService.getTossAccount();
-      setTossAccountInfo(accountInfo);
+      const accountInfo = await SystemSettingsService.getManualAccount();
+      setManualAccountInfo(accountInfo);
     } catch (error) {
-      console.error('토스페이먼츠 계좌 정보 로드 실패:', error);
-    }
-  };
-
-  // 결제 수단 변경 시 계좌 정보 로드
-  const handlePaymentMethodChange = async (method: 'simulation' | 'toss_payments' | 'kakao_pay') => {
-    setPaymentMethod(method);
-    if (method === 'toss_payments') {
-      await loadTossAccountInfo();
-    }
-  };
-
-  // 토스페이먼츠 결제 수단 변경 시 계좌 정보 로드
-  const handleTossPaymentMethodChange = async (method: string) => {
-    setTossPaymentMethod(method);
-    if (method === 'transfer') {
-      await loadTossAccountInfo();
+      console.error('수동 계좌이체 계좌 정보 로드 실패:', error);
     }
   };
 
   useEffect(() => {
     loadData();
+    loadManualAccountInfo();
     
     // 결제 완료 후 성공 메시지 표시
     if (location.state?.success && location.state?.message) {
@@ -152,61 +143,37 @@ const PointCharge: React.FC = () => {
 
   // 충전 처리
   const handleCharge = async () => {
-    if (!user || !chargeAmount || parseInt(chargeAmount) <= 0) {
+    if (!user || !chargeAmount || parseInt(chargeAmount.replace(/,/g, '')) <= 0) {
       setError('올바른 금액을 입력해주세요.');
       return;
     }
 
-    const amount = parseInt(chargeAmount);
+    const amount = parseInt(chargeAmount.replace(/,/g, ''));
     
     try {
       setCharging(true);
       setError('');
       
-             // 주문 ID 생성
+      // 주문 ID 생성
       const orderId = `ORDER_${Date.now()}_${user.id}`;
       
       let paymentResult;
       
-      // 결제 수단에 따른 처리
-      switch (paymentMethod) {
-        case 'kakao_pay':
-          paymentResult = await PaymentService.requestKakaoPay({
-            amount,
-            orderId,
-            itemName: `${amount.toLocaleString()}포인트 충전`,
-            userId: user.id,
-            userRole: 'seller'
-          });
-          break;
-          
-        case 'toss_payments':
-          paymentResult = await PaymentService.requestTossPayments({
-            amount,
-            orderId,
-            itemName: `${amount.toLocaleString()}포인트 충전`,
-            userId: user.id,
-            userRole: 'seller'
-          }, tossPaymentMethod);
-          break;
-          
-        default: // simulation
-          paymentResult = await PaymentService.requestPayment({
-            amount,
-            orderId,
-            itemName: `${amount.toLocaleString()}포인트 충전`,
-            userId: user.id,
-            userRole: 'seller'
-          });
-          break;
-      }
+             // 수동 계좌이체 충전 요청 생성
+       await ManualChargeService.createChargeRequest(
+         user.id,
+         user.name,
+         user.phone,
+         amount
+       );
+       
+       setSuccess(`${amount.toLocaleString()}원 충전 요청이 완료되었습니다. 관리자 확인 후 포인트가 지급됩니다.`);
+       setChargeDialogOpen(false);
+       setChargeAmount('');
+       setSelectedAmount(null);
+       return;
       
-      if (paymentResult.success && paymentResult.redirectUrl) {
-        // 결제 페이지로 리다이렉트
-        window.location.href = paymentResult.redirectUrl;
-      } else {
-        throw new Error(paymentResult.error || '결제 요청에 실패했습니다.');
-      }
+             // 수동 계좌이체는 리다이렉트가 필요 없음
     } catch (error) {
       console.error('포인트 충전 실패:', error);
       setError('포인트 충전에 실패했습니다.');
@@ -218,7 +185,7 @@ const PointCharge: React.FC = () => {
   // 충전 금액 선택
   const handleAmountSelect = (amount: number) => {
     setSelectedAmount(amount);
-    setChargeAmount(amount.toString());
+    setChargeAmount(amount.toLocaleString());
   };
 
   // 거래 상태 텍스트
@@ -441,191 +408,356 @@ const PointCharge: React.FC = () => {
       </Grid>
 
       {/* 포인트 충전 다이얼로그 */}
-              <Dialog open={chargeDialogOpen} onClose={() => setChargeDialogOpen(false)} maxWidth="sm" fullWidth disableEnforceFocus disableAutoFocus>
-        <DialogTitle>
-          <Box display="flex" alignItems="center" gap={1} component="div">
-            <Payment color="primary" />
-            <Typography component="span">포인트 충전</Typography>
+      <Dialog 
+        open={chargeDialogOpen} 
+        onClose={() => setChargeDialogOpen(false)} 
+        maxWidth="sm" 
+        fullWidth 
+        disableEnforceFocus 
+        disableAutoFocus
+        PaperProps={{
+          sx: {
+            borderRadius: 2,
+            background: `linear-gradient(135deg, ${themeColors.primary} 0%, ${themeColors.secondary} 100%)`,
+            boxShadow: mode === 'dark' ? '0 20px 40px rgba(0,0,0,0.5)' : '0 20px 40px rgba(0,0,0,0.3)',
+            overflow: 'hidden'
+          }
+        }}
+      >
+        <DialogTitle sx={{ 
+          background: themeColors.glassBackground, 
+          backdropFilter: 'blur(10px)',
+          borderBottom: `1px solid ${themeColors.border}`,
+          pb: 2
+        }}>
+          <Box display="flex" alignItems="center" gap={2} component="div">
+            <Box sx={{
+              background: `linear-gradient(135deg, ${themeColors.primary} 0%, ${themeColors.secondary} 100%)`,
+              borderRadius: '50%',
+              p: 1,
+              display: 'flex',
+              alignItems: 'center',
+              justifyContent: 'center'
+            }}>
+              <Payment sx={{ color: 'white', fontSize: 24 }} />
+            </Box>
+            <Box>
+              <Typography component="span" variant="h6" fontWeight="bold" sx={{ 
+                background: `linear-gradient(135deg, ${themeColors.primary} 0%, ${themeColors.secondary} 100%)`,
+                WebkitBackgroundClip: 'text',
+                WebkitTextFillColor: 'transparent',
+                backgroundClip: 'text'
+              }}>
+                포인트 충전
+              </Typography>
+              <Typography variant="body2" color="textSecondary" sx={{ mt: 0.5 }}>
+                안전하고 빠른 포인트 충전 서비스
+              </Typography>
+            </Box>
           </Box>
         </DialogTitle>
-        <DialogContent>
-          <Typography variant="body2" color="textSecondary" mb={3}>
-            충전할 포인트 금액을 선택하거나 직접 입력해주세요.
+        
+        <DialogContent sx={{ 
+          background: themeColors.glassBackground, 
+          backdropFilter: 'blur(10px)',
+          p: 3
+        }}>
+          <Typography variant="body1" color="textSecondary" mb={3} sx={{ 
+            textAlign: 'center',
+            fontSize: '1rem',
+            fontWeight: 500
+          }}>
+            💎 충전할 포인트 금액을 선택하거나 직접 입력해주세요
           </Typography>
           
           {/* 충전 금액 옵션 */}
-          <Grid container spacing={2} mb={3}>
-            {chargeOptions.map((option) => (
-              <Grid item xs={12} sm={6} key={option.amount}>
-                <Button
-                  variant={selectedAmount === option.amount ? "contained" : "outlined"}
-                  fullWidth
-                  onClick={() => handleAmountSelect(option.amount)}
-                  sx={{ py: 2 }}
-                >
-                  {option.label}
-                </Button>
-              </Grid>
-            ))}
-          </Grid>
+          <Box mb={3}>
+            <Typography variant="h6" gutterBottom sx={{ mb: 2, fontWeight: 600, color: themeColors.text }}>
+              💰 추천 충전 금액
+            </Typography>
+            <Grid container spacing={0.5}>
+              {chargeOptions.map((option) => (
+                <Grid item xs={6} key={option.amount}>
+                  <Card
+                    sx={{
+                      cursor: 'pointer',
+                      transition: 'all 0.3s ease',
+                      transform: selectedAmount === option.amount ? 'scale(1.02)' : 'scale(1)',
+                      boxShadow: selectedAmount === option.amount 
+                        ? `0 4px 15px ${themeColors.primary}40` 
+                        : mode === 'dark' ? '0 2px 6px rgba(0,0,0,0.3)' : '0 2px 6px rgba(0,0,0,0.1)',
+                      border: selectedAmount === option.amount 
+                        ? `2px solid ${themeColors.primary}` 
+                        : '2px solid transparent',
+                      background: selectedAmount === option.amount 
+                        ? `linear-gradient(135deg, ${themeColors.primary} 0%, ${themeColors.secondary} 100%)` 
+                        : themeColors.cardBackground,
+                      '&:hover': {
+                        transform: 'scale(1.01)',
+                        boxShadow: `0 4px 15px ${themeColors.primary}30`
+                      }
+                    }}
+                    onClick={() => handleAmountSelect(option.amount)}
+                  >
+                    <CardContent sx={{ 
+                      textAlign: 'center', 
+                      py: 1,
+                      px: 1.5,
+                      color: selectedAmount === option.amount ? 'white' : themeColors.text
+                    }}>
+                      <Typography variant="body2" fontWeight="bold" mb={0.3}>
+                        {option.amount.toLocaleString()}원
+                      </Typography>
+                      <Typography variant="caption" sx={{ opacity: 0.8, fontSize: '0.7rem' }}>
+                        {option.amount.toLocaleString()}포인트
+                      </Typography>
+                      {selectedAmount === option.amount && (
+                        <Box sx={{ mt: 0.3 }}>
+                          <CheckCircle sx={{ fontSize: 14 }} />
+                        </Box>
+                      )}
+                    </CardContent>
+                  </Card>
+                </Grid>
+              ))}
+            </Grid>
+          </Box>
           
           {/* 직접 입력 */}
-          <TextField
-            fullWidth
-            label="직접 입력 (원)"
-            type="number"
-            value={chargeAmount}
-            onChange={(e) => {
-              setChargeAmount(e.target.value);
-              setSelectedAmount(null);
-            }}
-            placeholder="충전할 금액을 입력하세요"
-            InputProps={{
-              endAdornment: <Typography variant="caption">원</Typography>
-            }}
-          />
-          
-          {chargeAmount && (
-            <Box mt={2} p={2} bgcolor="primary.light" borderRadius={1}>
-              <Typography variant="body2" color="white">
-                충전 예정: {parseInt(chargeAmount) || 0}포인트 ({(parseInt(chargeAmount) || 0).toLocaleString()}원)
-              </Typography>
-            </Box>
-          )}
-
-          {/* 결제 수단 선택 */}
-          <Box mt={3}>
-            <Typography variant="h6" gutterBottom>
-              결제 수단 선택
+          <Box mb={3}>
+            <Typography variant="h6" gutterBottom sx={{ mb: 1.5, fontWeight: 600, color: themeColors.text }}>
+              ✏️ 직접 입력
             </Typography>
-            
-            <FormControl component="fieldset" fullWidth>
-              <RadioGroup
-                value={paymentMethod}
-                onChange={(e) => handlePaymentMethodChange(e.target.value as 'simulation' | 'toss_payments' | 'kakao_pay')}
-              >
-                <FormControlLabel
-                  value="simulation"
-                  control={<Radio />}
-                  label={
-                    <Box display="flex" alignItems="center" gap={1}>
-                      <AccountBalanceWallet color="primary" />
-                      <Typography component="span">시뮬레이션 (테스트)</Typography>
-                    </Box>
-                  }
-                />
-
-                <FormControlLabel
-                  value="kakao_pay"
-                  control={<Radio />}
-                  label={
-                    <Box display="flex" alignItems="center" gap={1}>
-                      <Box 
-                        component="img" 
-                        src="https://developers.kakao.com/assets/img/about/logos/kakaopay/kakaopay_btn_small.png" 
-                        alt="카카오페이"
-                        sx={{ width: 20, height: 20 }}
-                      />
-                      <Typography component="span">카카오페이</Typography>
-                    </Box>
-                  }
-                />
-
-                <FormControlLabel
-                  value="toss_payments"
-                  control={<Radio />}
-                  label={
-                    <Box display="flex" alignItems="center" gap={1}>
-                      <CreditCard color="primary" />
-                      <Typography component="span">토스페이먼츠</Typography>
-                    </Box>
-                  }
-                />
-              </RadioGroup>
-            </FormControl>
-
-            {/* 토스페이먼츠 결제 수단 선택 */}
-            {paymentMethod === 'toss_payments' && (
-              <Box mt={2}>
-                <FormControl fullWidth>
-                  <InputLabel>결제 방법</InputLabel>
-                  <Select
-                    value={tossPaymentMethod}
-                    onChange={(e) => handleTossPaymentMethodChange(e.target.value)}
-                    label="결제 방법"
-                  >
-                    <MenuItem value="card">신용카드</MenuItem>
-                    <MenuItem value="transfer">계좌이체</MenuItem>
-                    <MenuItem value="virtual_account">가상계좌</MenuItem>
-                    <MenuItem value="phone">휴대폰 결제</MenuItem>
-                    <MenuItem value="gift_certificate">상품권</MenuItem>
-                    <MenuItem value="culture_gift_certificate">문화상품권</MenuItem>
-                  </Select>
-                </FormControl>
-              </Box>
-            )}
-
-            {/* 토스페이먼츠 계좌 정보 표시 */}
-            {paymentMethod === 'toss_payments' && tossPaymentMethod === 'transfer' && (
-              <Box mt={2}>
-                {tossAccountInfo ? (
-                  <Paper sx={{ p: 2, bgcolor: tossAccountInfo.isActive ? 'info.light' : 'warning.light', border: '1px solid', borderColor: tossAccountInfo.isActive ? 'info.main' : 'warning.main' }}>
-                    <Box display="flex" alignItems="center" gap={1} mb={1}>
-                      <Info color={tossAccountInfo.isActive ? 'info' : 'warning'} />
-                      <Typography variant="subtitle2" fontWeight="bold">
-                        토스페이먼츠 계좌 정보
-                      </Typography>
-                    </Box>
-                    <Typography variant="body2" color="textSecondary">
-                      은행: {tossAccountInfo.bankName}
-                    </Typography>
-                    <Typography variant="body2" color="textSecondary">
-                      계좌번호: {tossAccountInfo.accountNumber}
-                    </Typography>
-                    <Typography variant="body2" color="textSecondary">
-                      예금주: {tossAccountInfo.accountHolder}
-                    </Typography>
-                    <Chip 
-                      label={tossAccountInfo.isActive ? '활성화' : '비활성화'}
-                      color={tossAccountInfo.isActive ? 'success' : 'default'}
-                      size="small"
-                      sx={{ mt: 1 }}
-                    />
-                    {!tossAccountInfo.isActive && (
-                      <Alert severity="warning" sx={{ mt: 1 }}>
-                        <Typography variant="body2">
-                          현재 계좌가 비활성화되어 있습니다. 계좌이체 결제를 사용할 수 없습니다.
-                        </Typography>
-                      </Alert>
-                    )}
-                  </Paper>
-                ) : (
-                  <Alert severity="warning">
-                    <Typography variant="body2">
-                      토스페이먼츠 계좌 정보를 불러올 수 없습니다. 관리자에게 문의해주세요.
-                    </Typography>
-                  </Alert>
-                )}
-              </Box>
-            )}
+                         <TextField
+               fullWidth
+               label="충전할 금액 (원)"
+               type="text"
+               value={chargeAmount}
+               onChange={(e) => {
+                 // 숫자와 쉼표만 허용
+                 const value = e.target.value.replace(/[^\d,]/g, '');
+                 setChargeAmount(value);
+                 setSelectedAmount(null);
+               }}
+               placeholder="원하는 금액을 입력하세요"
+               InputProps={{
+                 endAdornment: <Typography variant="body1" sx={{ fontWeight: 600 }}>원</Typography>,
+                 sx: { 
+                   borderRadius: 1.5,
+                   fontSize: '1rem'
+                 }
+               }}
+               sx={{
+                 '& .MuiOutlinedInput-root': {
+                   '&:hover fieldset': {
+                     borderColor: themeColors.primary,
+                   },
+                   '&.Mui-focused fieldset': {
+                     borderColor: themeColors.primary,
+                   },
+                 },
+               }}
+             />
           </Box>
+          
+                                           {chargeAmount && (
+              <Card sx={{ 
+                mb: 3,
+                background: `linear-gradient(135deg, ${themeColors.primary} 0%, ${themeColors.secondary} 100%)`,
+                color: 'white',
+                borderRadius: 2
+              }}>
+                <CardContent sx={{ textAlign: 'center', py: 2 }}>
+                  <Typography variant="h6" fontWeight="bold" mb={1}>
+                    충전 예정 포인트
+                  </Typography>
+                  <Typography variant="h4" fontWeight="bold" mb={1}>
+                    {(parseInt(chargeAmount.replace(/,/g, '')) || 0).toLocaleString()} P
+                  </Typography>
+                  <Typography variant="body1" sx={{ opacity: 0.9 }}>
+                    {(parseInt(chargeAmount.replace(/,/g, '')) || 0).toLocaleString()}원
+                  </Typography>
+                </CardContent>
+              </Card>
+            )}
+
+            {/* 입금 계좌 정보 표시 */}
+            {chargeAmount && (
+              <Card sx={{ 
+                mb: 3,
+                background: manualAccountInfo?.isActive 
+                  ? `linear-gradient(135deg, ${themeColors.primary} 0%, ${themeColors.secondary} 100%)`
+                  : 'linear-gradient(135deg, #ff9a9e 0%, #fecfef 100%)',
+                color: 'white',
+                borderRadius: 2
+              }}>
+                <CardContent sx={{ p: 2 }}>
+                  <Box display="flex" alignItems="center" gap={2} mb={1.5}>
+                    <Box sx={{
+                      background: 'rgba(255,255,255,0.2)',
+                      borderRadius: '50%',
+                      p: 0.8,
+                      display: 'flex',
+                      alignItems: 'center',
+                      justifyContent: 'center'
+                    }}>
+                      <Info sx={{ color: 'white', fontSize: 20 }} />
+                    </Box>
+                    <Typography variant="h6" fontWeight="bold">
+                      입금 계좌 정보
+                    </Typography>
+                  </Box>
+                  
+                  {manualAccountInfo ? (
+                    <>
+                      <Box sx={{ 
+                        background: 'rgba(255,255,255,0.1)', 
+                        borderRadius: 1.5, 
+                        p: 1.5, 
+                        mb: 1.5 
+                      }}>
+                        <Typography variant="body2" sx={{ mb: 0.5, opacity: 0.9 }}>
+                          <strong>은행:</strong> {manualAccountInfo.bankName}
+                        </Typography>
+                        <Typography variant="body2" sx={{ mb: 0.5, opacity: 0.9 }}>
+                          <strong>계좌번호:</strong> {manualAccountInfo.accountNumber}
+                        </Typography>
+                        <Typography variant="body2" sx={{ opacity: 0.9 }}>
+                          <strong>예금주:</strong> {manualAccountInfo.accountHolder}
+                        </Typography>
+                      </Box>
+                      
+                      <Chip 
+                        label={manualAccountInfo.isActive ? '활성화' : '비활성화'}
+                        color={manualAccountInfo.isActive ? 'success' : 'default'}
+                        size="small"
+                        sx={{ 
+                          fontWeight: 'bold',
+                          background: manualAccountInfo.isActive ? 'rgba(76, 175, 80, 0.2)' : 'rgba(158, 158, 158, 0.2)',
+                          color: 'white',
+                          border: '1px solid rgba(255,255,255,0.3)'
+                        }}
+                      />
+                      
+                      {!manualAccountInfo.isActive && (
+                        <Alert severity="warning" sx={{ mt: 1.5, background: 'rgba(255,255,255,0.1)' }}>
+                          <Typography variant="body2" sx={{ color: 'white' }}>
+                            현재 계좌가 비활성화되어 있습니다. 수동 계좌이체를 사용할 수 없습니다.
+                          </Typography>
+                        </Alert>
+                      )}
+                    </>
+                  ) : (
+                    <Alert severity="warning" sx={{ background: 'rgba(255,255,255,0.1)' }}>
+                      <Typography variant="body2" sx={{ color: 'white' }}>
+                        계좌 정보를 불러올 수 없습니다. 관리자에게 문의해주세요.
+                      </Typography>
+                    </Alert>
+                  )}
+                </CardContent>
+              </Card>
+            )}
+
+            {/* 수동 계좌이체 안내 */}
+            <Box>
+              <Typography variant="h6" gutterBottom sx={{ mb: 2, fontWeight: 600, color: themeColors.text }}>
+                🏦 수동 계좌이체
+              </Typography>
+              
+              <Card sx={{ 
+                mb: 2,
+                background: `linear-gradient(135deg, #4facfe 0%, #00f2fe 100%)`,
+                color: 'white',
+                borderRadius: 2
+              }}>
+                <CardContent sx={{ p: 2 }}>
+                  <Box display="flex" alignItems="center" gap={2} mb={1.5}>
+                    <AccountBalance sx={{ color: 'white', fontSize: 24 }} />
+                    <Typography variant="h6" fontWeight="bold">
+                      수동 계좌이체
+                    </Typography>
+                  </Box>
+                  <Typography variant="body2" sx={{ opacity: 0.9, mb: 1 }}>
+                    수수료 0% • 관리자 확인 후 지급
+                  </Typography>
+                </CardContent>
+              </Card>
+
+              {/* 수동 계좌이체 안내 메시지 */}
+              <Card sx={{ 
+                mb: 2, 
+                background: 'linear-gradient(135deg, #4facfe 0%, #00f2fe 100%)',
+                color: 'white',
+                borderRadius: 2
+              }}>
+                <CardContent sx={{ p: 2 }}>
+                  <Box display="flex" alignItems="center" gap={2} mb={1.5}>
+                    <Info sx={{ fontSize: 24 }} />
+                    <Typography variant="h6" fontWeight="bold">
+                      수동 계좌이체 안내
+                    </Typography>
+                  </Box>
+                  <Box component="ul" sx={{ pl: 2, m: 0 }}>
+                    <Typography component="li" variant="body2" sx={{ mb: 0.5, opacity: 0.9 }}>
+                      수수료 없이 안전하게 충전 가능합니다
+                    </Typography>
+                    <Typography component="li" variant="body2" sx={{ mb: 0.5, opacity: 0.9 }}>
+                      충전 요청 후 관리자에게 자동으로 알림이 발송됩니다
+                    </Typography>
+                    <Typography component="li" variant="body2" sx={{ mb: 0.5, opacity: 0.9 }}>
+                      입금 확인 후 포인트가 지급됩니다 (보통 1-2시간 내)
+                    </Typography>
+                    <Typography component="li" variant="body2" sx={{ opacity: 0.9 }}>
+                      입금자명을 정확히 입력해주세요 (본인명과 동일하게)
+                    </Typography>
+                  </Box>
+                </CardContent>
+              </Card>
+            </Box>
         </DialogContent>
-        <DialogActions>
-          <Button onClick={() => setChargeDialogOpen(false)}>
+        
+        <DialogActions sx={{ 
+          background: themeColors.glassBackground, 
+          backdropFilter: 'blur(10px)',
+          borderTop: `1px solid ${themeColors.border}`,
+          p: 2
+        }}>
+          <Button 
+            onClick={() => setChargeDialogOpen(false)}
+            variant="outlined"
+            sx={{ 
+              borderRadius: 1.5,
+              px: 3,
+              py: 1,
+              fontWeight: 600
+            }}
+          >
             취소
           </Button>
           <Button
             onClick={handleCharge}
             variant="contained"
-            disabled={
-              charging || 
-              !chargeAmount || 
-              parseInt(chargeAmount) <= 0 ||
-              (paymentMethod === 'toss_payments' && 
-               tossPaymentMethod === 'transfer' && 
-               (!tossAccountInfo || !tossAccountInfo.isActive))
-            }
-            startIcon={charging ? <CircularProgress size={16} /> : <CheckCircle />}
+                         disabled={
+               charging || 
+               !chargeAmount || 
+               parseInt(chargeAmount.replace(/,/g, '')) <= 0 ||
+               !manualAccountInfo ||
+               !manualAccountInfo.isActive
+             }
+            startIcon={charging ? <CircularProgress size={18} /> : <CheckCircle />}
+            sx={{ 
+              borderRadius: 1.5,
+              px: 3,
+              py: 1,
+              fontWeight: 600,
+              background: `linear-gradient(135deg, ${themeColors.primary} 0%, ${themeColors.secondary} 100%)`,
+              '&:hover': {
+                background: `linear-gradient(135deg, ${themeColors.primary}dd 0%, ${themeColors.secondary}dd 100%)`
+              },
+              '&:disabled': {
+                background: 'rgba(0,0,0,0.12)'
+              }
+            }}
           >
             {charging ? '충전 중...' : '충전하기'}
           </Button>

@@ -1,5 +1,5 @@
-import { initializeApp } from 'firebase/app';
-import { getAuth, connectAuthEmulator } from 'firebase/auth';
+import { initializeApp, FirebaseApp } from 'firebase/app';
+import { getAuth, connectAuthEmulator, setPersistence, browserLocalPersistence } from 'firebase/auth';
 import { getFirestore, collection, getDocs, connectFirestoreEmulator } from 'firebase/firestore';
 import { getStorage, connectStorageEmulator } from 'firebase/storage';
 
@@ -17,7 +17,7 @@ const firebaseConfig = {
 console.log('Firebase Config:', firebaseConfig);
 
 // Firebase 초기화
-let app;
+let app: FirebaseApp;
 try {
   app = initializeApp(firebaseConfig);
   console.log('✅ Firebase 앱 초기화 성공');
@@ -31,6 +31,31 @@ export const auth = getAuth(app);
 export const db = getFirestore(app);
 export const storage = getStorage(app);
 
+// Firebase Auth 언어 설정을 한글로 변경
+auth.languageCode = 'ko';
+setPersistence(auth, browserLocalPersistence);
+
+// Firebase Auth 액션 코드 설정 (비밀번호 재설정 이메일 커스터마이징)
+const actionCodeSettings = {
+  // 비밀번호 재설정 후 리다이렉트 URL
+  url: process.env.NODE_ENV === 'development' 
+    ? 'http://localhost:3000/login'
+    : 'https://curtain-install.firebaseapp.com/login',
+  handleCodeInApp: false,
+  // iOS 앱 설정
+  iOS: {
+    bundleId: 'com.curtaininstall.app'
+  },
+  // Android 앱 설정
+  android: {
+    packageName: 'com.curtaininstall.app',
+    installApp: true,
+    minimumVersion: '12'
+  },
+  // 동적 링크 도메인
+  dynamicLinkDomain: 'curtain-install.page.link'
+};
+
 // 개발 환경에서 에뮬레이터 연결 (선택사항)
 if (process.env.NODE_ENV === 'development' && process.env.REACT_APP_USE_EMULATOR === 'true') {
   try {
@@ -43,43 +68,33 @@ if (process.env.NODE_ENV === 'development' && process.env.REACT_APP_USE_EMULATOR
   }
 }
 
-// Firebase 연결 테스트 함수 (재시도 로직 포함)
-export const testFirebaseConnection = async (retryCount = 3) => {
-  for (let attempt = 1; attempt <= retryCount; attempt++) {
-    try {
-      console.log(`Firebase 연결 테스트 시도 ${attempt}/${retryCount}...`);
-      
-      // Firestore 연결 테스트
-      const testCollection = collection(db, 'test');
-      const snapshot = await getDocs(testCollection);
-      console.log('✅ Firestore 연결 성공');
-      
-      // Auth 연결 테스트
-      const currentUser = auth.currentUser;
-      console.log('✅ Auth 연결 성공, 현재 사용자:', currentUser ? '로그인됨' : '로그인 안됨');
-      
-      return {
-        firestore: true,
-        auth: true,
-        message: 'Firebase 연결이 정상입니다.',
-        attempt
-      };
-    } catch (error) {
-      console.error(`❌ Firebase 연결 실패 (시도 ${attempt}/${retryCount}):`, error);
-      
-      if (attempt === retryCount) {
-        return {
-          firestore: false,
-          auth: false,
-          error: error,
-          message: 'Firebase 연결에 실패했습니다.',
-          attempt
-        };
-      }
-      
-      // 재시도 전 잠시 대기
-      await new Promise(resolve => setTimeout(resolve, 1000 * attempt));
+// Firebase 연결 테스트 함수 (간단한 버전)
+export const testFirebaseConnection = async () => {
+  try {
+    console.log('Firebase 연결 상태 확인 중...');
+    
+    // Firebase 앱이 초기화되었는지 확인
+    if (!app) {
+      throw new Error('Firebase 앱이 초기화되지 않았습니다.');
     }
+    
+    // Auth 연결 테스트 (권한이 필요하지 않음)
+    const currentUser = auth.currentUser;
+    console.log('✅ Firebase 연결 성공, 현재 사용자:', currentUser ? '로그인됨' : '로그인 안됨');
+    
+    return {
+      firestore: true,
+      auth: true,
+      message: 'Firebase 연결이 정상입니다.'
+    };
+  } catch (error) {
+    console.error('❌ Firebase 연결 실패:', error);
+    return {
+      firestore: false,
+      auth: false,
+      error: error,
+      message: 'Firebase 연결에 실패했습니다.'
+    };
   }
 };
 

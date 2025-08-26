@@ -9,7 +9,6 @@ import PointCharge from './pages/PointCharge';
 import PaymentSimulation from './pages/PaymentSimulation';
 import PaymentComplete from './pages/PaymentComplete';
 import PaymentFail from './pages/PaymentFail';
-import KakaoPayComplete from './pages/KakaoPayComplete';
 import Profile from './pages/Profile';
 import ContractorChat from './pages/ContractorChat';
 import Notifications from './pages/Notifications';
@@ -106,9 +105,6 @@ const SellerApp: React.FC = () => {
     }
     if (location.pathname === '/seller/payment-fail') {
       return canAccessFeature('/payment-fail') ? <PaymentFail /> : <Profile />;
-    }
-    if (location.pathname === '/seller/kakao-pay-complete') {
-      return canAccessFeature('/kakao-pay-complete') ? <KakaoPayComplete /> : <Profile />;
     }
     if (location.pathname.startsWith('/seller/chat/')) {
       return canAccessFeature('/chat') ? <ContractorChat /> : <Profile />;

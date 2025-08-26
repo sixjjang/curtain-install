@@ -31,6 +31,7 @@ import { SystemSettingsService } from '../../../shared/services/systemSettingsSe
 import { JobService } from '../../../shared/services/jobService';
 import { AuthService } from '../../../shared/services/authService';
 import { SystemSettings as SystemSettingsType } from '../../../types';
+import PWASettingsDialog from '../components/PWASettingsDialog';
 
 const SystemSettings: React.FC = () => {
   const { user } = useAuth();
@@ -41,6 +42,7 @@ const SystemSettings: React.FC = () => {
   const [success, setSuccess] = useState('');
   const [fixingProgress, setFixingProgress] = useState(false);
   const [updatedByUser, setUpdatedByUser] = useState<{ email: string; name: string } | null>(null);
+  const [pwaSettingsOpen, setPwaSettingsOpen] = useState(false);
   
   // 폼 데이터
   const [escrowHours, setEscrowHours] = useState(48);
@@ -57,6 +59,14 @@ const SystemSettings: React.FC = () => {
   
   // 토스페이먼츠 계좌 설정
   const [tossAccount, setTossAccount] = useState({
+    bankName: '',
+    accountNumber: '',
+    accountHolder: '',
+    isActive: false
+  });
+
+  // 수동 계좌이체 계좌 설정
+  const [manualAccount, setManualAccount] = useState({
     bankName: '',
     accountNumber: '',
     accountHolder: '',
@@ -97,6 +107,11 @@ const SystemSettings: React.FC = () => {
       // 토스페이먼츠 계좌 설정 로드
       if (systemSettings.tossAccount) {
         setTossAccount(systemSettings.tossAccount);
+      }
+
+      // 수동 계좌이체 계좌 설정 로드
+      if (systemSettings.manualAccount) {
+        setManualAccount(systemSettings.manualAccount);
       }
 
       // 사용자 안내사항 설정 로드
@@ -205,6 +220,20 @@ const SystemSettings: React.FC = () => {
         console.log('✅ 토스페이먼츠 계좌 설정 저장 완료:', tossAccount);
       } else {
         console.log('⚠️ 토스페이먼츠 계좌 설정 저장 건너뜀 - 필수 필드 누락');
+      }
+
+      // 수동 계좌이체 계좌 설정 저장
+      if (manualAccount.bankName && manualAccount.accountNumber && manualAccount.accountHolder) {
+        await SystemSettingsService.updateManualAccount(
+          manualAccount.bankName,
+          manualAccount.accountNumber,
+          manualAccount.accountHolder,
+          manualAccount.isActive,
+          user.id
+        );
+        console.log('✅ 수동 계좌이체 계좌 설정 저장 완료:', manualAccount);
+      } else {
+        console.log('⚠️ 수동 계좌이체 계좌 설정 저장 건너뜀 - 필수 필드 누락');
       }
 
       // 수수료 설정 저장
@@ -980,6 +1009,120 @@ const SystemSettings: React.FC = () => {
           </Card>
         </Grid>
 
+        {/* 수동 계좌이체 계좌 설정 */}
+        <Grid item xs={12} md={8}>
+          <Card>
+            <CardContent>
+              <Typography variant="h6" gutterBottom sx={{ display: 'flex', alignItems: 'center', gap: 1 }}>
+                <AccountBalance />
+                수동 계좌이체 계좌 설정
+              </Typography>
+              
+              <Typography variant="body2" color="textSecondary" sx={{ mb: 3 }}>
+                포인트 충전 시 사용자가 입금할 계좌 정보를 설정합니다.
+              </Typography>
+
+              <Grid container spacing={3}>
+                <Grid item xs={12} md={3}>
+                  <TextField
+                    fullWidth
+                    label="은행명"
+                    value={manualAccount.bankName}
+                    onChange={(e) => setManualAccount(prev => ({ ...prev, bankName: e.target.value }))}
+                    placeholder="예: 신한은행, 국민은행"
+                    required
+                  />
+                </Grid>
+                
+                <Grid item xs={12} md={3}>
+                  <TextField
+                    fullWidth
+                    label="계좌번호"
+                    value={manualAccount.accountNumber}
+                    onChange={(e) => setManualAccount(prev => ({ ...prev, accountNumber: e.target.value }))}
+                    placeholder="계좌번호를 입력하세요"
+                    required
+                  />
+                </Grid>
+                
+                <Grid item xs={12} md={3}>
+                  <TextField
+                    fullWidth
+                    label="예금주명"
+                    value={manualAccount.accountHolder}
+                    onChange={(e) => setManualAccount(prev => ({ ...prev, accountHolder: e.target.value }))}
+                    placeholder="예금주명을 입력하세요"
+                    required
+                  />
+                </Grid>
+                
+                <Grid item xs={12} md={3}>
+                  <Box display="flex" alignItems="center" height="100%">
+                    <Chip 
+                      label={manualAccount.isActive ? '활성화' : '비활성화'}
+                      color={manualAccount.isActive ? 'success' : 'default'}
+                      onClick={() => setManualAccount(prev => ({ ...prev, isActive: !prev.isActive }))}
+                      sx={{ cursor: 'pointer' }}
+                    />
+                    <Typography variant="body2" color="textSecondary" sx={{ ml: 1 }}>
+                      클릭하여 상태 변경
+                    </Typography>
+                  </Box>
+                </Grid>
+              </Grid>
+
+              <Box sx={{ mt: 3, display: 'flex', gap: 2, flexWrap: 'wrap', alignItems: 'center' }}>
+                <Chip 
+                  label={`은행: ${manualAccount.bankName || '미설정'}`}
+                  color="primary"
+                  variant="outlined"
+                />
+                <Chip 
+                  label={`계좌: ${manualAccount.accountNumber || '미설정'}`}
+                  color="secondary"
+                  variant="outlined"
+                />
+                <Chip 
+                  label={`예금주: ${manualAccount.accountHolder || '미설정'}`}
+                  color="info"
+                  variant="outlined"
+                />
+                <Chip 
+                  label={manualAccount.isActive ? '활성화' : '비활성화'}
+                  color={manualAccount.isActive ? 'success' : 'default'}
+                  variant="outlined"
+                />
+              </Box>
+
+              <Alert severity="info" sx={{ mt: 3 }}>
+                <Typography variant="body2">
+                  <strong>수동 계좌이체 계좌 설정 안내:</strong><br />
+                  • 포인트 충전 시 사용자가 이 계좌로 입금합니다<br />
+                  • 계좌 정보는 안전하게 암호화되어 저장됩니다<br />
+                  • 정확한 계좌 정보를 입력해주세요
+                </Typography>
+              </Alert>
+
+              <Box sx={{ mt: 3, display: 'flex', gap: 2 }}>
+                <Button
+                  variant="contained"
+                  startIcon={<Save />}
+                  onClick={handleSave}
+                  disabled={
+                    saving || 
+                    !manualAccount.bankName || 
+                    !manualAccount.accountNumber || 
+                    !manualAccount.accountHolder
+                  }
+                  sx={{ flex: 1 }}
+                >
+                  {saving ? '저장 중...' : '수동 계좌이체 계좌 설정 저장'}
+                </Button>
+              </Box>
+            </CardContent>
+          </Card>
+        </Grid>
+
         {/* 설정 가이드 */}
         <Grid item xs={12}>
           <Card>
@@ -1327,7 +1470,61 @@ const SystemSettings: React.FC = () => {
             </CardContent>
           </Card>
         </Grid>
+
+        {/* PWA 설정 섹션 */}
+        <Grid item xs={12}>
+          <Card>
+            <CardContent>
+              <Typography variant="h6" gutterBottom sx={{ display: 'flex', alignItems: 'center', gap: 1 }}>
+                <Settings />
+                PWA 앱 설정
+              </Typography>
+              
+              <Typography variant="body2" color="textSecondary" sx={{ mb: 3 }}>
+                스마트폰이나 컴퓨터에 설치될 앱의 아이콘, 이름, 색상 등을 설정할 수 있습니다.
+              </Typography>
+
+              <Paper sx={{ p: 3, border: '1px solid #e0e0e0' }}>
+                <Typography variant="h6" gutterBottom sx={{ display: 'flex', alignItems: 'center', gap: 1 }}>
+                  <Settings />
+                  앱 아이콘 및 테마 설정
+                </Typography>
+                
+                <Typography variant="body2" color="textSecondary" sx={{ mb: 2 }}>
+                  사용자가 홈 화면에 설치할 때 표시될 앱 아이콘, 이름, 색상 등을 설정합니다.
+                </Typography>
+
+                <Alert severity="info" sx={{ mb: 2 }}>
+                  <Typography variant="body2">
+                    <strong>설정 가능한 항목:</strong><br />
+                    • 앱 아이콘 (PNG, JPG, JPEG, 최대 5MB)<br />
+                    • 앱 이름 (홈 화면에 표시)<br />
+                    • 앱 설명 (앱 스토어에 표시)<br />
+                    • 테마 색상 (앱의 주요 색상)<br />
+                    • 배경 색상 (앱 로딩 시 배경)
+                  </Typography>
+                </Alert>
+
+                <Button
+                  variant="contained"
+                  color="primary"
+                  startIcon={<Edit />}
+                  onClick={() => setPwaSettingsOpen(true)}
+                  fullWidth
+                >
+                  PWA 설정 관리
+                </Button>
+              </Paper>
+            </CardContent>
+          </Card>
+        </Grid>
       </Grid>
+
+      {/* PWA 설정 다이얼로그 */}
+      <PWASettingsDialog
+        open={pwaSettingsOpen}
+        onClose={() => setPwaSettingsOpen(false)}
+      />
     </Box>
   );
 };

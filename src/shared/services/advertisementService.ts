@@ -55,7 +55,7 @@ export class AdvertisementService {
   }
 
   // 특정 위치의 활성 광고 조회
-  static async getActiveAdvertisementsByPosition(position: 'sidebar' | 'dashboard' | 'chat'): Promise<Advertisement[]> {
+  static async getActiveAdvertisementsByPosition(position: 'sidebar' | 'dashboard' | 'chat' | 'login'): Promise<Advertisement[]> {
     try {
       // 임시로 인덱스 없이 작동하도록 단순화
       const q = query(
@@ -149,7 +149,7 @@ export class AdvertisementService {
     title: string,
     imageFile: File,
     linkUrl: string,
-    position: 'sidebar' | 'dashboard' | 'chat',
+    position: 'sidebar' | 'dashboard' | 'chat' | 'login',
     createdBy: string,
     publishStartDate: Date,
     publishEndDate: Date
@@ -196,7 +196,7 @@ export class AdvertisementService {
     updates: {
       title?: string;
       linkUrl?: string;
-      position?: 'sidebar' | 'dashboard' | 'chat';
+      position?: 'sidebar' | 'dashboard' | 'chat' | 'login';
       isActive?: boolean;
     },
     imageFile?: File

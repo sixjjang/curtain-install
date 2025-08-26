@@ -218,6 +218,37 @@ export interface PointTransaction {
   transferCompletedAt?: Date; // 관련 거래 ID (환불 시 원본 거래 ID)
 }
 
+// 수동 계좌이체 충전 요청 타입
+export interface ManualChargeRequest {
+  id: string;
+  userId: string;
+  userName: string;
+  userPhone: string;
+  amount: number;
+  status: 'pending' | 'completed' | 'cancelled';
+  depositName?: string; // 입금자명
+  depositAmount?: number; // 실제 입금 금액
+  depositDate?: Date; // 입금 날짜
+  adminNote?: string; // 관리자 메모
+  createdAt: Date;
+  updatedAt: Date;
+  completedAt?: Date;
+  completedBy?: string; // 처리한 관리자 ID
+}
+
+// 관리자 알림 타입
+export interface AdminNotification {
+  id: string;
+  type: 'manual_charge_request' | 'system_alert' | 'user_issue';
+  title: string;
+  message: string;
+  data?: any;
+  isRead: boolean;
+  createdAt: Date;
+  readAt?: Date;
+  readBy?: string;
+}
+
 // 포인트 에스크로 타입
 export interface PointEscrow {
   id: string;
@@ -304,6 +335,21 @@ export interface SystemSettings {
     accountNumber: string;
     accountHolder: string;
     isActive: boolean;
+  };
+  // 수동 계좌이체 계좌 설정
+  manualAccount?: {
+    bankName: string;
+    accountNumber: string;
+    accountHolder: string;
+    isActive: boolean;
+  };
+  // PWA 설정
+  pwaSettings?: {
+    appIcon: string;
+    appName: string;
+    appDescription: string;
+    themeColor: string;
+    backgroundColor: string;
   };
   // 사용자 안내사항 설정
   userGuidanceSettings: {
@@ -646,7 +692,7 @@ export interface Advertisement {
   title: string;
   imageUrl: string;
   linkUrl: string;
-  position: 'sidebar' | 'dashboard' | 'chat';
+  position: 'sidebar' | 'dashboard' | 'chat' | 'login';
   isActive: boolean;
   clickCount: number; // 클릭수
   publishStartDate: Date; // 게시 시작일

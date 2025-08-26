@@ -3,7 +3,6 @@ import { PaymentService } from '../services/paymentService';
 export interface PaymentMethodStatus {
   simulation: boolean;
   tossPayments: boolean;
-  kakaoPay: boolean;
 }
 
 export interface PaymentMethodInfo {
@@ -24,27 +23,10 @@ export const getAvailablePaymentMethods = (): PaymentMethodInfo[] => {
   
   return [
     {
-      name: 'simulation',
-      displayName: '시뮬레이션 (테스트)',
-      description: '실제 결제 없이 테스트할 수 있는 모드입니다.',
-      icon: '🧪',
-      isAvailable: status.simulation,
-      setupRequired: false
-    },
-    {
-      name: 'kakao_pay',
-      displayName: '카카오페이',
-      description: '카카오페이를 통한 안전한 결제입니다.',
-      icon: '💛',
-      isAvailable: status.kakaoPay,
-      setupRequired: !status.kakaoPay,
-      setupGuide: '카카오페이 비즈니스 계정 설정 및 API 키 발급이 필요합니다.'
-    },
-    {
       name: 'toss_payments',
-      displayName: '토스페이먼츠',
-      description: '토스페이먼츠를 통한 다양한 결제 수단을 지원합니다.',
-      icon: '💳',
+      displayName: '토스페이먼츠 (수수료 0%)',
+      description: '실시간계좌이체와 무통장입금으로 수수료 없이 안전하게 결제',
+      icon: '🏦',
       isAvailable: status.tossPayments,
       setupRequired: !status.tossPayments,
       setupGuide: '토스페이먼츠 가맹점 등록 및 API 키 발급이 필요합니다.'
@@ -96,14 +78,10 @@ export const calculatePaymentFee = (amount: number, paymentMethod: string): {
   let feeRate = 0;
   
   switch (paymentMethod) {
-    case 'kakao_pay':
-      feeRate = 0.03; // 3%
-      break;
     case 'toss_payments':
-      feeRate = 0.03; // 3%
-      break;
-    case 'simulation':
-      feeRate = 0; // 수수료 없음
+    case 'transfer':
+    case 'virtual_account':
+      feeRate = 0; // 실시간계좌이체, 무통장입금은 수수료 없음
       break;
     default:
       feeRate = 0;
@@ -126,109 +104,44 @@ export const calculatePaymentFee = (amount: number, paymentMethod: string): {
 export const getPaymentStatusText = (status: string): string => {
   switch (status) {
     case 'pending':
-      return '결제 대기중';
+      return '처리 중';
     case 'completed':
-      return '결제 완료';
+      return '완료';
     case 'failed':
-      return '결제 실패';
+      return '실패';
     case 'cancelled':
-      return '결제 취소';
+      return '취소됨';
     default:
       return '알 수 없음';
   }
 };
 
 /**
- * 결제 수단을 한글로 변환합니다.
+ * 결제 수단별 설명을 반환합니다.
  */
-export const getPaymentMethodText = (method: string): string => {
+export const getPaymentMethodDescription = (method: string): string => {
   switch (method) {
-    case 'simulation':
-      return '시뮬레이션';
-    case 'kakao_pay':
-      return '카카오페이';
     case 'toss_payments':
-      return '토스페이먼츠';
+      return '토스페이먼츠 (실시간계좌이체/무통장입금)';
+    case 'transfer':
+      return '실시간계좌이체';
+    case 'virtual_account':
+      return '무통장입금';
     default:
-      return '알 수 없음';
+      return '알 수 없는 결제 수단';
   }
 };
 
 /**
- * 결제 수단별 아이콘을 반환합니다.
+ * 결제 수단이 사용 가능한지 확인합니다.
  */
-export const getPaymentMethodIcon = (method: string): string => {
-  switch (method) {
-    case 'simulation':
-      return '🧪';
-    case 'kakao_pay':
-      return '💛';
-    case 'toss_payments':
-      return '💳';
-    default:
-      return '💰';
-  }
-};
-
-/**
- * 결제 수단별 색상을 반환합니다.
- */
-export const getPaymentMethodColor = (method: string): string => {
-  switch (method) {
-    case 'simulation':
-      return '#666666';
-    case 'kakao_pay':
-      return '#FEE500';
-    case 'toss_payments':
-      return '#0064FF';
-    default:
-      return '#000000';
-  }
-};
-
-/**
- * 결제 검증을 수행합니다.
- */
-export const validatePaymentRequest = (amount: number, paymentMethod: string): {
-  isValid: boolean;
-  errors: string[];
-} => {
-  const errors: string[] = [];
-  
-  // 금액 검증
-  if (amount <= 0) {
-    errors.push('결제 금액은 0보다 커야 합니다.');
-  }
-  
-  if (amount > 1000000) {
-    errors.push('결제 금액은 1,000,000원을 초과할 수 없습니다.');
-  }
-  
-  // 결제 수단 검증
+export const isPaymentMethodAvailable = (method: string): boolean => {
   const availableMethods = PaymentService.getAvailablePaymentMethods();
   
-  switch (paymentMethod) {
-    case 'kakao_pay':
-      if (!availableMethods.kakaoPay) {
-        errors.push('카카오페이가 설정되지 않았습니다.');
-      }
-      break;
+  switch (method) {
     case 'toss_payments':
-      if (!availableMethods.tossPayments) {
-        errors.push('토스페이먼츠가 설정되지 않았습니다.');
-      }
-      break;
-    case 'simulation':
-      if (!availableMethods.simulation) {
-        errors.push('시뮬레이션 모드가 사용할 수 없습니다.');
-      }
-      break;
+      return availableMethods.tossPayments;
     default:
-      errors.push('지원하지 않는 결제 수단입니다.');
+      return false;
   }
-  
-  return {
-    isValid: errors.length === 0,
-    errors
-  };
 };

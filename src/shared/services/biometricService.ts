@@ -22,10 +22,26 @@ export class BiometricService {
   }
 
   /**
-   * 생체인증 지원 여부 확인
+   * 모바일 환경 확인
+   */
+  private static isMobileDevice(): boolean {
+    const userAgent = navigator.userAgent.toLowerCase();
+    const mobileKeywords = ['android', 'iphone', 'ipad', 'ipod', 'blackberry', 'windows phone'];
+    return mobileKeywords.some(keyword => userAgent.includes(keyword)) || 
+           ('ontouchstart' in window && window.innerWidth <= 768);
+  }
+
+  /**
+   * 생체인증 지원 여부 확인 (모바일 환경에서만)
    */
   static async isBiometricAvailable(): Promise<boolean> {
     try {
+      // 모바일 환경 확인
+      if (!this.isMobileDevice()) {
+        console.log('생체인증: 데스크톱 환경에서는 지원하지 않음');
+        return false;
+      }
+
       // 기본 지원 여부 확인
       if (!this.isSupported()) {
         console.log('생체인증: 기본 지원 안됨');
@@ -64,7 +80,7 @@ export class BiometricService {
       if (!isAvailable) {
         return {
           success: false,
-          error: '생체인증을 지원하지 않는 기기입니다.'
+          error: '모바일 환경에서만 생체인증을 사용할 수 있습니다.'
         };
       }
 
@@ -119,7 +135,7 @@ export class BiometricService {
       if (!isAvailable) {
         return {
           success: false,
-          error: '생체인증을 지원하지 않는 기기입니다.'
+          error: '모바일 환경에서만 생체인증을 사용할 수 있습니다.'
         };
       }
 
@@ -127,7 +143,7 @@ export class BiometricService {
       if (!isEnabled) {
         return {
           success: false,
-          error: '생체인증이 활성화되지 않았습니다.'
+          error: '모바일 생체인증이 활성화되지 않았습니다. 먼저 생체인증을 활성화해주세요.'
         };
       }
 
@@ -183,7 +199,7 @@ export class BiometricService {
       if (!isAvailable) {
         return {
           success: false,
-          error: '생체인증을 지원하지 않는 기기입니다.'
+          error: '모바일 환경에서만 생체인증을 사용할 수 있습니다.'
         };
       }
 

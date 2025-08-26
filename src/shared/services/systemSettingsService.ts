@@ -73,6 +73,7 @@ export class SystemSettingsService {
             sellerGuidance: data.userGuidanceSettings?.sellerGuidance || this.DEFAULT_SETTINGS.userGuidanceSettings.sellerGuidance
           },
           tossAccount: data.tossAccount || null,
+          manualAccount: data.manualAccount || null,
           createdAt: data.createdAt?.toDate() || new Date(),
           updatedAt: data.updatedAt?.toDate() || new Date(),
           updatedBy: data.updatedBy || 'system'
@@ -287,6 +288,49 @@ export class SystemSettingsService {
     } catch (error) {
       console.error('토스페이먼츠 계좌 설정 조회 실패:', error);
       return null;
+    }
+  }
+
+  // 수동 계좌이체 계좌 설정 조회
+  static async getManualAccount(): Promise<{ bankName: string; accountNumber: string; accountHolder: string; isActive: boolean } | null> {
+    try {
+      const settings = await this.getSystemSettings();
+      return settings.manualAccount || null;
+    } catch (error) {
+      console.error('수동 계좌이체 계좌 설정 조회 실패:', error);
+      return null;
+    }
+  }
+
+  // 수동 계좌이체 계좌 설정 업데이트
+  static async updateManualAccount(
+    bankName: string,
+    accountNumber: string,
+    accountHolder: string,
+    isActive: boolean,
+    adminId: string
+  ): Promise<void> {
+    try {
+      if (!bankName || !accountNumber || !accountHolder) {
+        throw new Error('은행명, 계좌번호, 예금주명을 모두 입력해주세요.');
+      }
+
+      const settingsRef = doc(db, 'systemSettings', this.SETTINGS_ID);
+      await updateDoc(settingsRef, {
+        manualAccount: {
+          bankName,
+          accountNumber,
+          accountHolder,
+          isActive
+        },
+        updatedAt: serverTimestamp(),
+        updatedBy: adminId
+      });
+
+      console.log(`✅ 수동 계좌이체 계좌 설정이 업데이트되었습니다. (${bankName} ${accountNumber})`);
+    } catch (error) {
+      console.error('수동 계좌이체 계좌 설정 업데이트 실패:', error);
+      throw new Error('수동 계좌이체 계좌 설정을 업데이트할 수 없습니다.');
     }
   }
 

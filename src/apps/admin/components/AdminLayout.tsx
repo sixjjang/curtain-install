@@ -40,14 +40,16 @@ import {
   AccountBalance
 } from '@mui/icons-material';
 import { useAuth } from '../../../shared/contexts/AuthContext';
+import { AdminNotificationData } from '../../../shared/services/adminNotificationService';
 
 const drawerWidth = { xs: 280, sm: 240 };
 
 interface AdminLayoutProps {
   children: React.ReactNode;
+  notifications?: AdminNotificationData;
 }
 
-const AdminLayout: React.FC<AdminLayoutProps> = ({ children }) => {
+const AdminLayout: React.FC<AdminLayoutProps> = ({ children, notifications }) => {
   const [mobileOpen, setMobileOpen] = useState(false);
   const [anchorEl, setAnchorEl] = useState<null | HTMLElement>(null);
   const { user, logout } = useAuth();
@@ -63,7 +65,18 @@ const AdminLayout: React.FC<AdminLayoutProps> = ({ children }) => {
     { text: '레벨 관리', icon: <LevelIcon />, path: '/admin/levels' },
     { text: '만족도 조사 관리', icon: <SurveyIcon />, path: '/admin/surveys' },
     { text: '템플릿 관리', icon: <TemplateIcon />, path: '/admin/templates' },
-    { text: '포인트 인출 관리', icon: <WithdrawalIcon />, path: '/admin/point-withdrawals' },
+    { 
+      text: '포인트 인출 관리', 
+      icon: <WithdrawalIcon />, 
+      path: '/admin/point-withdrawals',
+      badge: notifications?.pointWithdrawals || 0
+    },
+    { 
+      text: '수동 계좌이체 관리', 
+      icon: <AccountBalance />, 
+      path: '/admin/manual-charges',
+      badge: notifications?.manualChargeRequests || 0
+    },
     { text: '광고 관리', icon: <AdvertisementIcon />, path: '/admin/advertisements' },
     { text: '분석', icon: <AnalyticsIcon />, path: '/admin/analytics' },
     { text: '시스템 설정', icon: <SettingsIcon />, path: '/admin/settings' },
@@ -144,6 +157,19 @@ const AdminLayout: React.FC<AdminLayoutProps> = ({ children }) => {
                   }
                 }}
               />
+              {(item as any).badge > 0 && (
+                <Chip
+                  label={(item as any).badge}
+                  color="error"
+                  size="small"
+                  sx={{
+                    minWidth: 20,
+                    height: 20,
+                    fontSize: '0.75rem',
+                    fontWeight: 'bold'
+                  }}
+                />
+              )}
             </ListItemButton>
           </ListItem>
         ))}

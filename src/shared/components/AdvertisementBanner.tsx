@@ -12,7 +12,7 @@ import { AdvertisementService } from '../services/advertisementService';
 import { Advertisement } from '../../types';
 
 interface AdvertisementBannerProps {
-  position: 'sidebar' | 'dashboard' | 'chat';
+  position: 'sidebar' | 'dashboard' | 'chat' | 'login';
   maxCount?: number;
   height?: string | number;
   showTitle?: boolean;
@@ -82,6 +82,25 @@ const AdvertisementBanner: React.FC<AdvertisementBannerProps> = ({
 
   // 에러가 있거나 광고가 없을 때
   if (error || advertisements.length === 0) {
+    // 로그인 화면에서는 광고가 없을 때 기본 메시지 표시
+    if (position === 'login') {
+      return (
+        <Box sx={{ 
+          p: 3, 
+          bgcolor: 'white', 
+          borderRadius: 1,
+          border: '1px solid grey.200',
+          minHeight: height,
+          display: 'flex',
+          alignItems: 'center',
+          justifyContent: 'center'
+        }}>
+          <Typography variant="body2" color="textSecondary">
+            광고 준비 중입니다
+          </Typography>
+        </Box>
+      );
+    }
     return null;
   }
 

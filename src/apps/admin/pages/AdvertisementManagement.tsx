@@ -57,7 +57,7 @@ const AdvertisementManagement: React.FC = () => {
   // 폼 상태
   const [title, setTitle] = useState('');
   const [linkUrl, setLinkUrl] = useState('');
-  const [position, setPosition] = useState<'sidebar' | 'dashboard' | 'chat'>('sidebar');
+  const [position, setPosition] = useState<'sidebar' | 'dashboard' | 'chat' | 'login'>('sidebar');
   const [imageFile, setImageFile] = useState<File | null>(null);
   const [imagePreview, setImagePreview] = useState<string>('');
   const [isActive, setIsActive] = useState(true);
@@ -258,12 +258,13 @@ const AdvertisementManagement: React.FC = () => {
       case 'sidebar': return '사이드바';
       case 'dashboard': return '대시보드';
       case 'chat': return '채팅';
+      case 'login': return '로그인 화면';
       default: return position;
     }
   };
 
   // 광고 가이드 이미지 생성
-  const generateAdGuideImage = (position: 'sidebar' | 'dashboard' | 'chat'): string => {
+  const generateAdGuideImage = (position: 'sidebar' | 'dashboard' | 'chat' | 'login'): string => {
     const canvas = document.createElement('canvas');
     const ctx = canvas.getContext('2d');
     
@@ -283,6 +284,10 @@ const AdvertisementManagement: React.FC = () => {
       case 'chat':
         width = 600;
         height = 400;
+        break;
+      case 'login':
+        width = 400;
+        height = 300;
         break;
       default:
         width = 300;
@@ -340,7 +345,7 @@ const AdvertisementManagement: React.FC = () => {
   };
 
   // 광고 가이드 다운로드
-  const downloadAdGuide = (position: 'sidebar' | 'dashboard' | 'chat') => {
+  const downloadAdGuide = (position: 'sidebar' | 'dashboard' | 'chat' | 'login') => {
     const imageDataUrl = generateAdGuideImage(position);
     const link = document.createElement('a');
     link.download = `${getPositionLabel(position)}_광고가이드.png`;
@@ -352,7 +357,7 @@ const AdvertisementManagement: React.FC = () => {
 
   // 전체 광고 가이드 다운로드
   const downloadAllAdGuides = () => {
-    const positions: ('sidebar' | 'dashboard' | 'chat')[] = ['sidebar', 'dashboard', 'chat'];
+    const positions: ('sidebar' | 'dashboard' | 'chat' | 'login')[] = ['sidebar', 'dashboard', 'chat', 'login'];
     
     positions.forEach((position, index) => {
       setTimeout(() => {
@@ -448,7 +453,7 @@ const AdvertisementManagement: React.FC = () => {
               광고주에게 광고 이미지 자료를 요청할 때 사용할 수 있는 가이드 이미지를 다운로드할 수 있습니다.
             </Typography>
             <Grid container spacing={2}>
-              <Grid item xs={12} sm={4}>
+              <Grid item xs={12} sm={6} md={3}>
                 <Box sx={{ 
                   p: 2, 
                   border: '1px solid', 
@@ -472,7 +477,7 @@ const AdvertisementManagement: React.FC = () => {
                   </Button>
                 </Box>
               </Grid>
-              <Grid item xs={12} sm={4}>
+              <Grid item xs={12} sm={6} md={3}>
                 <Box sx={{ 
                   p: 2, 
                   border: '1px solid', 
@@ -496,7 +501,7 @@ const AdvertisementManagement: React.FC = () => {
                   </Button>
                 </Box>
               </Grid>
-              <Grid item xs={12} sm={4}>
+              <Grid item xs={12} sm={6} md={3}>
                 <Box sx={{ 
                   p: 2, 
                   border: '1px solid', 
@@ -514,6 +519,30 @@ const AdvertisementManagement: React.FC = () => {
                     size="small"
                     startIcon={<Download />}
                     onClick={() => downloadAdGuide('chat')}
+                    sx={{ mt: 1 }}
+                  >
+                    가이드 다운로드
+                  </Button>
+                </Box>
+              </Grid>
+              <Grid item xs={12} sm={6} md={3}>
+                <Box sx={{ 
+                  p: 2, 
+                  border: '1px solid', 
+                  borderColor: 'divider', 
+                  borderRadius: 1, 
+                  bgcolor: 'background.default' 
+                }}>
+                  <Typography variant="subtitle2" fontWeight="bold" gutterBottom>
+                    로그인 화면 광고
+                  </Typography>
+                  <Typography variant="caption" display="block" color="textSecondary">
+                    권장 크기: 400px × 300px
+                  </Typography>
+                  <Button
+                    size="small"
+                    startIcon={<Download />}
+                    onClick={() => downloadAdGuide('login')}
                     sx={{ mt: 1 }}
                   >
                     가이드 다운로드
@@ -667,15 +696,31 @@ const AdvertisementManagement: React.FC = () => {
                 <InputLabel>배치 위치</InputLabel>
                 <Select
                   value={position}
-                  onChange={(e) => setPosition(e.target.value as 'sidebar' | 'dashboard' | 'chat')}
+                  onChange={(e) => setPosition(e.target.value as 'sidebar' | 'dashboard' | 'chat' | 'login')}
                   label="배치 위치"
                 >
                   <MenuItem value="sidebar">사이드바 (3개)</MenuItem>
                   <MenuItem value="dashboard">대시보드 (1개)</MenuItem>
                   <MenuItem value="chat">채팅 (1개)</MenuItem>
+                  <MenuItem value="login">로그인 화면 (1개)</MenuItem>
                 </Select>
               </FormControl>
             </Grid>
+            
+            {/* 로그인 화면 광고 특별 안내 */}
+            {position === 'login' && (
+              <Grid item xs={12}>
+                <Alert severity="info" sx={{ mt: 1 }}>
+                  <Typography variant="body2">
+                    <strong>로그인 화면 광고 안내:</strong><br />
+                    • 로그인 화면 하단에 표시됩니다<br />
+                    • 사용자가 로그인하기 전에 볼 수 있는 중요한 광고 위치입니다<br />
+                    • 브랜드 인지도 향상에 효과적입니다<br />
+                    • 권장 크기: 400x300px (가로형)
+                  </Typography>
+                </Alert>
+              </Grid>
+            )}
             
             <Grid item xs={12} sm={6}>
               <FormControlLabel
@@ -752,7 +797,11 @@ const AdvertisementManagement: React.FC = () => {
                 )}
                 
                 <Typography variant="body2" color="textSecondary" sx={{ mt: 1 }}>
-                  권장 크기: {position === 'sidebar' ? '300x200px' : '600x400px'}
+                  권장 크기: {
+                    position === 'sidebar' ? '300x200px' : 
+                    position === 'login' ? '400x300px' : 
+                    '600x400px'
+                  }
                 </Typography>
               </Box>
             </Grid>

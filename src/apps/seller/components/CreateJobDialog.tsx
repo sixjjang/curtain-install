@@ -2223,14 +2223,9 @@ const CreateJobDialog: React.FC<CreateJobDialogProps> = ({
             onChange={(e) => handlePaymentMethodChange(e.target.value)}
           >
             <FormControlLabel 
-              value="simulation" 
-              control={<Radio />} 
-              label="시뮬레이션 (테스트용)" 
-            />
-            <FormControlLabel 
               value="toss_payments" 
               control={<Radio />} 
-              label="토스페이먼츠" 
+              label="토스페이먼츠 (수수료 0%)" 
             />
           </RadioGroup>
         </FormControl>
@@ -2244,9 +2239,18 @@ const CreateJobDialog: React.FC<CreateJobDialogProps> = ({
               label="결제 방법"
               onChange={(e) => handleTossPaymentMethodChange(e.target.value)}
             >
-              <MenuItem value="카드">신용카드</MenuItem>
-              <MenuItem value="가상계좌">가상계좌</MenuItem>
-              <MenuItem value="계좌이체">계좌이체</MenuItem>
+              <MenuItem value="transfer">
+                <Box display="flex" alignItems="center" gap={1}>
+                  <Typography>🏦 실시간계좌이체</Typography>
+                  <Chip label="수수료 0%" color="success" size="small" />
+                </Box>
+              </MenuItem>
+              <MenuItem value="virtual_account">
+                <Box display="flex" alignItems="center" gap={1}>
+                  <Typography>💰 무통장입금</Typography>
+                  <Chip label="수수료 0%" color="success" size="small" />
+                </Box>
+              </MenuItem>
             </Select>
           </FormControl>
         )}

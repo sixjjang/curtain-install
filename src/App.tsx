@@ -3,6 +3,7 @@ import { BrowserRouter as Router, Routes, Route, Navigate } from 'react-router-d
 import CssBaseline from '@mui/material/CssBaseline';
 import { AuthProvider } from './shared/contexts/AuthContext';
 import { ThemeProvider } from './shared/contexts/ThemeContext';
+import { usePWASettings } from './shared/hooks/usePWASettings';
 import { testFirebaseConnection } from './firebase/config';
 
 // 앱 컴포넌트들
@@ -18,11 +19,13 @@ import SatisfactionSurvey from './apps/customer/SatisfactionSurvey';
 // 공통 컴포넌트들
 import LoginPage from './shared/components/LoginPage';
 import RegisterPage from './shared/components/RegisterPage';
+import ForgotPasswordPage from './shared/components/ForgotPasswordPage';
 import ProtectedRoute from './shared/components/ProtectedRoute';
 import ApprovalStatusAwareRoute from './shared/components/ApprovalStatusAwareRoute';
 import PendingApprovalPage from './shared/components/PendingApprovalPage';
 import RejectedPage from './shared/components/RejectedPage';
 import InstallPWA from './shared/components/InstallPWA';
+import PWAUpdateNotification from './shared/components/PWAUpdateNotification';
 import FirebaseTest from './shared/components/FirebaseTest';
 import TestAccounts from './shared/components/TestAccounts';
 import StorageTest from './shared/components/StorageTest';
@@ -32,12 +35,15 @@ import FirebaseStorageGuide from './shared/components/FirebaseStorageGuide';
 // 기존 테마 설정 제거 - ThemeContext에서 관리
 
 function App() {
+  // PWA 설정 적용
+  usePWASettings();
+
   // Firebase 연결 테스트
   useEffect(() => {
     const testConnection = async () => {
       try {
         console.log('🔥 Firebase 연결 테스트 시작...');
-        const result = await testFirebaseConnection(3); // 3번 재시도
+        const result = await testFirebaseConnection();
         
         if (result && result.firestore && result.auth) {
           console.log('✅ Firebase 연결 성공:', result.message);
@@ -75,6 +81,7 @@ function App() {
             {/* 인증 페이지들 */}
             <Route path="/login" element={<LoginPage />} />
             <Route path="/register" element={<RegisterPage />} />
+            <Route path="/forgot-password" element={<ForgotPasswordPage />} />
             
             {/* 승인 상태 관련 페이지들 */}
             <Route path="/pending-approval" element={<PendingApprovalPage />} />
@@ -136,6 +143,9 @@ function App() {
           
           {/* PWA 설치 안내 컴포넌트 */}
           <InstallPWA />
+          
+          {/* PWA 업데이트 알림 컴포넌트 */}
+          <PWAUpdateNotification />
         </Router>
       </AuthProvider>
     </ThemeProvider>
